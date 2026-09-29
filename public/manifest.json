@@ -1,0 +1,30 @@
+{
+  "name": "紡塊像素 CUBEPIXEL",
+  "short_name": "CUBEPIXEL",
+  "description": "紡塊像素官方網站 - 保持你的可愛",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000611",
+  "theme_color": "#FFD1DC",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://drive.google.com/thumbnail?id=1yqTzowdnAcZTofISD4xSGTz-GigyR_Ma&sz=w192",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://drive.google.com/thumbnail?id=1yqTzowdnAcZTofISD4xSGTz-GigyR_Ma&sz=w512",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://drive.google.com/thumbnail?id=1yqTzowdnAcZTofISD4xSGTz-GigyR_Ma&sz=w1000",
+      "sizes": "1000x1000",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
