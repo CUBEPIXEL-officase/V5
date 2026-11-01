@@ -5,7 +5,7 @@
 
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { motion, AnimatePresence, useMotionValue, useSpring } from 'motion/react';
-import { Radio, Send, User, Lock, CornerDownRight, X, Heart, Save, Trash2, History, ArrowLeft } from 'lucide-react';
+import { Radio, Send, User, Lock, CornerDownRight, X, Heart, Save, Trash2, History, ArrowLeft, ChevronUp, ChevronDown } from 'lucide-react';
 const EventCalendar = React.lazy(() => 
   import('./components/EventCalendar').then(module => ({ default: module.EventCalendar }))
 );
@@ -705,6 +705,50 @@ const CharacterSelect: React.FC<{
     setIsDanmakuActive(false);
   }, []);
 
+  const [activeCategoryIndex, setActiveCategoryIndex] = useState<number>(0);
+  const wheelContainerRef = useRef<HTMLDivElement>(null);
+  const lastWheelTime = useRef<number>(0);
+
+  // Wheel event listener: prevent document scroll on carousel and cycle through categories
+  useEffect(() => {
+    const el = wheelContainerRef.current;
+    if (!el || selectedCategory) return;
+
+    const handleWheelEvent = (e: WheelEvent) => {
+      e.preventDefault();
+      const now = Date.now();
+      if (now - lastWheelTime.current < 180) return;
+      if (Math.abs(e.deltaY) > 8) {
+        lastWheelTime.current = now;
+        if (e.deltaY > 0) {
+          setActiveCategoryIndex(prev => (prev + 1) % MEMBER_CATEGORIES.length);
+        } else {
+          setActiveCategoryIndex(prev => (prev - 1 + MEMBER_CATEGORIES.length) % MEMBER_CATEGORIES.length);
+        }
+      }
+    };
+
+    el.addEventListener('wheel', handleWheelEvent, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheelEvent);
+  }, [selectedCategory]);
+
+  // Keyboard navigation for categories (ArrowUp, ArrowDown, Enter)
+  useEffect(() => {
+    if (selectedCategory) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+        setActiveCategoryIndex(prev => (prev + 1) % MEMBER_CATEGORIES.length);
+      } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+        setActiveCategoryIndex(prev => (prev - 1 + MEMBER_CATEGORIES.length) % MEMBER_CATEGORIES.length);
+      } else if (e.key === 'Enter') {
+        const cat = MEMBER_CATEGORIES[activeCategoryIndex];
+        if (cat) setSelectedCategory(cat.id);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedCategory, activeCategoryIndex]);
+
   const PRODUCER_FIGHTER = FIGHTERS.find(f => f.id === 1)!;
   const HONORARY_FIGHTER = FIGHTERS.find(f => f.id === 8)!;
   const INITIAL_MEMBERS = FIGHTERS.filter(f => f.id !== 1 && f.id !== 8 && f.id < 10);
@@ -719,7 +763,7 @@ const CharacterSelect: React.FC<{
   }));
 
   return (
-    <div className="relative w-full flex flex-col font-mono px-3 sm:px-4 md:px-6 pb-20 justify-center items-center pt-36 sm:pt-44">
+    <div className="relative w-full min-h-screen flex flex-col font-mono px-3 sm:px-6 md:px-10 lg:px-16 pb-24 justify-center items-center pt-24 sm:pt-28">
       {/* Kimi no Oshi Purple Danmaku Transition (With matching background #2D033B mask during flight) */}
       <AnimatePresence>
         {isDanmakuActive && (
@@ -730,7 +774,7 @@ const CharacterSelect: React.FC<{
         )}
       </AnimatePresence>
 
-      {/* Category Selection View (Before entering members page) - Emarges right when last bullet enters */}
+      {/* Category Selection View (Before entering members page) - Emerges right when last bullet enters */}
       {!selectedCategory ? (
         showButtons && (
           <motion.div
@@ -739,13 +783,13 @@ const CharacterSelect: React.FC<{
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
-            className="w-full max-w-5xl flex flex-col items-center justify-center space-y-8 z-10"
+            className="w-full max-w-none flex flex-col items-center justify-center space-y-8 z-10"
           >
-          {/* Header */}
-          <div className="text-center space-y-3">
-            <div className="inline-flex flex-wrap items-center justify-center gap-3">
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs font-mono uppercase tracking-[0.3em] text-[#7CFC00]">
-                <span className="w-2 h-2 rounded-full bg-[#7CFC00] animate-pulse" />
+          {/* Top Bar (Title removed as requested, keeping division badge and danmaku replay) */}
+          <div className="text-center">
+            <div className="inline-flex flex-wrap items-center justify-center gap-4 sm:gap-6">
+              <div className="inline-flex items-center gap-2.5 px-5 sm:px-7 py-2 sm:py-3 rounded-full bg-white/5 border border-white/10 text-xs sm:text-sm md:text-base font-mono uppercase tracking-[0.35em] text-[#7CFC00] shadow-md">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#7CFC00] animate-pulse" />
                 <span>DIVISION SELECTION // 分類選單</span>
               </div>
               <motion.button
@@ -755,103 +799,258 @@ const CharacterSelect: React.FC<{
                   setShowButtons(false);
                   setIsDanmakuActive(true);
                 }}
-                className="px-3.5 py-1.5 rounded-full bg-[#D1B3FF]/10 hover:bg-[#D1B3FF]/20 border border-[#D1B3FF]/40 text-[11px] font-mono text-[#D1B3FF] transition-all cursor-pointer flex items-center gap-1.5 shadow-[0_0_15px_rgba(209,179,255,0.15)]"
+                className="px-5 sm:px-7 py-2 sm:py-3 rounded-full bg-[#D1B3FF]/10 hover:bg-[#D1B3FF]/20 border border-[#D1B3FF]/40 text-xs sm:text-sm md:text-base font-mono text-[#D1B3FF] transition-all cursor-pointer flex items-center gap-2 shadow-[0_0_20px_rgba(209,179,255,0.2)]"
                 title="重新播放彈幕轉場"
               >
                 <span>🎬</span>
                 <span>重播「君の推し」彈幕</span>
               </motion.button>
             </div>
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-white tracking-[0.15em] italic drop-shadow-[0_0_30px_rgba(255,255,255,0.35)]">
-              請選擇探索類別
-            </h2>
-            <p className="text-xs sm:text-sm text-white/50 font-mono tracking-widest max-w-lg mx-auto leading-relaxed">
-              點擊下方分類按鈕進入專屬成員名單與詳細介紹
-            </p>
           </div>
 
-          {/* 4 Category Buttons */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 w-full">
-            {MEMBER_CATEGORIES.map((cat) => (
-              <motion.button
-                key={cat.id}
-                whileHover={{ y: -8, scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setSelectedCategory(cat.id)}
-                className="relative bg-black/60 hover:bg-black/85 backdrop-blur-xl border-2 border-white/15 rounded-3xl p-6 sm:p-8 flex flex-col justify-between items-start text-left cursor-pointer transition-all duration-300 group overflow-hidden shadow-[0_15px_35px_rgba(0,0,0,0.5)]"
-                style={{
-                  borderColor: `${cat.color}45`,
-                }}
-              >
-                {/* Glow Backdrop */}
-                <div 
-                  className="absolute -right-16 -top-16 w-56 h-56 rounded-full blur-[80px] pointer-events-none opacity-20 group-hover:opacity-45 transition-opacity duration-500"
-                  style={{ backgroundColor: cat.color }}
-                />
+          {/* 4 Category Carousel - Truly Fullscreen 4:3 Rectangles with Mouse Wheel Scroll Interaction */}
+          <div 
+            ref={wheelContainerRef}
+            className="relative w-full max-w-none h-[640px] sm:h-[740px] md:h-[840px] lg:h-[900px] xl:h-[960px] 2xl:h-[1020px] flex items-center justify-center select-none overflow-hidden py-6"
+          >
+            {/* Top Fade Overlay */}
+            <div className="absolute top-0 left-0 right-0 h-20 sm:h-28 bg-gradient-to-b from-[#2D033B] to-transparent z-40 pointer-events-none" />
 
-                {/* Corner Pixel Accents */}
-                <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2" style={{ borderColor: cat.color }} />
-                <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2" style={{ borderColor: cat.color }} />
-                <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2" style={{ borderColor: cat.color }} />
-                <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2" style={{ borderColor: cat.color }} />
+            {/* Up Button Control */}
+            <button
+              onClick={() => setActiveCategoryIndex(prev => (prev - 1 + MEMBER_CATEGORIES.length) % MEMBER_CATEGORIES.length)}
+              className="absolute top-3 sm:top-5 z-50 p-3 sm:p-5 md:p-6 rounded-full bg-white/10 hover:bg-white/20 border-2 border-white/25 text-white/80 hover:text-white transition-all active:scale-90 cursor-pointer shadow-2xl backdrop-blur-xl"
+              title="切換上一個分類"
+            >
+              <ChevronUp className="w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10" />
+            </button>
 
-                {/* Top Badge & Member Count */}
-                <div className="w-full flex justify-between items-center mb-6 z-10">
-                  <span 
-                    className="text-[10px] font-pixel px-3 py-1 rounded-lg uppercase tracking-wider font-bold shadow-md"
-                    style={{ backgroundColor: `${cat.color}20`, color: cat.color, border: `1px solid ${cat.color}40` }}
+            {/* Down Button Control */}
+            <button
+              onClick={() => setActiveCategoryIndex(prev => (prev + 1) % MEMBER_CATEGORIES.length)}
+              className="absolute bottom-3 sm:bottom-5 z-50 p-3 sm:p-5 md:p-6 rounded-full bg-white/10 hover:bg-white/20 border-2 border-white/25 text-white/80 hover:text-white transition-all active:scale-90 cursor-pointer shadow-2xl backdrop-blur-xl"
+              title="切換下一個分類"
+            >
+              <ChevronDown className="w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10" />
+            </button>
+
+            {/* 4:3 Aspect Ratio Cards Stack - Fullscreen Responsive Dimensions */}
+            <div className="relative w-full flex items-center justify-center h-full">
+              {MEMBER_CATEGORIES.map((cat, idx) => {
+                // Calculate circular offset relative to activeCategoryIndex
+                let diff = idx - activeCategoryIndex;
+                if (diff > MEMBER_CATEGORIES.length / 2) diff -= MEMBER_CATEGORIES.length;
+                if (diff < -MEMBER_CATEGORIES.length / 2) diff += MEMBER_CATEGORIES.length;
+
+                const isCenter = diff === 0;
+                const isAbove = diff === -1;
+                const isBelow = diff === 1;
+
+                let y = 0;
+                let scale = 1;
+                let opacity = 1;
+                let zIndex = 30;
+                let filter = 'blur(0px)';
+
+                if (isCenter) {
+                  y = 0;
+                  scale = 1;
+                  opacity = 1;
+                  zIndex = 30;
+                  filter = 'blur(0px)';
+                } else if (isAbove) {
+                  y = -220;
+                  scale = 0.86;
+                  opacity = 0.28;
+                  zIndex = 15;
+                  filter = 'blur(2px)';
+                } else if (isBelow) {
+                  y = 220;
+                  scale = 0.86;
+                  opacity = 0.28;
+                  zIndex = 15;
+                  filter = 'blur(2px)';
+                } else {
+                  y = diff > 0 ? 380 : -380;
+                  scale = 0.65;
+                  opacity = 0;
+                  zIndex = 0;
+                  filter = 'blur(6px)';
+                }
+
+                return (
+                  <motion.div
+                    key={cat.id}
+                    animate={{
+                      y,
+                      scale,
+                      opacity,
+                      filter,
+                    }}
+                    transition={{
+                      type: 'spring',
+                      stiffness: 260,
+                      damping: 28,
+                    }}
+                    style={{
+                      zIndex,
+                      pointerEvents: isCenter || isAbove || isBelow ? 'auto' : 'none',
+                      borderColor: isCenter ? cat.color : `${cat.color}40`,
+                      boxShadow: isCenter ? `0 0 65px ${cat.color}50, 0 30px 80px rgba(0,0,0,0.95)` : undefined,
+                    }}
+                    onClick={() => {
+                      if (isCenter) {
+                        setSelectedCategory(cat.id);
+                      } else {
+                        setActiveCategoryIndex(idx);
+                      }
+                    }}
+                    className={`absolute w-[94vw] sm:w-[88vw] md:w-[82vw] lg:w-[76vw] xl:w-[70vw] 2xl:w-[65vw] max-w-[1240px] aspect-[4/3] rounded-[32px] sm:rounded-[40px] md:rounded-[48px] bg-black/85 hover:bg-black/95 backdrop-blur-2xl border-2 sm:border-3 cursor-pointer transition-colors duration-300 overflow-hidden ${
+                      isCenter 
+                        ? 'shadow-[0_25px_80px_rgba(0,0,0,0.95)]' 
+                        : 'hover:opacity-60 shadow-xl'
+                    }`}
                   >
-                    {cat.badge}
-                  </span>
-                  <span className="text-[11px] font-mono text-white/50 tracking-widest font-bold">
-                    {cat.memberCount}
-                  </span>
-                </div>
+                    {/* Ambient Glow */}
+                    <div 
+                      className="absolute -right-24 -top-24 w-96 h-96 sm:w-[500px] sm:h-[500px] md:w-[600px] md:h-[600px] rounded-full blur-[110px] pointer-events-none transition-opacity duration-500"
+                      style={{ 
+                        backgroundColor: cat.color,
+                        opacity: isCenter ? 0.38 : 0.12,
+                      }}
+                    />
 
-                {/* Center Title and Icon */}
-                <div className="flex items-center gap-4 my-2 z-10">
-                  <div 
-                    className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl shadow-inner group-hover:scale-110 transition-transform duration-300 shrink-0"
-                    style={{ backgroundColor: `${cat.color}25`, border: `1px solid ${cat.color}50` }}
-                  >
-                    {cat.icon}
-                  </div>
-                  <div>
-                    <h3 
-                      className="text-2xl sm:text-3xl font-black tracking-wider text-white transition-colors duration-200"
-                      style={{ textShadow: `0 0 20px ${cat.color}50` }}
-                    >
-                      {cat.name}
-                    </h3>
-                    <p className="text-[10px] sm:text-[11px] font-mono text-white/40 tracking-[0.2em] uppercase mt-0.5">
-                      {cat.enName}
-                    </p>
-                  </div>
-                </div>
+                    {/* Corner Cyber Pixel Accents (Enlarged) */}
+                    <div className="absolute top-0 left-0 w-8 h-8 sm:w-12 sm:h-12 md:w-16 md:h-16 border-t-4 border-l-4" style={{ borderColor: cat.color }} />
+                    <div className="absolute top-0 right-0 w-8 h-8 sm:w-12 sm:h-12 md:w-16 md:h-16 border-t-4 border-r-4" style={{ borderColor: cat.color }} />
+                    <div className="absolute bottom-0 left-0 w-8 h-8 sm:w-12 sm:h-12 md:w-16 md:h-16 border-b-4 border-l-4" style={{ borderColor: cat.color }} />
+                    <div className="absolute bottom-0 right-0 w-8 h-8 sm:w-12 sm:h-12 md:w-16 md:h-16 border-b-4 border-r-4" style={{ borderColor: cat.color }} />
 
-                {/* Member preview & Action Bar */}
-                <div className="w-full mt-6 pt-4 border-t border-white/10 flex justify-between items-center z-10">
-                  <span className="text-xs text-white/70 font-mono truncate max-w-[70%]">
-                    {cat.desc}
-                  </span>
-                  <span 
-                    className="text-xs font-pixel font-bold flex items-center gap-1 group-hover:translate-x-1.5 transition-transform"
-                    style={{ color: cat.color }}
-                  >
-                    進入名單 →
-                  </span>
-                </div>
-              </motion.button>
-            ))}
+                    {/* 4:3 Card Content Layout - Super Sized for True Fullscreen */}
+                    <div className="relative w-full h-full flex flex-col justify-between p-6 sm:p-10 md:p-14 lg:p-16 xl:p-20 z-10">
+                      {/* Top Header Row */}
+                      <div className="w-full flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3 sm:gap-4">
+                          <span className="text-sm sm:text-lg md:text-xl lg:text-2xl font-pixel font-bold text-white/50 tracking-widest">
+                            0{idx + 1} // 04
+                          </span>
+                          <span 
+                            className="text-xs sm:text-sm md:text-base lg:text-lg font-pixel px-4 sm:px-6 py-1.5 sm:py-2.5 rounded-xl uppercase tracking-wider font-bold shadow-lg"
+                            style={{ 
+                              backgroundColor: `${cat.color}25`, 
+                              color: cat.color, 
+                              border: `1.5px solid ${cat.color}70` 
+                            }}
+                          >
+                            {cat.badge}
+                          </span>
+                        </div>
+                        <span className="text-xs sm:text-base md:text-lg lg:text-xl font-mono text-white/80 font-bold px-4 sm:px-6 py-1.5 sm:py-2.5 rounded-2xl bg-white/5 border border-white/10 shadow-sm">
+                          {cat.memberCount}
+                        </span>
+                      </div>
+
+                      {/* Center Hero Information */}
+                      <div className="flex flex-col items-center justify-center text-center my-auto py-3 gap-3 sm:gap-5 md:gap-6">
+                        <motion.div 
+                          animate={isCenter ? { scale: [1, 1.06, 1], rotate: [0, -2, 2, 0] } : {}}
+                          transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                          className="w-20 h-20 sm:w-28 sm:h-28 md:w-36 md:h-36 lg:w-44 lg:h-44 xl:w-52 xl:h-52 rounded-3xl sm:rounded-[36px] md:rounded-[44px] flex items-center justify-center text-5xl sm:text-7xl md:text-8xl lg:text-9xl xl:text-[10rem] shadow-inner"
+                          style={{ backgroundColor: `${cat.color}20`, border: `2.5px solid ${cat.color}60` }}
+                        >
+                          {cat.icon}
+                        </motion.div>
+
+                        <div className="flex flex-col items-center gap-1 sm:gap-2">
+                          <h3 
+                            className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-black tracking-widest text-white leading-tight"
+                            style={{ textShadow: `0 0 35px ${cat.color}70` }}
+                          >
+                            {cat.name}
+                          </h3>
+                          <span className="text-xs sm:text-base md:text-lg lg:text-xl font-mono text-white/50 tracking-[0.35em] uppercase">
+                            {cat.enName}
+                          </span>
+                        </div>
+
+                        <p className="text-sm sm:text-lg md:text-xl lg:text-2xl text-white/80 font-mono max-w-xl sm:max-w-2xl md:max-w-3xl lg:max-w-4xl line-clamp-2 leading-relaxed">
+                          {cat.desc}
+                        </p>
+                      </div>
+
+                      {/* Bottom Action Area */}
+                      <div className="w-full flex items-center justify-center pt-2">
+                        {isCenter ? (
+                          <div 
+                            className="w-full py-3.5 sm:py-5 md:py-6 lg:py-7 px-8 sm:px-14 rounded-2xl sm:rounded-3xl flex items-center justify-center gap-3 sm:gap-4 font-pixel text-sm sm:text-lg md:text-xl lg:text-2xl font-bold tracking-widest transition-all shadow-xl group-hover:scale-[1.01]"
+                            style={{ 
+                              backgroundColor: `${cat.color}35`, 
+                              color: '#FFFFFF',
+                              border: `1.5px solid ${cat.color}90`,
+                              boxShadow: `0 0 30px ${cat.color}50`
+                            }}
+                          >
+                            <span>點擊進入專屬名單 // ENTER CATEGORY</span>
+                            <span className="text-lg sm:text-2xl md:text-3xl">→</span>
+                          </div>
+                        ) : (
+                          <span className="text-xs sm:text-sm md:text-base font-mono text-white/50 tracking-widest uppercase">
+                            點擊置中切換 // CLICK TO CENTER
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+
+            {/* Bottom Fade Overlay */}
+            <div className="absolute bottom-0 left-0 right-0 h-20 sm:h-28 bg-gradient-to-t from-[#2D033B] to-transparent z-40 pointer-events-none" />
+          </div>
+
+          {/* Category Quick Select Pills & Mouse Wheel Cue */}
+          <div className="flex flex-col items-center gap-4 sm:gap-5 z-10 pt-2">
+            {/* Quick Pills */}
+            <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4">
+              {MEMBER_CATEGORIES.map((c, i) => (
+                <button
+                  key={c.id}
+                  onClick={() => setActiveCategoryIndex(i)}
+                  className={`px-4 sm:px-6 py-2 sm:py-3 rounded-2xl text-xs sm:text-sm md:text-base font-mono transition-all cursor-pointer flex items-center gap-2 sm:gap-3 ${
+                    i === activeCategoryIndex 
+                      ? 'bg-white/20 border-2 text-white font-bold scale-105 shadow-xl' 
+                      : 'bg-white/5 border border-white/10 text-white/50 hover:text-white/90 hover:bg-white/10'
+                  }`}
+                  style={{
+                    borderColor: i === activeCategoryIndex ? c.color : undefined,
+                  }}
+                >
+                  <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full" style={{ backgroundColor: c.color }} />
+                  <span>{c.name}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Wheel Scroll Prompt */}
+            <div className="flex items-center justify-center gap-3 text-white/50 font-mono text-xs sm:text-sm md:text-base select-none">
+              <svg className="w-5 h-5 sm:w-6 sm:h-6 text-white/60 animate-bounce" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="6" y="3" width="12" height="18" rx="6" />
+                <line x1="12" y1="7" x2="12" y2="11" />
+              </svg>
+              <span className="font-pixel text-[10px] sm:text-xs md:text-sm tracking-[0.28em] uppercase text-white/70">
+                滾輪滑動切換 • 點擊中央進入 // SCROLL WHEEL TO SELECT • CLICK TO ENTER
+              </span>
+            </div>
           </div>
 
           {/* Return Home Button */}
           <div className="pt-2 z-10">
             <button
               onClick={onHome}
-              className="px-6 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/30 text-xs font-mono text-white/60 hover:text-white tracking-widest uppercase transition-all active:scale-95 cursor-pointer flex items-center gap-2"
+              className="px-8 sm:px-12 py-3.5 sm:py-4 md:py-5 rounded-2xl bg-white/5 hover:bg-white/15 border border-white/15 hover:border-white/35 text-xs sm:text-sm md:text-base font-mono font-bold text-white/70 hover:text-white tracking-widest uppercase transition-all active:scale-95 cursor-pointer flex items-center gap-3 shadow-lg"
             >
-              <ArrowLeft className="w-3.5 h-3.5" />
+              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
               <span>返回主頁 // RETURN HOME</span>
             </button>
           </div>
@@ -865,7 +1064,7 @@ const CharacterSelect: React.FC<{
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -20 }}
           transition={{ duration: 0.35, ease: "easeOut" }}
-          className="w-full max-w-[1720px] bg-slate-900/40 backdrop-blur-xs p-4 sm:p-6 md:p-10 xl:p-12 z-10 rounded-3xl space-y-8"
+          className="w-full max-w-none bg-slate-900/40 backdrop-blur-xs p-6 sm:p-10 md:p-14 xl:p-16 z-10 rounded-[36px] space-y-10"
         >
           {/* Top Return and Category Switcher Bar */}
           <div className="w-full flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-white/10">
@@ -1318,7 +1517,7 @@ const SpecialThanksPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
       {/* Credits Content */}
       <div className="flex-1 flex flex-col items-center justify-center relative z-10 px-6 py-24 overflow-y-auto max-h-[85vh] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-        <div className="max-w-4xl w-full text-white/90 text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold tracking-wider text-center leading-relaxed sm:leading-loose">
+        <div className="w-full max-w-none text-white/90 text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-wider text-center leading-relaxed sm:leading-loose px-4 sm:px-12 md:px-20">
           <Typewriter text={credits} speed={80} />
         </div>
       </div>
@@ -2012,8 +2211,8 @@ const UmiriSpecialPage: React.FC<{ fighterId: number; onBack: () => void; onSecr
       </motion.button>
 
       {/* Main Content - Center Screen Control Block */}
-      <div className="flex-1 flex items-center justify-center relative z-10 w-full px-3 sm:px-4 md:px-6 py-16 pt-36 sm:pt-44">
-        <div className="flex flex-col xl:flex-row items-stretch gap-8 p-6 bg-slate-900/40 rounded-[2.5rem] backdrop-blur-xl border border-white/15 max-w-[1720px] w-full shadow-[0_20px_70px_rgba(0,0,0,0.5),inset_0_1px_2px_rgba(255,255,255,0.2)]">
+      <div className="flex-1 flex items-center justify-center relative z-10 w-full px-3 sm:px-6 md:px-10 lg:px-16 py-16 pt-32 sm:pt-40">
+        <div className="flex flex-col xl:flex-row items-stretch gap-8 p-6 sm:p-10 md:p-12 xl:p-16 bg-slate-900/40 rounded-[36px] backdrop-blur-xl border border-white/15 w-full max-w-none shadow-[0_20px_70px_rgba(0,0,0,0.5),inset_0_1px_2px_rgba(255,255,255,0.2)]">
           
           {/* Left Column Container */}
           <div className="flex flex-col gap-4 self-stretch hidden xl:flex flex-1 max-w-[360px]">
@@ -2362,7 +2561,7 @@ const UmiriSpecialPage: React.FC<{ fighterId: number; onBack: () => void; onSecr
             initial={{ opacity: 0, y: 50 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="relative z-10 flex flex-col items-start text-left w-full max-w-7xl"
+            className="relative z-10 flex flex-col items-start text-left w-full max-w-none"
           >
             <div className="flex flex-col items-start mb-20">
               <h2 className="text-9xl font-black text-white tracking-[-0.02em] italic drop-shadow-[0_0_40px_rgba(255,255,255,0.4)] leading-none">
@@ -2723,7 +2922,7 @@ const BroadcastStudioPage: React.FC<{
       <div className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 overflow-hidden relative">
         <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#fff 1px, transparent 0)', backgroundSize: '16px 16px' }} />
         
-        <div className="w-full max-w-[95vw] md:max-w-[90vw] h-[90vh] flex flex-col bg-black/20 rounded-[2.5rem] border-4 border-white/5 overflow-hidden shadow-2xl backdrop-blur-sm">
+        <div className="w-full max-w-none h-[92vh] flex flex-col bg-slate-900/40 rounded-[36px] border-2 border-white/10 overflow-hidden shadow-2xl backdrop-blur-md">
           {/* Status Bar */}
           <div className="h-14 bg-white/5 border-b-2 border-white/5 flex items-center justify-between px-6">
             <div className="flex items-center gap-3">
@@ -3964,71 +4163,71 @@ export default function App() {
                         </div>
                       );
                     })() : activeSubPage === 'intro_prequel_story' ? (
-                      <div className="absolute inset-x-0 mx-auto max-w-6xl flex flex-col items-center justify-center p-4 md:p-10">
+                      <div className="w-full max-w-none flex flex-col items-center justify-center p-4 sm:p-8 md:p-12 xl:p-16">
                         {/* Back navigation button */}
                         <motion.button
                           whileHover={{ scale: 1.05, x: -4 }}
                           whileTap={{ scale: 0.95 }}
                           onClick={() => setActiveSubPage('intro')}
-                          className="self-start mb-6 z-40 flex items-center gap-3 text-white/70 hover:text-white transition-all py-2 px-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl font-mono shadow-md cursor-pointer"
+                          className="self-start mb-8 z-40 flex items-center gap-3 text-white/70 hover:text-white transition-all py-3 px-6 bg-white/5 hover:bg-white/10 border border-white/15 rounded-2xl font-mono shadow-md cursor-pointer text-sm"
                         >
-                          <span className="text-base font-black">←</span>
-                          <span className="text-[10px] font-pixel uppercase tracking-widest">返回創團起點 // BACK</span>
+                          <span className="text-lg font-black">←</span>
+                          <span className="text-xs font-pixel uppercase tracking-widest">返回創團起點 // BACK</span>
                         </motion.button>
 
-                        <div className="flex flex-col lg:flex-row gap-8 lg:gap-12 w-full items-center justify-center z-10 text-white font-mono">
+                        <div className="w-full max-w-none bg-slate-900/40 backdrop-blur-xs p-6 sm:p-10 md:p-14 xl:p-16 rounded-[36px] border border-white/10 shadow-2xl flex flex-col lg:flex-row gap-10 lg:gap-16 items-center justify-center z-10 text-white font-mono">
                           {/* Left Column: Visual card */}
                           <motion.div
                             initial={{ x: -30, opacity: 0 }}
                             animate={{ x: 0, opacity: 1 }}
                             transition={{ delay: 0.2 }}
-                            className="w-[300px] h-[400px] sm:w-[320px] sm:h-[420px] bg-white/5 backdrop-blur-xl rounded-[24px] border-2 border-white/10 overflow-hidden relative shadow-[0_0_40px_rgba(80,114,123,0.2)] flex-shrink-0"
+                            className="w-[320px] h-[440px] sm:w-[380px] sm:h-[520px] md:w-[440px] md:h-[600px] bg-white/5 backdrop-blur-xl rounded-[32px] border-2 border-white/15 overflow-hidden relative shadow-[0_0_50px_rgba(80,114,123,0.3)] flex-shrink-0"
                           >
                             <img 
                               src="https://picsum.photos/seed/prequel-origin/600/800" 
                               alt="Prequel chapter"
-                              className="w-full h-full object-cover opacity-80"
+                              className="w-full h-full object-cover opacity-85"
                             />
                             <div className="absolute inset-0 bg-gradient-to-t from-[#001B3D]/95 via-[#001B3D]/30 to-transparent pointer-events-none" />
                             
-                            <div className="absolute bottom-6 left-6 right-6">
-                              <span className="text-[10px] bg-[#50727B] text-white px-2.5 py-1 rounded font-pixel uppercase tracking-widest font-bold">PREQUEL</span>
-                              <h3 className="text-xl font-black mt-2 tracking-wider italic text-white drop-shadow-[0_0_12px_rgba(255,255,255,0.4)]">一切的起點</h3>
-                              <p className="text-[10px] text-white/50 font-pixel uppercase tracking-[0.2em] mt-1">THE STARTS BEFORE DAWN</p>
+                            <div className="absolute bottom-8 left-8 right-8">
+                              <span className="text-xs bg-[#50727B] text-white px-3.5 py-1.5 rounded-xl font-pixel uppercase tracking-widest font-bold">PREQUEL</span>
+                              <h3 className="text-2xl sm:text-3xl font-black mt-3 tracking-wider italic text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.5)]">一切的起點</h3>
+                              <p className="text-xs text-white/50 font-pixel uppercase tracking-[0.2em] mt-1">THE STARTS BEFORE DAWN</p>
                             </div>
                             
-                            <div className="absolute top-4 left-4 w-6 h-6 border-t-2 border-l-2 border-white/30 rounded-tl-lg" />
-                            <div className="absolute bottom-4 right-4 w-6 h-6 border-b-2 border-r-2 border-white/30 rounded-br-lg" />
+                            <div className="absolute top-5 left-5 w-8 h-8 border-t-2 border-l-2 border-white/40 rounded-tl-xl" />
+                            <div className="absolute bottom-5 right-5 w-8 h-8 border-b-2 border-r-2 border-white/40 rounded-br-xl" />
                           </motion.div>
 
-                          {/* Right Column: Story Text Content Scroll */}
+                          {/* Right Column: Story Text Content */}
                           <motion.div
                             initial={{ x: 30, opacity: 0 }}
                             animate={{ x: 0, opacity: 1 }}
                             transition={{ delay: 0.3 }}
-                            className="flex-1 w-full max-w-2xl bg-black/45 backdrop-blur-md border-2 border-white/10 rounded-2xl p-6 md:p-8 relative overflow-hidden flex flex-col justify-between shadow-[0_12px_45px_rgba(0,0,0,0.5)] min-h-[400px]"
+                            className="flex-1 w-full bg-black/45 backdrop-blur-md border-2 border-white/10 rounded-3xl p-8 sm:p-10 md:p-12 relative overflow-hidden flex flex-col justify-between shadow-2xl min-h-[480px]"
                           >
-                            <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-[#50727B]" />
-                            <div className="absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 border-[#50727B]" />
-                            <div className="absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 border-[#50727B]" />
-                            <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-[#50727B]" />
+                            <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-[#50727B]" />
+                            <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-[#50727B]" />
+                            <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-[#50727B]" />
+                            <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-[#50727B]" />
 
-                            <div className="mb-4 flex items-center justify-between border-b border-white/10 pb-4">
-                              <div className="flex items-center gap-2">
-                                <span>✨</span>
-                                <span className="font-pixel text-[11px] tracking-[0.3em] uppercase text-[#87CEEB] font-bold">ARCADE HISTORY MODULE_00</span>
+                            <div className="mb-6 flex items-center justify-between border-b border-white/10 pb-5">
+                              <div className="flex items-center gap-3">
+                                <span className="text-2xl">✨</span>
+                                <span className="font-pixel text-xs sm:text-sm tracking-[0.3em] uppercase text-[#87CEEB] font-bold">ARCADE HISTORY MODULE_00</span>
                               </div>
-                              <span className="font-pixel text-[10px] text-white/35">PRE-STAGE SYNC // READY</span>
+                              <span className="font-pixel text-xs text-white/40">PRE-STAGE SYNC // READY</span>
                             </div>
 
-                            <div className="space-y-4 sm:space-y-5 text-sm sm:text-[15px] leading-relaxed text-white/90 font-mono tracking-wide py-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
-                              <p className="border-l-4 border-[#87CEEB] pl-4 text-white font-bold">
+                            <div className="space-y-6 sm:space-y-7 text-base sm:text-lg md:text-xl lg:text-2xl leading-relaxed text-white/95 font-mono tracking-wide py-2 max-h-[500px] overflow-y-auto custom-scrollbar pr-3">
+                              <p className="border-l-4 border-[#87CEEB] pl-5 text-white font-bold">
                                 在熱鬧的盛夏到來前，那是無數個漫長的寒夜。
                               </p>
                               <p>
                                 每位在白日為了生計而奔波、在鋼筋水泥的都市中壓抑靈魂的我們，總在午夜的群組裡不約而同地亮起綠燈。
                               </p>
-                              <p className="text-white/80 italic pl-3 border-l-2 border-[#87CEEB]/40">
+                              <p className="text-white/80 italic pl-4 border-l-2 border-[#87CEEB]/40">
                                 「不論這個世界怎麼變，我們當初對創作最純粹的那份熱愛，絕對不能被磨滅。」
                               </p>
                               <p>
@@ -4037,12 +4236,12 @@ export default function App() {
                               <p>
                                 那張由咖啡漬印染的草稿紙上，寫下了後來成為我們核心精神的誓言。沒有繁複的修飾，唯有一顆絕對真誠、想要傳達心意的「初心」。
                               </p>
-                              <p className="text-[#87CEEB] font-bold">
+                              <p className="text-[#87CEEB] font-bold text-xl sm:text-2xl md:text-3xl">
                                 這是前夜傳，是我們一切故事最珍貴、也最純淨的起點。
                               </p>
                             </div>
 
-                            <div className="mt-6 pt-4 border-t border-white/10 flex justify-between items-center text-[10px] text-white/40 tracking-widest uppercase">
+                            <div className="mt-8 pt-5 border-t border-white/10 flex justify-between items-center text-xs text-white/40 tracking-widest uppercase">
                               <span>PREQUEL LOG: INITIALIZED</span>
                               <span className="text-[#87CEEB] font-bold font-pixel">Q-PIXEL_PRE_0.0</span>
                             </div>
@@ -4050,30 +4249,30 @@ export default function App() {
                         </div>
                       </div>
                     ) : activeSubPage === 'intro_chapter_1' ? (
-                      <div className="absolute inset-x-0 mx-auto max-w-7xl w-full flex flex-col items-center justify-center p-4 md:p-8 lg:p-12">
+                      <div className="w-full max-w-none flex flex-col items-center justify-center p-4 sm:p-8 md:p-12 xl:p-16">
                         {/* Back navigation button */}
                         <motion.button
                           whileHover={{ scale: 1.05, x: -4 }}
                           whileTap={{ scale: 0.95 }}
                           onClick={() => setActiveSubPage('intro')}
-                          className="self-start mb-8 z-40 flex items-center gap-3 text-white/70 hover:text-white transition-all py-2.5 px-5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl font-mono shadow-md cursor-pointer"
+                          className="self-start mb-8 z-40 flex items-center gap-3 text-white/70 hover:text-white transition-all py-3 px-6 bg-white/5 hover:bg-white/10 border border-white/15 rounded-2xl font-mono shadow-md cursor-pointer text-sm"
                         >
-                          <span className="text-base font-black">←</span>
-                          <span className="text-[10px] font-pixel uppercase tracking-widest">返回創團起點 // BACK</span>
+                          <span className="text-lg font-black">←</span>
+                          <span className="text-xs font-pixel uppercase tracking-widest">返回創團起點 // BACK</span>
                         </motion.button>
 
-                        <div className="flex flex-col lg:flex-row gap-12 lg:gap-20 w-full items-center justify-center z-10 text-white font-mono">
-                          {/* Left Column: Visual card - Enlarged to reduce empty space */}
+                        <div className="w-full max-w-none bg-slate-900/40 backdrop-blur-xs p-6 sm:p-10 md:p-14 xl:p-16 rounded-[36px] border border-white/10 shadow-2xl flex flex-col lg:flex-row gap-10 lg:gap-16 items-center justify-center z-10 text-white font-mono">
+                          {/* Left Column: Visual card */}
                           <motion.div
                             initial={{ x: -30, opacity: 0 }}
                             animate={{ x: 0, opacity: 1 }}
                             transition={{ delay: 0.2 }}
-                            className="w-[260px] h-[350px] sm:w-[340px] sm:h-[460px] md:w-[380px] md:h-[510px] bg-white/5 backdrop-blur-xl rounded-[24px] border border-white/10 overflow-hidden relative shadow-[0_0_40px_rgba(76,94,110,0.2)] flex-shrink-0"
+                            className="w-[320px] h-[440px] sm:w-[380px] sm:h-[520px] md:w-[440px] md:h-[600px] bg-white/5 backdrop-blur-xl rounded-[32px] border-2 border-white/15 overflow-hidden relative shadow-[0_0_50px_rgba(76,94,110,0.3)] flex-shrink-0"
                           >
                             <img 
                               src="https://lh3.googleusercontent.com/d/1UQln4avTEezktGqc7ezjiV8BjN3ugH1-" 
                               alt="Origin chapter"
-                              className="w-full h-full object-cover opacity-85"
+                              className="w-full h-full object-cover opacity-90"
                               referrerPolicy="no-referrer"
                               onError={(e) => {
                                 e.currentTarget.src = "https://picsum.photos/seed/chapter-fallback/600/800";
@@ -4082,33 +4281,33 @@ export default function App() {
                             />
                             <div className="absolute inset-0 bg-gradient-to-t from-[#001B3D]/95 via-[#001B3D]/30 to-transparent pointer-events-none" />
                             
-                            <div className="absolute bottom-6 left-6 right-6">
-                              <span className="text-[10px] bg-[#4C5E6E] text-white px-3 py-1 rounded font-pixel uppercase tracking-widest font-bold">CHAPTER 1</span>
-                              <h3 className="text-xl font-black mt-2 tracking-wider italic text-white drop-shadow-[0_0_12px_rgba(255,255,255,0.4)]">回不去的曾經</h3>
-                              <p className="text-[10px] text-white/50 font-pixel uppercase tracking-[0.2em] mt-0.5">THE STORY CONTINUES</p>
+                            <div className="absolute bottom-8 left-8 right-8">
+                              <span className="text-xs bg-[#4C5E6E] text-white px-3.5 py-1.5 rounded-xl font-pixel uppercase tracking-widest font-bold">CHAPTER 1</span>
+                              <h3 className="text-2xl sm:text-3xl font-black mt-3 tracking-wider italic text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.5)]">回不去的曾經</h3>
+                              <p className="text-xs text-white/50 font-pixel uppercase tracking-[0.2em] mt-1">THE STORY CONTINUES</p>
                             </div>
                             
-                            <div className="absolute top-4 left-4 w-5 h-5 border-t border-l border-white/30 rounded-tl-md" />
-                            <div className="absolute bottom-4 right-4 w-5 h-5 border-b border-r border-white/30 rounded-br-md" />
+                            <div className="absolute top-5 left-5 w-8 h-8 border-t-2 border-l-2 border-white/40 rounded-tl-xl" />
+                            <div className="absolute bottom-5 right-5 w-8 h-8 border-b-2 border-r-2 border-white/40 rounded-br-xl" />
                           </motion.div>
 
-                          {/* Right Column: Story Text Content - Enlarged max-width, padding and spacing, no borders/scrolling */}
+                          {/* Right Column: Story Text Content */}
                           <motion.div
                             initial={{ x: 30, opacity: 0 }}
                             animate={{ x: 0, opacity: 1 }}
                             transition={{ delay: 0.3 }}
-                            className="flex-1 w-full max-w-4xl bg-black/15 backdrop-blur-xs p-6 md:p-8 lg:p-10 relative flex flex-col justify-between shadow-none"
+                            className="flex-1 w-full bg-black/45 backdrop-blur-md border-2 border-white/10 rounded-3xl p-8 sm:p-10 md:p-12 relative flex flex-col justify-between shadow-2xl"
                           >
-                            <div className="mb-6 flex items-center justify-between border-b border-white/10 pb-4">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xl">🌌</span>
-                                <span className="font-pixel text-[11px] tracking-[0.3em] uppercase text-[#7E98B0] font-bold">ARCADE HISTORY MODULE_01</span>
+                            <div className="mb-6 flex items-center justify-between border-b border-white/10 pb-5">
+                              <div className="flex items-center gap-3">
+                                <span className="text-2xl">🌌</span>
+                                <span className="font-pixel text-xs sm:text-sm tracking-[0.3em] uppercase text-[#7E98B0] font-bold">ARCADE HISTORY MODULE_01</span>
                               </div>
-                              <span className="font-pixel text-[10px] text-white/35">ONLINE SYNC // SUCCESS</span>
+                              <span className="font-pixel text-xs text-white/40">ONLINE SYNC // SUCCESS</span>
                             </div>
 
-                            <div className="space-y-6 sm:space-y-8 text-[18px] sm:text-[21px] md:text-[24px] lg:text-[26px] leading-relaxed text-white/95 font-mono tracking-wide py-2">
-                              <p className="border-l-4 border-[#4C5E6E] pl-5 text-white font-bold">
+                            <div className="space-y-6 sm:space-y-8 text-lg sm:text-xl md:text-2xl lg:text-3xl leading-relaxed text-white/95 font-mono tracking-wide py-2">
+                              <p className="border-l-4 border-[#4C5E6E] pl-6 text-white font-bold">
                                 本來 一切都是挺好的.........直到那天
                               </p>
                               <p>
@@ -4116,7 +4315,7 @@ export default function App() {
                                 一個人創業 一個人努力工作 甚至一個人架網站<br />
                                 在我本來以為一切都好起來了 嚮往已久的工作室終於到手的時候
                               </p>
-                              <p className="text-white/80 italic pl-4 border-l-2 border-[#4C5E6E]/40">
+                              <p className="text-white/80 italic pl-5 border-l-2 border-[#4C5E6E]/40">
                                 就因為父親一句話 一個錯誤的決策 一個本不應由我承擔的結果<br />
                                 被強行的壓到我頭上 工作室也即將退租被收回
                               </p>
@@ -4128,12 +4327,12 @@ export default function App() {
                                 網上所說的「你有一個低認知父母 事業就毀一半」這種話<br />
                                 我在以前都是笑笑帶過 直到事情打到我頭上 我才知道
                               </p>
-                              <p className="text-[#FFA4B4] font-bold text-2xl sm:text-3xl md:text-4xl border-t border-white/10 pt-5 mt-4">
+                              <p className="text-[#FFA4B4] font-bold text-3xl sm:text-4xl md:text-5xl border-t border-white/10 pt-6 mt-4">
                                 「呵 我有兩個」
                               </p>
                             </div>
 
-                            <div className="mt-8 pt-4 border-t border-white/10 flex justify-between items-center text-[10px] text-white/40 tracking-widest uppercase">
+                            <div className="mt-8 pt-5 border-t border-white/10 flex justify-between items-center text-xs text-white/40 tracking-widest uppercase">
                               <span>AUTOSAVE STATE: STORED</span>
                               <span className="text-[#4C5E6E] font-bold font-pixel">Q-PIXEL_PROD_1.0</span>
                             </div>
@@ -4141,8 +4340,9 @@ export default function App() {
                         </div>
                       </div>
                     ) : activeSubPage === 'collab' ? (
-                      <div className="absolute inset-0 flex items-start justify-center px-16 pt-72 pb-16 z-40">
-                        <div className="grid grid-cols-2 grid-rows-3 gap-4 w-full h-full max-h-[calc(100vh-320px)] max-w-[95vw] mx-auto">
+                      <div className="w-full max-w-none flex flex-col items-center justify-center px-4 sm:px-8 md:px-12 xl:px-16 pt-32 pb-20 z-40">
+                        <div className="w-full max-w-none bg-slate-900/40 backdrop-blur-xs p-6 sm:p-10 md:p-14 xl:p-16 rounded-[36px] border border-white/10 shadow-2xl">
+                          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 sm:gap-8 w-full min-h-[calc(100vh-320px)]">
                           {[
                             { title: 'BRAND', id: '01' },
                             { title: 'EVENT', id: '02' },
@@ -4156,23 +4356,19 @@ export default function App() {
                               initial={{ opacity: 0, scale: 0.98 }}
                               animate={{ opacity: 1, scale: 1 }}
                               transition={{ delay: i * 0.05 }}
-                              className="bg-white/5 backdrop-blur-xl border border-white/10 hover:bg-white/10 transition-all duration-300 cursor-pointer flex flex-col items-center justify-center group relative overflow-hidden shadow-2xl"
+                              className="bg-white/5 backdrop-blur-xl border border-white/10 hover:bg-white/10 transition-all duration-300 cursor-pointer flex flex-col items-center justify-center group relative overflow-hidden shadow-2xl rounded-3xl min-h-[220px]"
                             >
-                              {/* Background Text Accent - Removed */}
-                              <div className="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden">
-                              </div>
-
                               {/* Decorative Corner Accents */}
-                              <div className="absolute top-0 left-0 w-32 h-32 border-t-2 border-l-2 border-white/10 group-hover:border-white/30 transition-all duration-500" />
-                              <div className="absolute bottom-0 right-0 w-32 h-32 border-b-2 border-r-2 border-white/10 group-hover:border-white/30 transition-all duration-500" />
+                              <div className="absolute top-0 left-0 w-16 h-16 border-t-2 border-l-2 border-white/20 group-hover:border-white/40 transition-all duration-500" />
+                              <div className="absolute bottom-0 right-0 w-16 h-16 border-b-2 border-r-2 border-white/20 group-hover:border-white/40 transition-all duration-500" />
                               
                               {/* Content */}
-                              <div className="relative z-10 flex flex-col items-center justify-center px-8 text-center w-full h-full">
+                              <div className="relative z-10 flex flex-col items-center justify-center p-8 text-center w-full h-full">
                                 {i === 0 && (
                                   <motion.div
                                     initial={{ opacity: 0, y: 20 }}
                                     animate={{ opacity: 1, y: 0 }}
-                                    className="text-white font-black text-6xl md:text-8xl tracking-[0.2em] drop-shadow-[0_0_30px_rgba(255,255,255,0.5)]"
+                                    className="text-white font-black text-4xl sm:text-6xl md:text-7xl xl:text-8xl tracking-[0.2em] drop-shadow-[0_0_30px_rgba(255,255,255,0.5)]"
                                   >
                                     團員招募中
                                   </motion.div>
@@ -4183,8 +4379,8 @@ export default function App() {
                                     animate={{ opacity: 1, y: 0 }}
                                     className="text-white font-bold flex flex-col gap-4 text-center items-center"
                                   >
-                                    <div className="text-3xl md:text-4xl tracking-widest opacity-60">官方通訊管道</div>
-                                    <div className="text-xl md:text-2xl opacity-80 font-mono tracking-widest">
+                                    <div className="text-2xl sm:text-3xl md:text-4xl tracking-widest opacity-60">官方通訊管道</div>
+                                    <div className="text-xl sm:text-2xl md:text-3xl opacity-80 font-mono tracking-widest">
                                       電話: 02-8925-2329
                                     </div>
                                   </motion.div>
@@ -4195,35 +4391,35 @@ export default function App() {
                                     animate={{ opacity: 1, y: 0 }}
                                     className="text-white font-bold flex flex-col gap-4"
                                   >
-                                    <div className="text-3xl md:text-4xl tracking-widest opacity-60">其他合作邀約請聯繫</div>
-                                    <div className="text-xl md:text-2xl text-[#4C5E6E] break-all">海璃海狸工作室電子郵件<br/>haillibaobao0822@gmail.com</div>
-                                    <div className="text-lg md:text-xl opacity-80 leading-relaxed">
+                                    <div className="text-2xl sm:text-3xl md:text-4xl tracking-widest opacity-60">其他合作邀約請聯繫</div>
+                                    <div className="text-xl sm:text-2xl text-[#4C5E6E] break-all">海璃海狸工作室電子郵件<br/>haillibaobao0822@gmail.com</div>
+                                    <div className="text-base sm:text-lg md:text-xl opacity-80 leading-relaxed">
                                       或於平日早上9:00至晚上8:00<br/>
                                       至海璃海狸工作室進行商談
                                     </div>
                                   </motion.div>
                                 )}
-                                <div className="absolute bottom-12 h-3 w-0 bg-white/70 group-hover:w-96 transition-all duration-500" />
+                                <div className="absolute bottom-8 h-2 w-0 bg-white/70 group-hover:w-64 transition-all duration-500" />
                               </div>
                               
                               {/* Hover Glow & Scanline */}
-                              <div className="absolute inset-0 bg-gradient-to-br from-white/25 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                              <div className="absolute inset-0 pointer-events-none opacity-[0.06] bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[length:100%_2px,3px_100%]" />
+                              <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                             </motion.div>
                           ))}
                         </div>
                       </div>
+                    </div>
                     ) : activeSubPage === 'performance' ? (
-                      <div className="w-full flex flex-col items-center gap-16 md:gap-24 relative z-10">
+                      <div className="w-full max-w-none flex flex-col items-center gap-16 md:gap-24 relative z-10 px-3 sm:px-6 md:px-10 lg:px-16">
                         {/* Page 1: Announcement Block */}
-                        <div className="min-h-[calc(100vh-220px)] w-full flex flex-col items-center justify-center p-4 md:p-8 relative">
-                          {/* Enlarged pixel prohibition button for Banned List, aligned in the bottom right corner */}
+                        <div className="min-h-[calc(100vh-220px)] w-full max-w-none flex flex-col items-center justify-center p-4 md:p-8 relative">
+                          {/* Enlarged pixel prohibition button for Banned List */}
                           <div className="absolute bottom-6 right-6 sm:bottom-8 sm:right-8 md:bottom-12 md:right-12 z-50 pointer-events-auto">
                             <motion.button 
                               whileHover={{ scale: 1.1, rotate: -5 }}
                               whileTap={{ scale: 0.95 }}
                               onClick={() => setGameState('banned_list')}
-                              className="p-4 bg-neutral-950/95 hover:bg-red-950/45 border-2 border-[#FF5555] rounded-xl flex flex-col items-center justify-center gap-3 transition-all duration-300 shadow-[0_0_25px_rgba(255,85,85,0.3)] hover:shadow-[0_0_35px_rgba(255,85,85,0.5)] cursor-pointer group"
+                              className="p-5 bg-neutral-950/95 hover:bg-red-950/45 border-2 border-[#FF5555] rounded-2xl flex flex-col items-center justify-center gap-3 transition-all duration-300 shadow-[0_0_25px_rgba(255,85,85,0.3)] hover:shadow-[0_0_35px_rgba(255,85,85,0.5)] cursor-pointer group"
                             >
                               {/* Large Pixel Prohibition Icon */}
                               <div className="grid grid-cols-9 gap-[1px]">
@@ -4241,7 +4437,7 @@ export default function App() {
                                   row.map((pixel, colIndex) => (
                                     <div 
                                       key={`${rowIndex}-${colIndex}`} 
-                                      className="w-1.5 h-1.5 sm:w-2 sm:h-2 md:w-2.5 md:h-2.5"
+                                      className="w-2 h-2 sm:w-2.5 sm:h-2.5 md:w-3 md:h-3"
                                       style={{ 
                                         backgroundColor: pixel === 1 ? '#FFFFFF' : pixel === 2 ? '#FF3333' : 'transparent' 
                                       }}
@@ -4250,41 +4446,41 @@ export default function App() {
                                 )}
                               </div>
                               
-                              <div className="flex flex-col items-center gap-0.5">
-                                <span className="text-[#FF5555] text-[11px] sm:text-xs font-pixel tracking-wider font-bold group-hover:text-red-400">
+                              <div className="flex flex-col items-center gap-1">
+                                <span className="text-[#FF5555] text-xs sm:text-sm font-pixel tracking-wider font-bold group-hover:text-red-400">
                                   出禁名單
                                 </span>
-                                <span className="text-white/40 text-[8px] font-mono tracking-widest uppercase">
+                                <span className="text-white/40 text-[9px] font-mono tracking-widest uppercase">
                                   BLACKLIST
                                 </span>
                               </div>
                             </motion.button>
                           </div>
-                          <div className="w-full max-w-5xl flex flex-col gap-8 my-auto py-8">
+                          <div className="w-full max-w-none flex flex-col gap-8 my-auto py-8">
                             {/* Opening Announcement Block (Enlarged) */}
                             <motion.div
                               initial={{ opacity: 0, scale: 0.95 }}
                               animate={{ opacity: 1, scale: 1 }}
                               transition={{ delay: 0.1 }}
-                              className="w-full bg-black/45 backdrop-blur-lg rounded-2xl py-16 px-6 sm:px-12 md:py-20 md:px-16 border-2 border-white/10 shadow-[0_0_50px_rgba(255,179,71,0.18)] relative overflow-hidden group"
+                              className="w-full max-w-none bg-slate-900/40 backdrop-blur-lg rounded-[36px] py-20 px-8 sm:px-14 md:py-24 md:px-20 border-2 border-white/10 shadow-[0_0_50px_rgba(255,179,71,0.25)] relative overflow-hidden group"
                             >
                               {/* Neon-colored pixel corner decorations */}
-                              <div className="absolute top-0 left-0 w-5 h-5 border-t-2 border-l-2 border-[#FFB347]" />
-                              <div className="absolute top-0 right-0 w-5 h-5 border-t-2 border-r-2 border-[#FFB347]" />
-                              <div className="absolute bottom-0 left-0 w-5 h-5 border-b-2 border-l-2 border-[#FFB347]" />
-                              <div className="absolute bottom-0 right-0 w-5 h-5 border-b-2 border-r-2 border-[#FFB347]" />
+                              <div className="absolute top-0 left-0 w-8 h-8 border-t-3 border-l-3 border-[#FFB347]" />
+                              <div className="absolute top-0 right-0 w-8 h-8 border-t-3 border-r-3 border-[#FFB347]" />
+                              <div className="absolute bottom-0 left-0 w-8 h-8 border-b-3 border-l-3 border-[#FFB347]" />
+                              <div className="absolute bottom-0 right-0 w-8 h-8 border-b-3 border-r-3 border-[#FFB347]" />
                               
                               {/* Content header style */}
-                              <div className="flex items-center justify-center gap-4 mb-10">
-                                <span className="text-4xl animate-pulse select-none">🏮</span>
-                                <span className="text-sm md:text-base text-[#FFB347] font-pixel tracking-[0.5em] uppercase font-black">INFO MODULE</span>
-                                <span className="text-4xl animate-pulse select-none">🏮</span>
+                              <div className="flex items-center justify-center gap-5 mb-12">
+                                <span className="text-5xl animate-pulse select-none">🏮</span>
+                                <span className="text-base md:text-lg text-[#FFB347] font-pixel tracking-[0.5em] uppercase font-black">INFO MODULE</span>
+                                <span className="text-5xl animate-pulse select-none">🏮</span>
                               </div>
                               
                               {/* Announcement Body */}
-                              <p className="text-center text-xl sm:text-2xl md:text-4xl lg:text-5xl xl:text-6xl font-black text-white tracking-[0.15em] leading-[1.8] select-none drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]">
+                              <p className="text-center text-2xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-black text-white tracking-[0.15em] leading-[1.8] select-none drop-shadow-[0_0_20px_rgba(255,255,255,0.35)]">
                                 紡塊像素官方小基地<br />
-                                <span className="text-[#FFB347] drop-shadow-[0_0_25px_rgba(255,179,113,0.6)] font-extrabold inline-block my-3">「酸欠像素偶像居酒屋」</span><br />
+                                <span className="text-[#FFB347] drop-shadow-[0_0_30px_rgba(255,179,113,0.7)] font-extrabold inline-block my-4">「酸欠像素偶像居酒屋」</span><br />
                                 現正營業中
                               </p>
                             </motion.div>
@@ -4297,24 +4493,24 @@ export default function App() {
                             viewport={{ once: true }}
                             className="absolute bottom-2 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-white/30 pointer-events-none"
                           >
-                            <span className="text-[10px] font-black tracking-[0.5em] uppercase">Scroll</span>
+                            <span className="text-xs font-black tracking-[0.5em] uppercase">Scroll</span>
                             <motion.div 
                               animate={{ y: [0, 8, 0] }}
                               transition={{ duration: 2, repeat: Infinity }}
-                              className="w-1 h-8 bg-gradient-to-b from-white/30 to-transparent rounded-full"
+                              className="w-1.5 h-10 bg-gradient-to-b from-white/30 to-transparent rounded-full"
                             />
                           </motion.div>
                         </div>
 
                         {/* Page 2: Monthly Calendar */}
-                        <div className="min-h-screen w-full flex flex-col items-center justify-center p-4 md:p-8 relative">
-                          <div className="w-full max-w-4xl flex flex-col gap-8 my-auto py-8">
+                        <div className="min-h-screen w-full max-w-none flex flex-col items-center justify-center p-4 md:p-8 relative">
+                          <div className="w-full max-w-none flex flex-col gap-8 my-auto py-8">
                             <motion.div
                               initial={{ opacity: 0, y: 30 }}
                               whileInView={{ opacity: 1, y: 0 }}
                               viewport={{ once: true }}
                               transition={{ duration: 0.6 }}
-                              className="w-full"
+                              className="w-full max-w-none bg-slate-900/40 backdrop-blur-xs p-6 sm:p-10 md:p-14 rounded-[36px] border border-white/10"
                             >
                               <React.Suspense fallback={
                                 <div className="flex flex-col items-center justify-center p-12 bg-white/5 border border-white/10 rounded-2xl animate-pulse font-mono text-xs text-white/50 tracking-widest">
@@ -4329,34 +4525,34 @@ export default function App() {
                         </div>
                       </div>
                     ) : activeSubPage === 'live_event' ? (
-                      <div className="w-full flex flex-col items-center gap-16 md:gap-24 relative z-10">
+                      <div className="w-full max-w-none flex flex-col items-center gap-16 md:gap-24 relative z-10 px-3 sm:px-6 md:px-10 lg:px-16">
                         {/* Page 1: Announcement Block */}
-                        <div className="min-h-[calc(100vh-220px)] w-full flex flex-col items-center justify-center p-4 md:p-8 relative">
-                          <div className="w-full max-w-4xl flex flex-col gap-8 my-auto py-8">
+                        <div className="min-h-[calc(100vh-220px)] w-full max-w-none flex flex-col items-center justify-center p-4 md:p-8 relative">
+                          <div className="w-full max-w-none flex flex-col gap-8 my-auto py-8">
                             {/* Opening Announcement Block (Enlarged) */}
                             <motion.div
                               initial={{ opacity: 0, scale: 0.95 }}
                               animate={{ opacity: 1, scale: 1 }}
                               transition={{ delay: 0.1 }}
-                              className="w-full bg-black/45 backdrop-blur-lg rounded-2xl py-16 px-12 md:py-20 md:px-16 border-2 border-[#FFFF00]/25 shadow-[0_0_50px_rgba(255,255,0,0.12)] relative overflow-hidden group"
+                              className="w-full max-w-none bg-slate-900/40 backdrop-blur-lg rounded-[36px] py-20 px-8 sm:px-14 md:py-24 md:px-20 border-2 border-[#FFFF00]/30 shadow-[0_0_50px_rgba(255,255,0,0.18)] relative overflow-hidden group"
                             >
                               {/* Neon-colored pixel corner decorations */}
-                              <div className="absolute top-0 left-0 w-5 h-5 border-t-2 border-l-2 border-[#FFFF00]" />
-                              <div className="absolute top-0 right-0 w-5 h-5 border-t-2 border-r-2 border-[#FFFF00]" />
-                              <div className="absolute bottom-0 left-0 w-5 h-5 border-b-2 border-l-2 border-[#FFFF00]" />
-                              <div className="absolute bottom-0 right-0 w-5 h-5 border-b-2 border-r-2 border-[#FFFF00]" />
+                              <div className="absolute top-0 left-0 w-8 h-8 border-t-3 border-l-3 border-[#FFFF00]" />
+                              <div className="absolute top-0 right-0 w-8 h-8 border-t-3 border-r-3 border-[#FFFF00]" />
+                              <div className="absolute bottom-0 left-0 w-8 h-8 border-b-3 border-l-3 border-[#FFFF00]" />
+                              <div className="absolute bottom-0 right-0 w-8 h-8 border-b-3 border-r-3 border-[#FFFF00]" />
                               
                               {/* Content header style */}
-                              <div className="flex items-center justify-center gap-4 mb-10">
-                                <span className="text-4xl animate-pulse select-none">🎤</span>
-                                <span className="text-sm md:text-base text-[#FFFF00] font-pixel tracking-[0.5em] uppercase font-black">LIVE PERFORMANCE</span>
-                                <span className="text-4xl animate-pulse select-none">🎤</span>
+                              <div className="flex items-center justify-center gap-5 mb-12">
+                                <span className="text-5xl animate-pulse select-none">🎤</span>
+                                <span className="text-base md:text-lg text-[#FFFF00] font-pixel tracking-[0.5em] uppercase font-black">LIVE PERFORMANCE</span>
+                                <span className="text-5xl animate-pulse select-none">🎤</span>
                               </div>
                               
                               {/* Announcement Body */}
-                              <p className="text-center text-xl sm:text-2xl md:text-4xl font-black text-white tracking-[0.15em] leading-[1.8] select-none drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]">
+                              <p className="text-center text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-[0.15em] leading-[1.8] select-none drop-shadow-[0_0_20px_rgba(255,255,255,0.35)]">
                                 CUBEPIXEL 夏季特別Live公演<br />
-                                <span className="text-[#FFFF00] drop-shadow-[0_0_25px_rgba(255,255,0,0.6)] font-extrabold inline-block my-2">「第一回紡塊公演：像素重力」</span><br />
+                                <span className="text-[#FFFF00] drop-shadow-[0_0_30px_rgba(255,255,0,0.7)] font-extrabold inline-block my-4">「第一回紡塊公演：像素重力」</span><br />
                                 即將隆重推出，敬請期待！
                               </p>
                             </motion.div>
@@ -4369,24 +4565,24 @@ export default function App() {
                             viewport={{ once: true }}
                             className="absolute bottom-2 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-white/30 pointer-events-none"
                           >
-                            <span className="text-[10px] font-black tracking-[0.5em] uppercase">Scroll</span>
+                            <span className="text-xs font-black tracking-[0.5em] uppercase">Scroll</span>
                             <motion.div 
                               animate={{ y: [0, 8, 0] }}
                               transition={{ duration: 2, repeat: Infinity }}
-                              className="w-1 h-8 bg-gradient-to-b from-white/30 to-transparent rounded-full"
+                              className="w-1.5 h-10 bg-gradient-to-b from-white/30 to-transparent rounded-full"
                             />
                           </motion.div>
                         </div>
 
                         {/* Page 2: Monthly Calendar */}
-                        <div className="min-h-screen w-full flex flex-col items-center justify-center p-4 md:p-8 relative">
-                          <div className="w-full max-w-4xl flex flex-col gap-8 my-auto py-8">
+                        <div className="min-h-screen w-full max-w-none flex flex-col items-center justify-center p-4 md:p-8 relative">
+                          <div className="w-full max-w-none flex flex-col gap-8 my-auto py-8">
                             <motion.div
                               initial={{ opacity: 0, y: 30 }}
                               whileInView={{ opacity: 1, y: 0 }}
                               viewport={{ once: true }}
                               transition={{ duration: 0.6 }}
-                              className="w-full"
+                              className="w-full max-w-none bg-slate-900/40 backdrop-blur-xs p-6 sm:p-10 md:p-14 rounded-[36px] border border-white/10"
                             >
                               <React.Suspense fallback={
                                 <div className="flex flex-col items-center justify-center p-12 bg-white/5 border border-white/10 rounded-2xl animate-pulse font-mono text-xs text-white/50 tracking-widest">
@@ -4401,24 +4597,24 @@ export default function App() {
                         </div>
                       </div>
                     ) : activeSubPage === 'disabled' ? (
-                      <div className="w-full min-h-[calc(100vh-220px)] flex flex-col items-center justify-center p-4 md:p-8 relative z-10">
+                      <div className="w-full max-w-none min-h-[calc(100vh-220px)] flex flex-col items-center justify-center p-4 sm:p-8 md:p-12 xl:p-16 relative z-10">
                         <motion.div 
                           initial={{ opacity: 0, scale: 0.92 }}
                           animate={{ opacity: 1, scale: 1 }}
                           transition={{ duration: 0.4 }}
-                          className="max-w-2xl w-full bg-slate-900/95 border-2 border-slate-500/40 rounded-3xl p-6 md:p-8 backdrop-blur-xl shadow-[0_0_50px_rgba(76,94,110,0.3)] flex flex-col items-center text-center space-y-6"
+                          className="w-full max-w-none bg-slate-900/40 border border-white/15 rounded-[36px] p-8 sm:p-12 md:p-16 backdrop-blur-xl shadow-2xl flex flex-col items-center text-center space-y-8"
                         >
                           {/* Header Tag */}
-                          <div className="flex items-center gap-2 px-4 py-1.5 bg-slate-800/90 border border-slate-500/40 rounded-full text-slate-300 text-xs font-mono font-bold tracking-widest shadow-sm">
+                          <div className="flex items-center gap-2 px-5 py-2 bg-slate-800/90 border border-slate-500/40 rounded-full text-slate-300 text-sm font-mono font-bold tracking-widest shadow-sm">
                             <span>🔒 SECRET UNLOCKED // 隱藏內容</span>
                           </div>
 
                           {/* Image Container */}
-                          <div className="w-full rounded-2xl overflow-hidden border border-slate-600/30 bg-black/80 shadow-2xl relative group">
+                          <div className="w-full rounded-3xl overflow-hidden border border-slate-600/30 bg-black/80 shadow-2xl relative group max-w-5xl">
                             <img 
-                              src="https://drive.google.com/thumbnail?id=16pSSUb3kREFMRTd08o-97CZ-bSvH-Ulm&sz=w1000"
+                              src="https://drive.google.com/thumbnail?id=16pSSUb3kREFMRTd08o-97CZ-bSvH-Ulm&sz=w1000" 
                               alt="隱藏圖片"
-                              className="w-full max-h-[60vh] object-contain transition-transform duration-500 group-hover:scale-105"
+                              className="w-full max-h-[70vh] object-contain transition-transform duration-500 group-hover:scale-105"
                               referrerPolicy="no-referrer"
                             />
                           </div>
@@ -4429,14 +4625,14 @@ export default function App() {
                               href="https://drive.google.com/file/d/16pSSUb3kREFMRTd08o-97CZ-bSvH-Ulm/view?usp=sharing"
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="px-5 py-2.5 bg-slate-700/80 hover:bg-slate-600 text-white rounded-xl text-xs font-bold font-mono transition-all border border-slate-500/30 shadow-md flex items-center gap-2"
+                              className="px-6 py-3 bg-slate-700/80 hover:bg-slate-600 text-white rounded-2xl text-sm font-bold font-mono transition-all border border-slate-500/30 shadow-md flex items-center gap-2"
                             >
                               <span>🖼️</span>
                               <span>開啟原圖連結</span>
                             </a>
                             <button
                               onClick={() => setActiveSubPage(null)}
-                              className="px-5 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold font-mono transition-all border border-white/20"
+                              className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-2xl text-sm font-bold font-mono transition-all border border-white/20"
                             >
                               ✕ 關閉頁面
                             </button>
