@@ -18,6 +18,9 @@ import { DarkRedSubPage } from './components/DarkRedSubPage';
 import { EscalatorMonologueSubpage } from './components/EscalatorMonologueSubpage';
 import { umiriPhotoBase64 as umiriOfficialPhoto } from './assets/umiriPhotoBase64';
 
+const LOGO_URL = "/assets/aistudio/____-removebg-preview_d70a7f72.png";
+const FALLBACK_LOGO_URL = "/images/logo.png";
+
 const COLORS = [
   '#F08080', // 紅/淺珊瑚紅 (Light Coral)
   '#FFB347', // 橘/粉彩柑橘色 (Pastel Tangerine/Citrus Orange)
@@ -431,12 +434,277 @@ const BubbleSystem: React.FC = () => {
   );
 };
 
+type MemberCategory = 'producer' | 'cubepixel' | 'yojiuta' | 'independent';
+
+const MEMBER_CATEGORIES: {
+  id: MemberCategory;
+  name: string;
+  enName: string;
+  badge: string;
+  color: string;
+  icon: string;
+  desc: string;
+  memberCount: string;
+}[] = [
+  {
+    id: 'producer',
+    name: '製作人與營運',
+    enName: 'PRODUCER & OPERATIONS',
+    badge: 'CORE // 核心團隊',
+    color: '#87CEEB',
+    icon: '👑',
+    desc: '涼海 璃 (璃帽) • 遜砲小藍',
+    memberCount: '2 位成員',
+  },
+  {
+    id: 'cubepixel',
+    name: '紡塊像素',
+    enName: 'CUBEPIXEL 1ST GEN',
+    badge: '1ST GEN // 一期生',
+    color: '#FFB347',
+    icon: '🎮',
+    desc: '鈴未 藪 及一期生戰隊成員',
+    memberCount: '6 位成員',
+  },
+  {
+    id: 'yojiuta',
+    name: '蕷蒔泡沫',
+    enName: 'YOJIUTA 2ND GEN',
+    badge: '2ND GEN // 二期生預定',
+    color: '#B8AC78',
+    icon: '🫧',
+    desc: '四方はつら 及二期生預備團員',
+    memberCount: '4 位成員',
+  },
+  {
+    id: 'independent',
+    name: '其他獨立藝人',
+    enName: 'INDEPENDENT & VTUBER',
+    badge: 'PROJECT // 獨立企劃',
+    color: '#A855F7',
+    icon: '🔮',
+    desc: 'YURUKIRA 及外部合作活動藝人',
+    memberCount: 'VTUBER 企劃',
+  },
+];
+
+const PURPLE_TEXTS = [
+  '君の推し',
+  '君の推し',
+  '君の推し',
+  '✦ 君の推し ✦',
+  '君の推し',
+  '君の推し！',
+  '君の推し♡',
+  '【君の推し】',
+  '君の推し',
+  '君の推し',
+  '君の推し',
+  '◆ 君の推し ◆',
+];
+
+const PURPLE_PALETTE = [
+  '#F3E8FF', // Purple 100 / Ultra light
+  '#E9D5FF', // Purple 200 / Lilac
+  '#D8B4FE', // Purple 300 / Soft purple
+  '#C084FC', // Purple 400 / Medium light
+  '#A855F7', // Purple 500 / Violet
+  '#9333EA', // Purple 600 / Deep violet
+  '#7E22CE', // Purple 700 / Royal purple
+  '#B266FF', // Neon purple
+  '#D1B3FF', // Pastel grape
+  '#E0B0FF', // Mauve
+  '#C4B5FD', // Soft lavender
+  '#DDD6FE', // Pale violet
+];
+
+const PURPLE_OPACITIES = [0.15, 0.22, 0.32, 0.45, 0.58, 0.72, 0.85, 0.95];
+
+const KIMI_SIZES = [
+  'text-xl sm:text-2xl font-bold',
+  'text-2xl sm:text-3xl font-extrabold',
+  'text-3xl sm:text-4xl font-black',
+  'text-4xl sm:text-5xl font-black italic',
+  'text-5xl sm:text-6xl md:text-7xl font-black italic',
+  'text-6xl sm:text-7xl md:text-8xl font-black tracking-widest italic',
+];
+
+interface DanmakuParticle {
+  id: number;
+  text: string;
+  top: string;
+  duration: number;
+  delay: number;
+  color: string;
+  sizeClass: string;
+  opacity: number;
+  zIndex: number;
+}
+
+const KimiNoOshiDanmakuTransition: React.FC<{ 
+  onLastBulletEntered: () => void;
+  onComplete: () => void;
+}> = ({ onLastBulletEntered, onComplete }) => {
+  const [maskFaded, setMaskFaded] = useState<boolean>(false);
+  const onLastBulletEnteredRef = useRef(onLastBulletEntered);
+  const onCompleteRef = useRef(onComplete);
+  onLastBulletEnteredRef.current = onLastBulletEntered;
+  onCompleteRef.current = onComplete;
+
+  const particles = useMemo<DanmakuParticle[]>(() => {
+    const list: DanmakuParticle[] = [];
+    const count = 90; // 豐沛的大量紫色彈幕
+    for (let i = 0; i < count; i++) {
+      const isLast = i === count - 1;
+      // distribute across viewport vertically (from 1% to 95%)
+      const baseTop = (i * 3.3) % 95 + (Math.random() * 2 - 1);
+      const text = isLast ? '君の推し 💜' : PURPLE_TEXTS[i % PURPLE_TEXTS.length];
+      const color = isLast ? '#E9D5FF' : PURPLE_PALETTE[i % PURPLE_PALETTE.length];
+      const opacity = isLast ? 1 : PURPLE_OPACITIES[i % PURPLE_OPACITIES.length];
+      const sizeClass = isLast
+        ? 'text-3xl sm:text-4xl md:text-5xl font-black tracking-widest'
+        : KIMI_SIZES[Math.floor(Math.random() * KIMI_SIZES.length)];
+
+      // swift velocity rushing from right to left (0.95s to 1.25s)
+      const duration = isLast ? 1.15 : (0.95 + (i % 6) * 0.05 + Math.random() * 0.06);
+
+      // 前 89 顆彈幕在 0s ~ 0.65s 之間密集發射，最後一顆彈幕（第 90 顆）於 0.70s 壓軸發射
+      const delay = isLast ? 0.70 : ((i / (count - 1)) * 0.65);
+      const isLarge = isLast || sizeClass.includes('text-6xl') || sizeClass.includes('text-5xl');
+
+      list.push({
+        id: i,
+        text,
+        top: isLast ? '48%' : `${Math.max(1, Math.min(95, baseTop))}%`,
+        duration,
+        delay,
+        color,
+        sizeClass,
+        opacity: isLarge ? Math.max(0.75, opacity) : opacity,
+        zIndex: isLast ? 50 : (isLarge ? 30 : 10 + (i % 10)),
+      });
+    }
+    return list;
+  }, []);
+
+  // 精確計時設定（使用 ref 避免父層 re-render 導致計時器被提早清除或重置）：
+  // 1. 最後一個彈幕於 0.70s 發射，以約 200vw/s 速度往左飛行，當其最右端完全進入畫面中時（約 830ms）：
+  //    觸發背景同色遮罩淡出並自 DOM 移除，同時觸發分類按鈕漸變浮現。
+  // 2. 當所有彈幕完全飛出螢幕左側後（約 1850ms），結束轉場並卸載彈幕層。
+  useEffect(() => {
+    const revealTimer = setTimeout(() => {
+      setMaskFaded(true);
+      onLastBulletEnteredRef.current();
+    }, 830);
+
+    const completeTimer = setTimeout(() => {
+      onCompleteRef.current();
+    }, 1850);
+
+    return () => {
+      clearTimeout(revealTimer);
+      clearTimeout(completeTimer);
+    };
+  }, []);
+
+  return (
+    <motion.div
+      key="danmaku-transition-overlay"
+      initial={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.25 }}
+      className="fixed inset-0 z-[1200] pointer-events-none overflow-hidden"
+    >
+      {/* 與背景同色（#2D033B）的不透明遮罩：在最後一個彈幕最右端完全入屏時（830ms）自動平滑淡出並完全自 DOM 移除 */}
+      <AnimatePresence>
+        {!maskFaded && (
+          <motion.div
+            key="matching-background-mask"
+            initial={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.45, ease: "easeOut" }}
+            className="absolute inset-0 bg-[#2D033B] pointer-events-none"
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Dynamic Purple Speed Lines */}
+      <AnimatePresence>
+        {!maskFaded && (
+          <motion.div 
+            key="speed-lines"
+            initial={{ opacity: 0.3 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.4 }}
+            className="absolute inset-0 pointer-events-none overflow-hidden"
+          >
+            {[...Array(10)].map((_, i) => (
+              <motion.div
+                key={i}
+                initial={{ x: '100vw', opacity: 0 }}
+                animate={{ x: '-100vw', opacity: [0, 0.8, 0] }}
+                transition={{
+                  duration: 0.6 + (i % 3) * 0.15,
+                  repeat: Infinity,
+                  delay: (i * 0.08),
+                  ease: "linear"
+                }}
+                className="absolute h-[1px] bg-gradient-to-r from-transparent via-[#C084FC] to-transparent w-[60vw]"
+                style={{ top: `${(i * 10) + 4}%` }}
+              />
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Massive Barrage of Purple "君の推し" Flying from Right to Left with Varied Opacities */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        {particles.map((p) => (
+          <motion.div
+            key={p.id}
+            initial={{ x: '100vw' }}
+            animate={{ x: '-130vw' }}
+            transition={{
+              duration: p.duration,
+              delay: p.delay,
+              ease: 'linear',
+            }}
+            style={{
+              top: p.top,
+              color: p.color,
+              opacity: p.opacity,
+              zIndex: p.zIndex,
+              textShadow: `0 0 16px ${p.color}, 0 0 35px ${p.color}90`,
+              willChange: 'transform',
+            }}
+            className={`absolute whitespace-nowrap tracking-wider select-none ${p.sizeClass}`}
+          >
+            {p.text}
+          </motion.div>
+        ))}
+      </div>
+    </motion.div>
+  );
+};
+
 const CharacterSelect: React.FC<{ 
   onHome?: () => void; 
   onPageChange?: (id: string) => void; 
   onSpecialPage?: (id: number) => void;
   onTriggerLogin?: () => void;
 }> = ({ onHome, onPageChange, onSpecialPage, onTriggerLogin }) => {
+  const [selectedCategory, setSelectedCategory] = useState<MemberCategory | null>(null);
+  const [isDanmakuActive, setIsDanmakuActive] = useState<boolean>(true);
+  const [showButtons, setShowButtons] = useState<boolean>(false);
+
+  const handleLastBulletEntered = React.useCallback(() => {
+    setShowButtons(true);
+  }, []);
+
+  const handleDanmakuComplete = React.useCallback(() => {
+    setIsDanmakuActive(false);
+  }, []);
+
   const PRODUCER_FIGHTER = FIGHTERS.find(f => f.id === 1)!;
   const HONORARY_FIGHTER = FIGHTERS.find(f => f.id === 8)!;
   const INITIAL_MEMBERS = FIGHTERS.filter(f => f.id !== 1 && f.id !== 8 && f.id < 10);
@@ -452,209 +720,394 @@ const CharacterSelect: React.FC<{
 
   return (
     <div className="relative w-full flex flex-col font-mono px-3 sm:px-4 md:px-6 pb-20 justify-center items-center pt-36 sm:pt-44">
-      {/* Character Grid Selector Area - slightly scaled down from full screen with margins */}
-      <div className="w-full max-w-[1720px] bg-slate-900/40 backdrop-blur-xs p-4 sm:p-6 md:p-10 xl:p-12 z-10 rounded-3xl">
-        
-        {/* ROW 1: Producer & Honorary Member (涼海璃 & 遜砲小藍) */}
-        <div className="mb-12">
-          <div className="text-[10px] sm:text-xs text-[#4C5E6E] font-pixel tracking-[0.25em] mb-5 uppercase flex items-center gap-3 px-2">
-            <span>PRODUCER & HONORARY MEMBER / 製作人與榮譽團員</span>
-            <span className="h-[1px] bg-[#4C5E6E]/20 flex-1" />
+      {/* Kimi no Oshi Purple Danmaku Transition (With matching background #2D033B mask during flight) */}
+      <AnimatePresence>
+        {isDanmakuActive && (
+          <KimiNoOshiDanmakuTransition 
+            onLastBulletEntered={handleLastBulletEntered}
+            onComplete={handleDanmakuComplete} 
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Category Selection View (Before entering members page) - Emarges right when last bullet enters */}
+      {!selectedCategory ? (
+        showButtons && (
+          <motion.div
+            key="category-selection-menu"
+            initial={{ opacity: 0, y: 35, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
+            className="w-full max-w-5xl flex flex-col items-center justify-center space-y-8 z-10"
+          >
+          {/* Header */}
+          <div className="text-center space-y-3">
+            <div className="inline-flex flex-wrap items-center justify-center gap-3">
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs font-mono uppercase tracking-[0.3em] text-[#7CFC00]">
+                <span className="w-2 h-2 rounded-full bg-[#7CFC00] animate-pulse" />
+                <span>DIVISION SELECTION // 分類選單</span>
+              </div>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => {
+                  setShowButtons(false);
+                  setIsDanmakuActive(true);
+                }}
+                className="px-3.5 py-1.5 rounded-full bg-[#D1B3FF]/10 hover:bg-[#D1B3FF]/20 border border-[#D1B3FF]/40 text-[11px] font-mono text-[#D1B3FF] transition-all cursor-pointer flex items-center gap-1.5 shadow-[0_0_15px_rgba(209,179,255,0.15)]"
+                title="重新播放彈幕轉場"
+              >
+                <span>🎬</span>
+                <span>重播「君の推し」彈幕</span>
+              </motion.button>
+            </div>
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-white tracking-[0.15em] italic drop-shadow-[0_0_30px_rgba(255,255,255,0.35)]">
+              請選擇探索類別
+            </h2>
+            <p className="text-xs sm:text-sm text-white/50 font-mono tracking-widest max-w-lg mx-auto leading-relaxed">
+              點擊下方分類按鈕進入專屬成員名單與詳細介紹
+            </p>
           </div>
-          <div className="grid grid-cols-4 gap-4 sm:gap-6 md:gap-8 lg:gap-10">
-            {/* Producer Card */}
-            <motion.div
-              key={PRODUCER_FIGHTER.id}
-              onClick={() => onSpecialPage?.(PRODUCER_FIGHTER.id)}
-              whileHover={{ y: -10, scale: 1.04 }}
-              whileTap={{ scale: 0.96 }}
-              className="relative aspect-[16/9] rounded-3xl overflow-hidden cursor-pointer bg-black/80 hover:bg-black/90 border-2 border-white/15 hover:border-white/40 shadow-[0_12px_36px_rgba(0,0,0,0.6)] hover:shadow-[0_0_45px_rgba(255,255,255,0.2)] transition-all text-left"
-            >
-              <div className="absolute inset-0 w-full h-full">
-                <img 
-                  src={umiriOfficialPhoto} 
-                  alt="Suzuumiri Official Photo"
-                  className="w-full h-full object-cover"
-                  referrerPolicy="no-referrer"
+
+          {/* 4 Category Buttons */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 w-full">
+            {MEMBER_CATEGORIES.map((cat) => (
+              <motion.button
+                key={cat.id}
+                whileHover={{ y: -8, scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setSelectedCategory(cat.id)}
+                className="relative bg-black/60 hover:bg-black/85 backdrop-blur-xl border-2 border-white/15 rounded-3xl p-6 sm:p-8 flex flex-col justify-between items-start text-left cursor-pointer transition-all duration-300 group overflow-hidden shadow-[0_15px_35px_rgba(0,0,0,0.5)]"
+                style={{
+                  borderColor: `${cat.color}45`,
+                }}
+              >
+                {/* Glow Backdrop */}
+                <div 
+                  className="absolute -right-16 -top-16 w-56 h-56 rounded-full blur-[80px] pointer-events-none opacity-20 group-hover:opacity-45 transition-opacity duration-500"
+                  style={{ backgroundColor: cat.color }}
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-              </div>
-              
-              <div className="absolute top-3 left-3 bg-[#4C5E6E] text-white text-[9px] sm:text-xs md:text-sm font-black px-2 py-1 rounded-lg uppercase font-pixel tracking-widest shadow-md">
-                製作人
-              </div>
-              
-              <div className="absolute bottom-3 left-3 sm:bottom-6 sm:left-6 text-sm sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl font-black italic text-white tracking-widest drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
-                涼海 璃(璃帽)
-              </div>
-            </motion.div>
 
-            {/* Honorary Member Card (遜砲小藍) */}
-            <motion.div
-              key={HONORARY_FIGHTER.id}
-              onClick={() => onSpecialPage?.(HONORARY_FIGHTER.id)}
-              whileHover={{ y: -10, scale: 1.04 }}
-              whileTap={{ scale: 0.96 }}
-              className="relative aspect-[16/9] rounded-3xl overflow-hidden cursor-pointer bg-black/80 hover:bg-black/90 border-2 border-white/15 hover:border-white/40 shadow-[0_12px_36px_rgba(0,0,0,0.6)] hover:shadow-[0_0_45px_rgba(255,255,255,0.2)] transition-all text-left"
+                {/* Corner Pixel Accents */}
+                <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2" style={{ borderColor: cat.color }} />
+                <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2" style={{ borderColor: cat.color }} />
+                <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2" style={{ borderColor: cat.color }} />
+                <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2" style={{ borderColor: cat.color }} />
+
+                {/* Top Badge & Member Count */}
+                <div className="w-full flex justify-between items-center mb-6 z-10">
+                  <span 
+                    className="text-[10px] font-pixel px-3 py-1 rounded-lg uppercase tracking-wider font-bold shadow-md"
+                    style={{ backgroundColor: `${cat.color}20`, color: cat.color, border: `1px solid ${cat.color}40` }}
+                  >
+                    {cat.badge}
+                  </span>
+                  <span className="text-[11px] font-mono text-white/50 tracking-widest font-bold">
+                    {cat.memberCount}
+                  </span>
+                </div>
+
+                {/* Center Title and Icon */}
+                <div className="flex items-center gap-4 my-2 z-10">
+                  <div 
+                    className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl shadow-inner group-hover:scale-110 transition-transform duration-300 shrink-0"
+                    style={{ backgroundColor: `${cat.color}25`, border: `1px solid ${cat.color}50` }}
+                  >
+                    {cat.icon}
+                  </div>
+                  <div>
+                    <h3 
+                      className="text-2xl sm:text-3xl font-black tracking-wider text-white transition-colors duration-200"
+                      style={{ textShadow: `0 0 20px ${cat.color}50` }}
+                    >
+                      {cat.name}
+                    </h3>
+                    <p className="text-[10px] sm:text-[11px] font-mono text-white/40 tracking-[0.2em] uppercase mt-0.5">
+                      {cat.enName}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Member preview & Action Bar */}
+                <div className="w-full mt-6 pt-4 border-t border-white/10 flex justify-between items-center z-10">
+                  <span className="text-xs text-white/70 font-mono truncate max-w-[70%]">
+                    {cat.desc}
+                  </span>
+                  <span 
+                    className="text-xs font-pixel font-bold flex items-center gap-1 group-hover:translate-x-1.5 transition-transform"
+                    style={{ color: cat.color }}
+                  >
+                    進入名單 →
+                  </span>
+                </div>
+              </motion.button>
+            ))}
+          </div>
+
+          {/* Return Home Button */}
+          <div className="pt-2 z-10">
+            <button
+              onClick={onHome}
+              className="px-6 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/30 text-xs font-mono text-white/60 hover:text-white tracking-widest uppercase transition-all active:scale-95 cursor-pointer flex items-center gap-2"
             >
-              <div 
-                className="absolute inset-0 flex items-center justify-center text-5xl sm:text-7xl md:text-8xl lg:text-9xl xl:text-[11rem] opacity-90 font-black drop-shadow-[0_8px_16px_rgba(0,0,0,0.5)]"
-                style={{ color: HONORARY_FIGHTER.color }}
-              >
-                {HONORARY_FIGHTER.icon}
-              </div>
-              
-              <div className="absolute top-3 left-3 bg-white text-black text-[9px] sm:text-xs md:text-sm font-black px-2 py-1 rounded-lg uppercase font-pixel tracking-widest shadow-md">
-                榮譽團員
-              </div>
-
-              <div className="absolute bottom-3 left-3 sm:bottom-6 sm:left-6 text-sm sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl font-black italic text-white tracking-widest drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
-                遜砲小藍
-              </div>
-            </motion.div>
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>返回主頁 // RETURN HOME</span>
+            </button>
           </div>
-        </div>
+        </motion.div>
+        )
+      ) : (
+        /* Member Roster for Selected Category */
+        <motion.div
+          key={`category-roster-${selectedCategory}`}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          transition={{ duration: 0.35, ease: "easeOut" }}
+          className="w-full max-w-[1720px] bg-slate-900/40 backdrop-blur-xs p-4 sm:p-6 md:p-10 xl:p-12 z-10 rounded-3xl space-y-8"
+        >
+          {/* Top Return and Category Switcher Bar */}
+          <div className="w-full flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-white/10">
+            <button
+              onClick={() => setSelectedCategory(null)}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/25 text-xs sm:text-sm font-mono font-bold text-white tracking-widest uppercase cursor-pointer transition-all active:scale-95 hover:border-white/40 shadow-lg"
+            >
+              <ArrowLeft className="w-4 h-4 text-[#7CFC00]" />
+              <span>← 返回成員分類 // BACK TO CATEGORIES</span>
+            </button>
 
-        {/* ROW 2: Members (紡塊像素CubePixel_一期生) */}
-        <div className="mb-12">
-          <div className="text-[10px] sm:text-xs text-white/40 font-pixel tracking-[0.25em] mb-5 uppercase flex items-center gap-3 px-2">
-            <span>紡塊像素CubePixel_一期生 / 1ST GENERATION</span>
-            <span className="h-[1px] bg-white/10 flex-1" />
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 md:gap-8 lg:gap-10">
-            {/* Initial Members */}
-            {INITIAL_MEMBERS.map((f) => (
-              <motion.div
-                key={f.id}
-                onClick={() => onSpecialPage?.(f.id)}
-                whileHover={{ y: -10, scale: 1.04 }}
-                whileTap={{ scale: 0.96 }}
-                className="relative aspect-[16/9] rounded-3xl overflow-hidden cursor-pointer bg-black/80 hover:bg-black/90 border-2 border-white/15 hover:border-white/40 shadow-[0_12px_36px_rgba(0,0,0,0.6)] hover:shadow-[0_0_45px_rgba(255,255,255,0.2)] transition-all text-left"
-              >
-                <div 
-                  className="absolute inset-0 flex items-center justify-center text-5xl sm:text-7xl md:text-8xl lg:text-9xl xl:text-[11rem] opacity-95 font-black font-pixel drop-shadow-[0_8px_16px_rgba(0,0,0,0.5)]"
-                  style={{ color: f.color }}
+            {/* Quick Category Switch Tabs */}
+            <div className="flex flex-wrap items-center gap-2">
+              {MEMBER_CATEGORIES.map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => setSelectedCategory(cat.id)}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-mono tracking-wider font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    selectedCategory === cat.id
+                      ? 'bg-white text-black shadow-lg scale-105 border-white'
+                      : 'bg-white/5 hover:bg-white/10 text-white/60 border border-white/10'
+                  }`}
+                  style={{
+                    boxShadow: selectedCategory === cat.id ? `0 0 20px ${cat.color}60` : undefined,
+                  }}
                 >
-                  {f.icon}
-                </div>
-
-                {getRoleTag(f.id) && (
-                  <div 
-                    className="absolute top-3 left-3 text-black text-[9px] sm:text-xs md:text-sm font-black px-2 py-1 rounded-lg uppercase font-pixel tracking-widest shadow-md"
-                    style={{ backgroundColor: f.color }}
-                  >
-                    {getRoleTag(f.id)}
-                  </div>
-                )}
-
-                <div className="absolute bottom-3 left-3 sm:bottom-6 sm:left-6 text-sm sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl font-black italic text-white tracking-widest drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
-                  {f.name}
-                </div>
-              </motion.div>
-            ))}
+                  <span>{cat.icon}</span>
+                  <span>{cat.name}</span>
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
 
-        {/* ROW 3: 蕷蒔泡沫YOJIUTA_二期生預定 */}
-        <div className="mb-12">
-          <div className="text-[10px] sm:text-xs text-white/40 font-pixel tracking-[0.25em] mb-5 uppercase flex items-center gap-3 px-2">
-            <span>蕷蒔泡沫YOJIUTA_二期生預定</span>
-            <span className="h-[1px] bg-white/10 flex-1" />
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 md:gap-8 lg:gap-10">
-            {SECOND_GEN_MEMBERS.map((slot) => (
-              <motion.div
-                key={slot.id}
-                onClick={() => onSpecialPage?.(slot.id)}
-                whileHover={{ y: -10, scale: 1.04 }}
-                whileTap={{ scale: 0.96 }}
-                className="relative aspect-[16/9] rounded-3xl overflow-hidden cursor-pointer bg-black/80 hover:bg-black/90 border-2 border-white/15 hover:border-white/40 shadow-[0_12px_36px_rgba(0,0,0,0.6)] hover:shadow-[0_0_45px_rgba(255,255,255,0.2)] transition-all text-left"
-              >
-                <div 
-                  className="absolute inset-0 flex items-center justify-center text-5xl sm:text-7xl md:text-8xl lg:text-9xl xl:text-[11rem] opacity-95 font-black font-pixel drop-shadow-[0_8px_16px_rgba(0,0,0,0.5)]"
-                  style={{ color: slot.color }}
+          {/* 1. 「製作人與營運」 */}
+          {selectedCategory === 'producer' && (
+            <div>
+              <div className="text-[10px] sm:text-xs text-[#87CEEB] font-pixel tracking-[0.25em] mb-5 uppercase flex items-center gap-3 px-2">
+                <span>PRODUCER & HONORARY MEMBER / 製作人與營運</span>
+                <span className="h-[1px] bg-[#87CEEB]/30 flex-1" />
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 md:gap-8 lg:gap-10">
+                {/* Producer Card */}
+                <motion.div
+                  key={PRODUCER_FIGHTER.id}
+                  onClick={() => onSpecialPage?.(PRODUCER_FIGHTER.id)}
+                  whileHover={{ y: -10, scale: 1.04 }}
+                  whileTap={{ scale: 0.96 }}
+                  className="relative aspect-[16/9] rounded-3xl overflow-hidden cursor-pointer bg-black/80 hover:bg-black/90 border-2 border-white/15 hover:border-white/40 shadow-[0_12px_36px_rgba(0,0,0,0.6)] hover:shadow-[0_0_45px_rgba(255,255,255,0.2)] transition-all text-left"
                 >
-                  {slot.icon}
-                </div>
-
-                {getRoleTag(slot.id) && (
-                  <div 
-                    className="absolute top-3 left-3 text-black text-[9px] sm:text-xs md:text-sm font-black px-2 py-1 rounded-lg uppercase font-pixel tracking-widest shadow-md"
-                    style={{ backgroundColor: slot.color }}
-                  >
-                    {getRoleTag(slot.id)}
+                  <div className="absolute inset-0 w-full h-full">
+                    <img 
+                      src={umiriOfficialPhoto} 
+                      alt="Suzuumiri Official Photo"
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                   </div>
-                )}
+                  
+                  <div className="absolute top-3 left-3 bg-[#4C5E6E] text-white text-[9px] sm:text-xs md:text-sm font-black px-2 py-1 rounded-lg uppercase font-pixel tracking-widest shadow-md">
+                    製作人
+                  </div>
+                  
+                  <div className="absolute bottom-3 left-3 sm:bottom-6 sm:left-6 text-sm sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl font-black italic text-white tracking-widest drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+                    涼海 璃(璃帽)
+                  </div>
+                </motion.div>
 
-                <div className="absolute bottom-3 left-3 sm:bottom-6 sm:left-6 text-sm sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl font-black italic text-white tracking-widest drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
-                  {slot.name}
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-
-        {/* ROW: 獨立活動藝人 | VTUBER企劃 */}
-        <div className="mb-12">
-          <div className="text-[10px] sm:text-xs text-white/40 font-pixel tracking-[0.25em] mb-5 uppercase flex items-center gap-3 px-2">
-            <span>獨立活動藝人 | VTUBER企劃</span>
-            <span className="h-[1px] bg-white/10 flex-1" />
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 md:gap-8 lg:gap-10">
-            {INDEPENDENT_MEMBERS.map((slot) => (
-              <motion.div
-                key={slot.id}
-                onClick={() => onSpecialPage?.(slot.id)}
-                whileHover={{ y: -10, scale: 1.04 }}
-                whileTap={{ scale: 0.96 }}
-                className="relative aspect-[16/9] rounded-3xl overflow-hidden cursor-pointer bg-black/80 hover:bg-black/90 border-2 border-white/15 hover:border-[#A855F7]/50 shadow-[0_12px_36px_rgba(0,0,0,0.6)] hover:shadow-[0_0_45px_rgba(168,85,247,0.3)] transition-all text-left"
-              >
-                <div 
-                  className="absolute inset-0 flex items-center justify-center text-5xl sm:text-7xl md:text-8xl lg:text-9xl xl:text-[11rem] opacity-95 font-black font-pixel drop-shadow-[0_8px_16px_rgba(0,0,0,0.5)]"
-                  style={{ color: slot.color }}
+                {/* Honorary Member Card (遜砲小藍) */}
+                <motion.div
+                  key={HONORARY_FIGHTER.id}
+                  onClick={() => onSpecialPage?.(HONORARY_FIGHTER.id)}
+                  whileHover={{ y: -10, scale: 1.04 }}
+                  whileTap={{ scale: 0.96 }}
+                  className="relative aspect-[16/9] rounded-3xl overflow-hidden cursor-pointer bg-black/80 hover:bg-black/90 border-2 border-white/15 hover:border-white/40 shadow-[0_12px_36px_rgba(0,0,0,0.6)] hover:shadow-[0_0_45px_rgba(255,255,255,0.2)] transition-all text-left"
                 >
-                  {slot.icon}
-                </div>
-
-                {getRoleTag(slot.id) && (
                   <div 
-                    className="absolute top-3 left-3 text-black text-[9px] sm:text-xs md:text-sm font-black px-2 py-1 rounded-lg uppercase font-pixel tracking-widest shadow-md"
-                    style={{ backgroundColor: slot.color }}
+                    className="absolute inset-0 flex items-center justify-center text-5xl sm:text-7xl md:text-8xl lg:text-9xl xl:text-[11rem] opacity-90 font-black drop-shadow-[0_8px_16px_rgba(0,0,0,0.5)]"
+                    style={{ color: HONORARY_FIGHTER.color }}
                   >
-                    {getRoleTag(slot.id)}
+                    {HONORARY_FIGHTER.icon}
                   </div>
-                )}
+                  
+                  <div className="absolute top-3 left-3 bg-white text-black text-[9px] sm:text-xs md:text-sm font-black px-2 py-1 rounded-lg uppercase font-pixel tracking-widest shadow-md">
+                    榮譽團員
+                  </div>
 
-                <div className="absolute bottom-3 left-3 sm:bottom-6 sm:left-6 text-sm sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl font-black italic text-white tracking-widest drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
-                  {slot.name}
+                  <div className="absolute bottom-3 left-3 sm:bottom-6 sm:left-6 text-sm sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl font-black italic text-white tracking-widest drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+                    遜砲小藍
+                  </div>
+                </motion.div>
+              </div>
+            </div>
+          )}
+
+          {/* 2. 「紡塊像素」 */}
+          {selectedCategory === 'cubepixel' && (
+            <div>
+              <div className="text-[10px] sm:text-xs text-white/40 font-pixel tracking-[0.25em] mb-5 uppercase flex items-center gap-3 px-2">
+                <span>紡塊像素CubePixel_一期生 / 1ST GENERATION</span>
+                <span className="h-[1px] bg-white/10 flex-1" />
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 md:gap-8 lg:gap-10">
+                {INITIAL_MEMBERS.map((f) => (
+                  <motion.div
+                    key={f.id}
+                    onClick={() => onSpecialPage?.(f.id)}
+                    whileHover={{ y: -10, scale: 1.04 }}
+                    whileTap={{ scale: 0.96 }}
+                    className="relative aspect-[16/9] rounded-3xl overflow-hidden cursor-pointer bg-black/80 hover:bg-black/90 border-2 border-white/15 hover:border-white/40 shadow-[0_12px_36px_rgba(0,0,0,0.6)] hover:shadow-[0_0_45px_rgba(255,255,255,0.2)] transition-all text-left"
+                  >
+                    <div 
+                      className="absolute inset-0 flex items-center justify-center text-5xl sm:text-7xl md:text-8xl lg:text-9xl xl:text-[11rem] opacity-95 font-black font-pixel drop-shadow-[0_8px_16px_rgba(0,0,0,0.5)]"
+                      style={{ color: f.color }}
+                    >
+                      {f.icon}
+                    </div>
+
+                    {getRoleTag(f.id) && (
+                      <div 
+                        className="absolute top-3 left-3 text-black text-[9px] sm:text-xs md:text-sm font-black px-2 py-1 rounded-lg uppercase font-pixel tracking-widest shadow-md"
+                        style={{ backgroundColor: f.color }}
+                      >
+                        {getRoleTag(f.id)}
+                      </div>
+                    )}
+
+                    <div className="absolute bottom-3 left-3 sm:bottom-6 sm:left-6 text-sm sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl font-black italic text-white tracking-widest drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+                      {f.name}
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 3. 「蕷蒔泡沫」 */}
+          {selectedCategory === 'yojiuta' && (
+            <div>
+              <div className="text-[10px] sm:text-xs text-white/40 font-pixel tracking-[0.25em] mb-5 uppercase flex items-center gap-3 px-2">
+                <span>蕷蒔泡沫YOJIUTA_二期生預定</span>
+                <span className="h-[1px] bg-white/10 flex-1" />
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 md:gap-8 lg:gap-10">
+                {SECOND_GEN_MEMBERS.map((slot) => (
+                  <motion.div
+                    key={slot.id}
+                    onClick={() => onSpecialPage?.(slot.id)}
+                    whileHover={{ y: -10, scale: 1.04 }}
+                    whileTap={{ scale: 0.96 }}
+                    className="relative aspect-[16/9] rounded-3xl overflow-hidden cursor-pointer bg-black/80 hover:bg-black/90 border-2 border-white/15 hover:border-white/40 shadow-[0_12px_36px_rgba(0,0,0,0.6)] hover:shadow-[0_0_45px_rgba(255,255,255,0.2)] transition-all text-left"
+                  >
+                    <div 
+                      className="absolute inset-0 flex items-center justify-center text-5xl sm:text-7xl md:text-8xl lg:text-9xl xl:text-[11rem] opacity-95 font-black font-pixel drop-shadow-[0_8px_16px_rgba(0,0,0,0.5)]"
+                      style={{ color: slot.color }}
+                    >
+                      {slot.icon}
+                    </div>
+
+                    {getRoleTag(slot.id) && (
+                      <div 
+                        className="absolute top-3 left-3 text-black text-[9px] sm:text-xs md:text-sm font-black px-2 py-1 rounded-lg uppercase font-pixel tracking-widest shadow-md"
+                        style={{ backgroundColor: slot.color }}
+                      >
+                        {getRoleTag(slot.id)}
+                      </div>
+                    )}
+
+                    <div className="absolute bottom-3 left-3 sm:bottom-6 sm:left-6 text-sm sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl font-black italic text-white tracking-widest drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+                      {slot.name}
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 4. 「其他獨立藝人」 */}
+          {selectedCategory === 'independent' && (
+            <div className="space-y-12">
+              <div>
+                <div className="text-[10px] sm:text-xs text-[#A855F7] font-pixel tracking-[0.25em] mb-5 uppercase flex items-center gap-3 px-2">
+                  <span>獨立活動藝人 | VTUBER企劃</span>
+                  <span className="h-[1px] bg-[#A855F7]/30 flex-1" />
                 </div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 md:gap-8 lg:gap-10">
+                  {INDEPENDENT_MEMBERS.map((slot) => (
+                    <motion.div
+                      key={slot.id}
+                      onClick={() => onSpecialPage?.(slot.id)}
+                      whileHover={{ y: -10, scale: 1.04 }}
+                      whileTap={{ scale: 0.96 }}
+                      className="relative aspect-[16/9] rounded-3xl overflow-hidden cursor-pointer bg-black/80 hover:bg-black/90 border-2 border-white/15 hover:border-[#A855F7]/50 shadow-[0_12px_36px_rgba(0,0,0,0.6)] hover:shadow-[0_0_45px_rgba(168,85,247,0.3)] transition-all text-left"
+                    >
+                      <div 
+                        className="absolute inset-0 flex items-center justify-center text-5xl sm:text-7xl md:text-8xl lg:text-9xl xl:text-[11rem] opacity-95 font-black font-pixel drop-shadow-[0_8px_16px_rgba(0,0,0,0.5)]"
+                        style={{ color: slot.color }}
+                      >
+                        {slot.icon}
+                      </div>
 
-        {/* ROW 4: Candidates (候選名單_待招募) */}
-        <div>
-          <div className="text-[10px] sm:text-xs text-white/40 font-pixel tracking-[0.25em] mb-5 uppercase flex items-center gap-3 px-2">
-            <span>候選名單_待招募 / CANDIDATES</span>
-            <span className="h-[1px] bg-white/10 flex-1" />
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 md:gap-8 lg:gap-10">
-            {/* 10 Black Disabled Slots */}
-            {DISABLED_SLOTS.map((slot) => (
-              <div
-                key={slot.id}
-                className="relative aspect-[16/9] bg-black/90 w-full rounded-3xl overflow-hidden flex flex-col items-center justify-center select-none border-2 border-white/10 shadow-[0_8px_24px_rgba(0,0,0,0.7)]"
-              >
-                <div className="text-3xl sm:text-5xl md:text-7xl lg:text-8xl xl:text-9xl text-white/5 font-black font-pixel">?</div>
-                <div className="absolute bottom-3 text-safety text-[8px] sm:text-xs md:text-sm text-white/5 font-pixel uppercase tracking-[0.3em]">
-                  LOCKED
+                      {getRoleTag(slot.id) && (
+                        <div 
+                          className="absolute top-3 left-3 text-black text-[9px] sm:text-xs md:text-sm font-black px-2 py-1 rounded-lg uppercase font-pixel tracking-widest shadow-md"
+                          style={{ backgroundColor: slot.color }}
+                        >
+                          {getRoleTag(slot.id)}
+                        </div>
+                      )}
+
+                      <div className="absolute bottom-3 left-3 sm:bottom-6 sm:left-6 text-sm sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl font-black italic text-white tracking-widest drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+                        {slot.name}
+                      </div>
+                    </motion.div>
+                  ))}
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
-      </div>
+
+              {/* Candidates (候選名單_待招募) */}
+              <div>
+                <div className="text-[10px] sm:text-xs text-white/40 font-pixel tracking-[0.25em] mb-5 uppercase flex items-center gap-3 px-2">
+                  <span>候選名單_待招募 / CANDIDATES</span>
+                  <span className="h-[1px] bg-white/10 flex-1" />
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 md:gap-8 lg:gap-10">
+                  {DISABLED_SLOTS.map((slot) => (
+                    <div
+                      key={slot.id}
+                      className="relative aspect-[16/9] bg-black/90 w-full rounded-3xl overflow-hidden flex flex-col items-center justify-center select-none border-2 border-white/10 shadow-[0_8px_24px_rgba(0,0,0,0.7)]"
+                    >
+                      <div className="text-3xl sm:text-5xl md:text-7xl lg:text-8xl xl:text-9xl text-white/5 font-black font-pixel">?</div>
+                      <div className="absolute bottom-3 text-safety text-[8px] sm:text-xs md:text-sm text-white/5 font-pixel uppercase tracking-[0.3em]">
+                        LOCKED
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </motion.div>
+      )}
     </div>
   );
 };
@@ -4691,13 +5144,16 @@ export default function App() {
                   animate={{ opacity: 1, y: -30, rotate: -5 }}
                   exit={{ opacity: 0, scale: 0.8, y: -100 }}
                   transition={{ duration: 0.8, ease: "easeIn" }}
-                  className="max-w-[95vw] md:max-w-5xl drop-shadow-[0_30px_60px_rgba(0,0,0,0.6)] pointer-events-none"
+                  className="max-w-[90vw] md:max-w-md lg:max-w-lg drop-shadow-[0_30px_60px_rgba(0,0,0,0.6)] pointer-events-none mx-auto flex justify-center mb-6"
                 >
                   <img 
-                    src="https://drive.google.com/thumbnail?id=1yqTzowdnAcZTofISD4xSGTz-GigyR_Ma&sz=w1000" 
-                    alt="Cube Pixel Console"
-                    className="w-full h-auto rounded-lg"
+                    src={LOGO_URL} 
+                    alt="保持可愛 漫研社 Logo"
+                    className="w-72 sm:w-80 md:w-96 max-h-[50vh] object-contain drop-shadow-[0_20px_50px_rgba(168,85,247,0.5)]"
                     referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      e.currentTarget.src = FALLBACK_LOGO_URL;
+                    }}
                   />
                 </motion.div>
 

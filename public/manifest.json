@@ -9,19 +9,19 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "https://drive.google.com/thumbnail?id=1yqTzowdnAcZTofISD4xSGTz-GigyR_Ma&sz=w192",
+      "src": "/assets/aistudio/____-removebg-preview_d70a7f72.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "https://drive.google.com/thumbnail?id=1yqTzowdnAcZTofISD4xSGTz-GigyR_Ma&sz=w512",
+      "src": "/assets/aistudio/____-removebg-preview_d70a7f72.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "https://drive.google.com/thumbnail?id=1yqTzowdnAcZTofISD4xSGTz-GigyR_Ma&sz=w1000",
+      "src": "/assets/aistudio/____-removebg-preview_d70a7f72.png",
       "sizes": "1000x1000",
       "type": "image/png",
       "purpose": "any maskable"
