@@ -17,8 +17,10 @@ import {
   Heart, 
   ShieldAlert,
   ArrowRight,
-  Footprints
+  Footprints,
+  Box
 } from 'lucide-react';
+import { Room3DScene } from './Room3DScene';
 
 const LOGO_URL = "/assets/aistudio/____-removebg-preview_d70a7f72.png";
 const FALLBACK_LOGO_URL = "/images/logo.png";
@@ -451,8 +453,9 @@ export const MobileWebsite: React.FC<MobileWebsiteProps> = ({
   // 'walking' -> Perspective slow walk towards the single door panel
   // 'door_reached' -> Door enlarged so round knob lock (喇叭鎖) is clearly visible
   // 'door_opening' -> Knob turns and door swings inward
+  // 'room' -> 3D empty room with look-around viewpoint & virtual joystick
   // 'explored' -> Explored hub behind the door
-  const [sceneState, setSceneState] = useState<'landing' | 'walking' | 'door_reached' | 'door_opening' | 'explored'>('landing');
+  const [sceneState, setSceneState] = useState<'landing' | 'walking' | 'door_reached' | 'door_opening' | 'room' | 'explored'>('landing');
 
   // Walking progress from 0 (far) to 1 (at door)
   const [walkProgress, setWalkProgress] = useState(0);
@@ -478,9 +481,9 @@ export const MobileWebsite: React.FC<MobileWebsiteProps> = ({
     walkStartTimeRef.current = performance.now();
     lastFootstepStepRef.current = -1;
 
-    // Trigger slight haptic on mobile tap
+    // Gentle haptic on mobile tap (reduced from 30ms to 12ms)
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
-      try { navigator.vibrate(30); } catch {}
+      try { navigator.vibrate(12); } catch {}
     }
   };
 
@@ -493,11 +496,12 @@ export const MobileWebsite: React.FC<MobileWebsiteProps> = ({
     setSceneState('door_reached');
   };
 
-  // Walking animation loop (slow, cinematic ~5.2 seconds walk)
+  // Walking animation loop (slow, leisurely ~7.6 seconds walk with gentle cadence)
   useEffect(() => {
     if (sceneState !== 'walking') return;
 
-    const WALK_DURATION = 5200; // 5.2 seconds for slow, immersive walking effect
+    // Slowed down walking speed for calm, cinematic approach
+    const WALK_DURATION = 7600; 
 
     const updateWalk = (now: number) => {
       const elapsed = now - walkStartTimeRef.current;
@@ -510,13 +514,14 @@ export const MobileWebsite: React.FC<MobileWebsiteProps> = ({
 
       setWalkProgress(smoothProgress);
 
-      // Footstep cadence: 7 steps across the walk
+      // Footstep cadence: 7 gentle steps across the slower walk
       const currentStep = Math.floor(rawProgress * 7);
       if (currentStep > lastFootstepStepRef.current && currentStep < 7) {
         lastFootstepStepRef.current = currentStep;
         sfx.playFootstep();
+        // Light, subtle vibration pulse
         if (typeof navigator !== 'undefined' && navigator.vibrate) {
-          try { navigator.vibrate(15); } catch {}
+          try { navigator.vibrate(6); } catch {}
         }
       }
 
@@ -544,7 +549,7 @@ export const MobileWebsite: React.FC<MobileWebsiteProps> = ({
     setIsKnobTurned(true);
 
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
-      try { navigator.vibrate([40, 20, 60]); } catch {}
+      try { navigator.vibrate([20, 15, 25]); } catch {}
     }
 
     setSceneState('door_opening');
@@ -554,10 +559,10 @@ export const MobileWebsite: React.FC<MobileWebsiteProps> = ({
       sfx.playDoorCreak();
     }, 280);
 
-    // Transition to explored content
+    // Transition directly into the 3D empty room!
     setTimeout(() => {
-      setSceneState('explored');
-    }, 1300);
+      setSceneState('room');
+    }, 1250);
   };
 
   // Return back to the initial landing screen
@@ -574,17 +579,17 @@ export const MobileWebsite: React.FC<MobileWebsiteProps> = ({
   };
 
   // Calculate dynamic camera walking bobbing & scale
-  // Walking bobbing: sinusoidal vertical movement
+  // Softened sinusoidal vertical bobbing (reduced from 9px to 3.2px)
   const cameraBobY = sceneState === 'walking' 
-    ? Math.sin(walkProgress * Math.PI * 14) * 9 
+    ? Math.sin(walkProgress * Math.PI * 14) * 3.2 
     : 0;
 
-  // Lateral sway: gentle head roll/sway
+  // Gentle lateral head sway (reduced from 4.5px to 1.5px)
   const cameraSwayX = sceneState === 'walking' 
-    ? Math.sin(walkProgress * Math.PI * 7) * 4.5 
+    ? Math.sin(walkProgress * Math.PI * 7) * 1.5 
     : 0;
   const cameraTilt = sceneState === 'walking' 
-    ? Math.sin(walkProgress * Math.PI * 7) * 0.8 
+    ? Math.sin(walkProgress * Math.PI * 7) * 0.22 
     : 0;
 
   // Door scale: starts at 0.13 (far in the distance), slowly magnifies to 2.15 (right in front with 喇叭鎖 clearly visible)
@@ -614,37 +619,39 @@ export const MobileWebsite: React.FC<MobileWebsiteProps> = ({
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-pink-500/15 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-1/4 left-1/2 -translate-x-1/2 translate-y-1/2 w-96 h-96 bg-amber-500/10 rounded-full blur-[130px] pointer-events-none" />
 
-      {/* Top Controls Bar */}
-      <header className="w-full max-w-md flex justify-between items-center text-xs px-4 pt-3 pb-2 z-40 border-b border-white/5 backdrop-blur-sm">
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-pink-400 animate-ping inline-block" />
-          <span className="font-mono font-bold tracking-widest text-[10px] text-pink-300">
-            QPKS // CUBEPIXEL
-          </span>
-        </div>
+      {/* Top Controls Bar (hidden during 3D room mode to give full screen viewport) */}
+      {sceneState !== 'room' && (
+        <header className="w-full max-w-md flex justify-between items-center text-xs px-4 pt-3 pb-2 z-40 border-b border-white/5 backdrop-blur-sm">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-pink-400 animate-ping inline-block" />
+            <span className="font-mono font-bold tracking-widest text-[10px] text-pink-300">
+              QPKS // CUBEPIXEL
+            </span>
+          </div>
 
-        <div className="flex items-center gap-3">
-          {/* Sound Toggle Button */}
-          <button 
-            onClick={toggleSound}
-            className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 active:scale-95 transition-all text-[11px] flex items-center gap-1 font-mono border border-white/10"
-            title="音效開關"
-          >
-            {soundEnabled ? <Volume2 className="w-3.5 h-3.5 text-amber-300" /> : <VolumeX className="w-3.5 h-3.5 text-white/40" />}
-          </button>
-
-          {/* Quick Return to Landing if in other states */}
-          {sceneState !== 'landing' && (
-            <button
-              onClick={handleResetToLanding}
-              className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15 text-white/80 active:scale-95 transition-all text-[10px] font-mono flex items-center gap-1 border border-white/15"
+          <div className="flex items-center gap-3">
+            {/* Sound Toggle Button */}
+            <button 
+              onClick={toggleSound}
+              className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 active:scale-95 transition-all text-[11px] flex items-center gap-1 font-mono border border-white/10"
+              title="音效開關"
             >
-              <RotateCcw className="w-3 h-3 text-pink-300" />
-              <span>首頁</span>
+              {soundEnabled ? <Volume2 className="w-3.5 h-3.5 text-amber-300" /> : <VolumeX className="w-3.5 h-3.5 text-white/40" />}
             </button>
-          )}
-        </div>
-      </header>
+
+            {/* Quick Return to Landing if in other states */}
+            {sceneState !== 'landing' && (
+              <button
+                onClick={handleResetToLanding}
+                className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15 text-white/80 active:scale-95 transition-all text-[10px] font-mono flex items-center gap-1 border border-white/15"
+              >
+                <RotateCcw className="w-3 h-3 text-pink-300" />
+                <span>首頁</span>
+              </button>
+            )}
+          </div>
+        </header>
+      )}
 
       {/* ======================================================== */}
       {/* 1. INITIAL LANDING SCREEN: STRICTLY LOGO & 開始探索 */}
@@ -829,7 +836,31 @@ export const MobileWebsite: React.FC<MobileWebsiteProps> = ({
       </AnimatePresence>
 
       {/* ======================================================== */}
-      {/* 3. EXPLORED HUB: REVEALED BEHIND THE OPENED DOOR */}
+      {/* 3. 3D EMPTY ROOM: ROTATING VIEWPOINT & VIRTUAL JOYSTICK */}
+      {/* ======================================================== */}
+      <AnimatePresence mode="wait">
+        {sceneState === 'room' && (
+          <motion.div
+            key="room-3d-scene"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.6 }}
+            className="absolute inset-0 w-full h-full z-40 bg-[#0a0c16]"
+          >
+            <Room3DScene 
+              onExitRoom={handleResetToLanding}
+              onOpenMenu={() => setSceneState('explored')}
+              soundEnabled={soundEnabled}
+              onToggleSound={toggleSound}
+              playFootstep={() => sfx.playFootstep()}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ======================================================== */}
+      {/* 4. EXPLORED HUB: REVEALED BEHIND THE OPENED DOOR */}
       {/* ======================================================== */}
       <AnimatePresence mode="wait">
         {sceneState === 'explored' && (
@@ -917,22 +948,32 @@ export const MobileWebsite: React.FC<MobileWebsiteProps> = ({
               </div>
             </div>
 
-            {/* Actions: Walk Again or Close Door */}
-            <div className="w-full pt-2 flex items-center gap-2">
+            {/* Actions: Return to 3D Room, Walk Again or Close Door */}
+            <div className="w-full space-y-2 pt-2">
               <button
-                onClick={handleReplayWalk}
-                className="flex-1 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-white/90 text-xs font-mono font-bold tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-all shadow-md"
+                onClick={() => setSceneState('room')}
+                className="w-full py-2.5 rounded-xl bg-gradient-to-r from-pink-500/25 via-purple-500/25 to-amber-500/25 hover:from-pink-500/35 hover:to-amber-500/35 border border-pink-400/40 text-pink-200 text-xs font-mono font-bold tracking-wider flex items-center justify-center gap-2 active:scale-95 transition-all shadow-md"
               >
-                <Footprints className="w-3.5 h-3.5 text-pink-300" />
-                <span>重新漫步探索</span>
+                <Box className="w-4 h-4 text-amber-300" />
+                <span>返回 3D 空房間漫遊 (虛擬搖桿)</span>
               </button>
-              <button
-                onClick={handleResetToLanding}
-                className="flex-1 py-2.5 rounded-xl bg-pink-500/20 hover:bg-pink-500/30 border border-pink-400/40 text-pink-200 text-xs font-mono font-bold tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-all shadow-md"
-              >
-                <DoorClosed className="w-3.5 h-3.5 text-amber-300" />
-                <span>關閉門板返回</span>
-              </button>
+
+              <div className="w-full flex items-center gap-2">
+                <button
+                  onClick={handleReplayWalk}
+                  className="flex-1 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-white/90 text-xs font-mono font-bold tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-all shadow-md"
+                >
+                  <Footprints className="w-3.5 h-3.5 text-pink-300" />
+                  <span>重新漫步探索</span>
+                </button>
+                <button
+                  onClick={handleResetToLanding}
+                  className="flex-1 py-2.5 rounded-xl bg-pink-500/20 hover:bg-pink-500/30 border border-pink-400/40 text-pink-200 text-xs font-mono font-bold tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-all shadow-md"
+                >
+                  <DoorClosed className="w-3.5 h-3.5 text-amber-300" />
+                  <span>關閉門板返回</span>
+                </button>
+              </div>
             </div>
           </motion.div>
         )}
@@ -1063,12 +1104,14 @@ export const MobileWebsite: React.FC<MobileWebsiteProps> = ({
         )}
       </AnimatePresence>
 
-      {/* Footer */}
-      <footer className="w-full max-w-md flex flex-col items-center gap-1 pt-1 pb-2 text-center font-mono z-30 border-t border-white/5">
-        <div className="text-[8px] text-white/40 tracking-wider">
-          © 2026 CUBEPIXEL • 保持你的可愛
-        </div>
-      </footer>
+      {/* Footer (hidden during full 3D room mode) */}
+      {sceneState !== 'room' && (
+        <footer className="w-full max-w-md flex flex-col items-center gap-1 pt-1 pb-2 text-center font-mono z-30 border-t border-white/5">
+          <div className="text-[8px] text-white/40 tracking-wider">
+            © 2026 CUBEPIXEL • 保持你的可愛
+          </div>
+        </footer>
+      )}
     </div>
   );
 };
