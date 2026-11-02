@@ -31,7 +31,8 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Angle constraints: 60° horizontal range (±30° from forward), slight pitch down and up
-  const CENTER_YAW = Math.PI; // Facing straight forward toward front wall & desk (-Z)
+  // Rotated 180° per user request: CENTER_YAW = 0 looks straight forward (-Z) towards the front wooden desk
+  const CENTER_YAW = 0; 
   const YAW_RANGE_HALF = (30 * Math.PI) / 180; // 30 degrees each side = 60 degrees total
   const MIN_YAW = CENTER_YAW - YAW_RANGE_HALF;
   const MAX_YAW = CENTER_YAW + YAW_RANGE_HALF;
