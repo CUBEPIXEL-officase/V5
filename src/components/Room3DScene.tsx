@@ -40,21 +40,21 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
   const MIN_PITCH = (-14 * Math.PI) / 180; // 稍微低頭 (~14 degrees down)
   const MAX_PITCH = (24 * Math.PI) / 180; // 抬頭 (~24 degrees up)
 
-  // Room Dimensions
-  const ROOM_WIDTH = 5.8;
-  const ROOM_HEIGHT = 2.9;
-  const ROOM_DEPTH = 6.8;
-  const TABLE_DEPTH = 0.82;
-  const TABLE_HEIGHT = 0.76;
+  // Room Dimensions (縮小房間尺寸並提高木桌高度)
+  const ROOM_WIDTH = 4.6;
+  const ROOM_HEIGHT = 2.65;
+  const ROOM_DEPTH = 5.2;
+  const TABLE_DEPTH = 0.80;
+  const TABLE_HEIGHT = 0.95; // 提高木桌高度 (原 0.76m 提升至 0.95m 高檯高度)
 
   // Collision limits:
-  // Front: Table front edge is at -ROOM_DEPTH / 2 + TABLE_DEPTH = -3.4 + 0.82 = -2.58
+  // Front: Table front edge is at -ROOM_DEPTH / 2 + TABLE_DEPTH
   const tableFrontEdgeZ = -ROOM_DEPTH / 2 + TABLE_DEPTH;
-  const MIN_Z = tableFrontEdgeZ + 0.55; // Stop in front of the table (~ -2.03m)
-  const MAX_Z = ROOM_DEPTH / 2 - 0.75;  // Entrance door is behind player (~ 2.65m)
+  const MIN_Z = tableFrontEdgeZ + 0.55; // Stop in front of the table
+  const MAX_Z = ROOM_DEPTH / 2 - 0.75;  // Entrance door is behind player
 
   // Table contact zone threshold: reached / touching the table
-  const AT_TABLE_THRESHOLD_Z = tableFrontEdgeZ + 0.70; // ~ -1.88m
+  const AT_TABLE_THRESHOLD_Z = tableFrontEdgeZ + 0.70;
 
   // HUD & Game State
   const [yawOffsetDeg, setYawOffsetDeg] = useState(0);
@@ -83,9 +83,9 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
   const targetPitchRef = useRef<number>(0);
 
   // User request: "將視角改為進入門內(背對房門)"
-  // Entrance door is at Z = +ROOM_DEPTH / 2 (+3.4m).
-  // Player spawns at Z = 2.6m, back to door, looking straight forward (-Z) towards the front wooden desk.
-  const playerPosRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 1.55, 2.6));
+  // Entrance door is at Z = +ROOM_DEPTH / 2.
+  // Player spawns just in front of the door at Z = ROOM_DEPTH / 2 - 0.8, looking straight forward (-Z) towards the front wooden desk.
+  const playerPosRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 1.55, 1.8));
   const walkDistanceRef = useRef<number>(0);
   const lastFootstepDistRef = useRef<number>(0);
 
@@ -495,7 +495,7 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
     // --- Tabletop Accents ---
     // Brass Desk Lamp
     const lampGroup = new THREE.Group();
-    lampGroup.position.set(-1.4, TABLE_HEIGHT, -0.08);
+    lampGroup.position.set(-TABLE_WIDTH * 0.25, TABLE_HEIGHT, -0.08);
 
     const lampBaseGeo = new THREE.CylinderGeometry(0.11, 0.12, 0.025, 20);
     const lampBase = new THREE.Mesh(lampBaseGeo, brassMat);
