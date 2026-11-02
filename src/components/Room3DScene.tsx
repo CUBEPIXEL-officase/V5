@@ -53,7 +53,7 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
   const STAND_HEIGHT = 1.55;
   const SEATED_HEIGHT = 0.68; // 盤腿/屈膝坐於坐墊時的視線高度
   const ENTRANCE_Z = 4.2; // 站在房門前 (背對房門，面朝茶几與盆栽)
-  const SEATED_Z = 0.72; // 茶几南側坐墊位置 (茶几正前方)
+  const SEATED_Z = 1.15; // 圓形茶几南側坐墊位置 (圓几正前方，半徑 0.85m + 坐墊中心 0.30m)
 
   // HUD & Game State
   const [yawOffsetDeg, setYawOffsetDeg] = useState(0);
@@ -64,6 +64,12 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
   useEffect(() => {
     sitStateRef.current = sitState;
   }, [sitState]);
+
+  // Smooth Kinetic Animation Progress Trackers
+  const walkProgressRef = useRef<number>(0);
+  const sitProgressRef = useRef<number>(0);
+  const standProgressRef = useRef<number>(0);
+  const walkPhaseRef = useRef<number>(0);
 
   // Touch look tracking (enabled ONLY when seated at table)
   const lookTouchIdRef = useRef<number | null>(null);
@@ -627,45 +633,132 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
     tableGroup.position.set(0, 0, -ROOM_DEPTH / 2 + TABLE_DEPTH / 2);
     roomGroup.add(tableGroup);
 
-    // --- 4B. CENTER WOODEN TEA TABLE & FLOOR CUSHIONS (房間正中間木頭茶几與小坐墊) ---
+    // --- 4B. ENLARGED CIRCULAR WOODEN TEA TABLE & TABLE LAMP (放大並改為圓形木茶几，附設雅緻檯燈) ---
     const centerTeaGroup = new THREE.Group();
     centerTeaGroup.position.set(0, 0, 0); // Exact center of the room
 
-    const TEA_TABLE_WIDTH = 1.18;
-    const TEA_TABLE_DEPTH = 0.64;
-    const TEA_TABLE_HEIGHT = 0.32;
-    const TEA_TABLE_TOP_THICK = 0.036;
+    const TEA_TABLE_RADIUS = 0.85; // 圓形茶几半徑 (直徑 1.7m，大器且舒適)
+    const TEA_TABLE_HEIGHT = 0.36; // 茶几高度
+    const TEA_TABLE_TOP_THICK = 0.045; // 實木厚度
 
-    // Tea Table Top Slab
-    const teaTopGeo = new THREE.BoxGeometry(TEA_TABLE_WIDTH, TEA_TABLE_TOP_THICK, TEA_TABLE_DEPTH);
+    // Circular Tabletop Slab
+    const teaTopGeo = new THREE.CylinderGeometry(TEA_TABLE_RADIUS, TEA_TABLE_RADIUS, TEA_TABLE_TOP_THICK, 48);
     const teaTop = new THREE.Mesh(teaTopGeo, tableMat);
     teaTop.position.set(0, TEA_TABLE_HEIGHT - TEA_TABLE_TOP_THICK / 2, 0);
     teaTop.castShadow = true;
     teaTop.receiveShadow = true;
     centerTeaGroup.add(teaTop);
 
-    // Tea Table Legs
-    const teaLegHeight = TEA_TABLE_HEIGHT - TEA_TABLE_TOP_THICK;
-    const teaLegThick = 0.052;
-    const teaLegGeo = new THREE.BoxGeometry(teaLegThick, teaLegHeight, teaLegThick);
-    const teaLegPositions = [
-      [-TEA_TABLE_WIDTH / 2 + 0.05, teaLegHeight / 2, -TEA_TABLE_DEPTH / 2 + 0.05],
-      [TEA_TABLE_WIDTH / 2 - 0.05, teaLegHeight / 2, -TEA_TABLE_DEPTH / 2 + 0.05],
-      [-TEA_TABLE_WIDTH / 2 + 0.05, teaLegHeight / 2, TEA_TABLE_DEPTH / 2 - 0.05],
-      [TEA_TABLE_WIDTH / 2 - 0.05, teaLegHeight / 2, TEA_TABLE_DEPTH / 2 - 0.05],
-    ];
-    teaLegPositions.forEach(([lx, ly, lz]) => {
-      const leg = new THREE.Mesh(teaLegGeo, tableDarkWoodMat);
-      leg.position.set(lx, ly, lz);
+    // Beveled Round Edge Trim
+    const roundRimGeo = new THREE.TorusGeometry(TEA_TABLE_RADIUS, 0.018, 16, 48);
+    const roundRimMesh = new THREE.Mesh(roundRimGeo, tableDarkWoodMat);
+    roundRimMesh.position.set(0, TEA_TABLE_HEIGHT - TEA_TABLE_TOP_THICK / 2, 0);
+    roundRimMesh.rotation.x = Math.PI / 2;
+    centerTeaGroup.add(roundRimMesh);
+
+    // 4 Curved / Angled Sturdy Wooden Legs under Round Table
+    const legRadius = TEA_TABLE_RADIUS - 0.20;
+    const roundLegHeight = TEA_TABLE_HEIGHT - TEA_TABLE_TOP_THICK;
+    const roundLegGeo = new THREE.BoxGeometry(0.065, roundLegHeight, 0.065);
+    
+    [Math.PI * 0.25, Math.PI * 0.75, Math.PI * 1.25, Math.PI * 1.75].forEach((angle) => {
+      const lx = Math.cos(angle) * legRadius;
+      const lz = Math.sin(angle) * legRadius;
+      const leg = new THREE.Mesh(roundLegGeo, tableDarkWoodMat);
+      leg.position.set(lx, roundLegHeight / 2, lz);
+      leg.rotation.y = -angle;
       leg.castShadow = true;
       centerTeaGroup.add(leg);
     });
 
-    // Elegant tea tray on tea table
-    const teaTrayGeo = new THREE.BoxGeometry(0.30, 0.012, 0.20);
+    // Cross brace frame under the tabletop
+    const braceGeo = new THREE.BoxGeometry(legRadius * 2, 0.035, 0.035);
+    const brace1 = new THREE.Mesh(braceGeo, tableDarkWoodMat);
+    brace1.position.set(0, 0.12, 0);
+    brace1.rotation.y = Math.PI * 0.25;
+    centerTeaGroup.add(brace1);
+
+    const brace2 = new THREE.Mesh(braceGeo, tableDarkWoodMat);
+    brace2.position.set(0, 0.12, 0);
+    brace2.rotation.y = Math.PI * 0.75;
+    centerTeaGroup.add(brace2);
+
+    // --- TABLE LAMP ON TEA TABLE (User Request: 在茶几上擺上一個檯燈) ---
+    const lampGroup = new THREE.Group();
+    // Positioned gracefully on the round tea table (slightly offset to the left-rear to frame the tea tray)
+    lampGroup.position.set(-0.35, TEA_TABLE_HEIGHT, -0.15);
+
+    // 1. Heavy dark bronze/ceramic lamp base
+    const lampBaseMat = new THREE.MeshStandardMaterial({
+      color: 0x1b1512,
+      roughness: 0.35,
+      metalness: 0.25,
+    });
+    const lampBaseGeo = new THREE.CylinderGeometry(0.11, 0.13, 0.032, 24);
+    const lampBase = new THREE.Mesh(lampBaseGeo, lampBaseMat);
+    lampBase.position.y = 0.016;
+    lampBase.castShadow = true;
+    lampGroup.add(lampBase);
+
+    // Brass accent ring above base
+    const brassRingGeo = new THREE.TorusGeometry(0.08, 0.01, 12, 24);
+    const brassRing = new THREE.Mesh(brassRingGeo, brassMat);
+    brassRing.position.y = 0.034;
+    brassRing.rotation.x = Math.PI / 2;
+    lampGroup.add(brassRing);
+
+    // 2. Sculpted wooden/ceramic stem neck
+    const lampStemGeo = new THREE.CylinderGeometry(0.020, 0.040, 0.16, 16);
+    const lampStem = new THREE.Mesh(lampStemGeo, tableDarkWoodMat);
+    lampStem.position.y = 0.115;
+    lampStem.castShadow = true;
+    lampGroup.add(lampStem);
+
+    // 3. Washi Paper / Pleated Drum Lampshade (透光和紙燈罩)
+    const lampShadeMat = new THREE.MeshStandardMaterial({
+      color: 0xfff0dc,
+      roughness: 0.85,
+      side: THREE.DoubleSide,
+    });
+    const lampShadeGeo = new THREE.CylinderGeometry(0.14, 0.17, 0.20, 24, 1, true);
+    const lampShade = new THREE.Mesh(lampShadeGeo, lampShadeMat);
+    lampShade.position.y = 0.27;
+    lampShade.castShadow = true;
+    lampGroup.add(lampShade);
+
+    // Dark wood top & bottom shade rims
+    const shadeRimTop = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.007, 12, 24), tableDarkWoodMat);
+    shadeRimTop.position.y = 0.37;
+    shadeRimTop.rotation.x = Math.PI / 2;
+    lampGroup.add(shadeRimTop);
+
+    const shadeRimBottom = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.007, 12, 24), tableDarkWoodMat);
+    shadeRimBottom.position.y = 0.17;
+    shadeRimBottom.rotation.x = Math.PI / 2;
+    lampGroup.add(shadeRimBottom);
+
+    // Internal soft incandescent bulb
+    const lampBulb = new THREE.Mesh(
+      new THREE.SphereGeometry(0.024, 12, 12),
+      new THREE.MeshBasicMaterial({ color: 0xffeacc })
+    );
+    lampBulb.position.y = 0.26;
+    lampGroup.add(lampBulb);
+
+    // Table Lamp Point Light casting warm intimate glow on the tabletop & surroundings
+    const tableLampLight = new THREE.PointLight(0xffdf9a, 2.8, 5.2, 1.25);
+    tableLampLight.position.y = 0.27;
+    tableLampLight.castShadow = true;
+    lampGroup.add(tableLampLight);
+
+    centerTeaGroup.add(lampGroup);
+
+    // --- TEA SET (茶盤與茶具) ---
+    // Elegant tea tray placed in front-center of table
+    const teaTrayGeo = new THREE.BoxGeometry(0.32, 0.014, 0.22);
     const teaTrayMat = new THREE.MeshStandardMaterial({ color: 0x1f120a, roughness: 0.5 });
     const teaTray = new THREE.Mesh(teaTrayGeo, teaTrayMat);
-    teaTray.position.set(0, TEA_TABLE_HEIGHT + 0.006, 0);
+    teaTray.position.set(0.10, TEA_TABLE_HEIGHT + 0.007, 0.10);
     teaTray.receiveShadow = true;
     centerTeaGroup.add(teaTray);
 
@@ -673,23 +766,23 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
     const teapotGeo = new THREE.CylinderGeometry(0.038, 0.050, 0.058, 16);
     const teaPotMat = new THREE.MeshStandardMaterial({ color: 0x2b332e, roughness: 0.35, metalness: 0.1 });
     const teapot = new THREE.Mesh(teapotGeo, teaPotMat);
-    teapot.position.set(-0.05, TEA_TABLE_HEIGHT + 0.040, 0);
+    teapot.position.set(0.04, TEA_TABLE_HEIGHT + 0.040, 0.10);
     teapot.castShadow = true;
     centerTeaGroup.add(teapot);
 
     // Ceramic teacups
     const cupMat = new THREE.MeshStandardMaterial({ color: 0xe8e2d8, roughness: 0.4 });
     const cup1 = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.018, 0.034, 14), cupMat);
-    cup1.position.set(0.05, TEA_TABLE_HEIGHT + 0.028, -0.035);
+    cup1.position.set(0.16, TEA_TABLE_HEIGHT + 0.028, 0.06);
     cup1.castShadow = true;
     centerTeaGroup.add(cup1);
 
     const cup2 = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.018, 0.034, 14), cupMat);
-    cup2.position.set(0.05, TEA_TABLE_HEIGHT + 0.028, 0.035);
+    cup2.position.set(0.16, TEA_TABLE_HEIGHT + 0.028, 0.14);
     cup2.castShadow = true;
     centerTeaGroup.add(cup2);
 
-    // --- Floor Cushions (小坐墊 / 和室厚坐墊) ---
+    // --- Floor Cushions (小坐墊 / 環繞圓几的和室厚坐墊) ---
     const cushionMatCharcoal = new THREE.MeshStandardMaterial({
       color: 0x2d2823, // 深炭灰織物
       roughness: 0.85,
@@ -699,21 +792,23 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
       roughness: 0.85,
     });
 
-    const cushionGeo = new THREE.CylinderGeometry(0.20, 0.21, 0.060, 24);
+    const cushionGeo = new THREE.CylinderGeometry(0.22, 0.23, 0.065, 24);
+    const CUSHION_DISTANCE = TEA_TABLE_RADIUS + 0.30; // 1.15m from center
+
     const cushionPositions = [
-      // Left cushion (西側)
-      { x: -TEA_TABLE_WIDTH / 2 - 0.24, z: 0, mat: cushionMatCharcoal },
-      // Right cushion (東側)
-      { x: TEA_TABLE_WIDTH / 2 + 0.24, z: 0, mat: cushionMatEarth },
-      // South cushion (南側 - 面朝前門)
-      { x: 0, z: TEA_TABLE_DEPTH / 2 + 0.24, mat: cushionMatEarth },
-      // North cushion (北側 - 面朝木桌盆栽)
-      { x: 0, z: -TEA_TABLE_DEPTH / 2 - 0.24, mat: cushionMatCharcoal },
+      // South cushion (南側 - 面朝茶几與前方盆栽，玩家落座處)
+      { x: 0, z: CUSHION_DISTANCE, mat: cushionMatEarth },
+      // North cushion (北側)
+      { x: 0, z: -CUSHION_DISTANCE, mat: cushionMatCharcoal },
+      // East cushion (東側)
+      { x: CUSHION_DISTANCE, z: 0, mat: cushionMatEarth },
+      // West cushion (西側)
+      { x: -CUSHION_DISTANCE, z: 0, mat: cushionMatCharcoal },
     ];
 
     cushionPositions.forEach((pos) => {
       const cushionGroup = new THREE.Group();
-      cushionGroup.position.set(pos.x, 0.03, pos.z);
+      cushionGroup.position.set(pos.x, 0.0325, pos.z);
 
       const cushion = new THREE.Mesh(cushionGeo, pos.mat);
       cushion.castShadow = true;
@@ -724,7 +819,7 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
       const buttonGeo = new THREE.SphereGeometry(0.016, 10, 8);
       const buttonMat = new THREE.MeshStandardMaterial({ color: 0x16120e, roughness: 0.6 });
       const button = new THREE.Mesh(buttonGeo, buttonMat);
-      button.position.y = 0.031;
+      button.position.y = 0.033;
       button.scale.set(1, 0.4, 1);
       cushionGroup.add(button);
 
@@ -803,63 +898,101 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
     const renderLoop = () => {
       const delta = Math.min(clock.getDelta(), 0.1);
 
-      // --- USER REQUEST: "按下坐下按鈕則走到茶几邊坐下" ---
-      if (sitStateRef.current === 'walking_to_table') {
-        const walkSpeed = 2.6; // comfortable walking speed
-        const dz = -walkSpeed * delta;
-        playerPosRef.current.z += dz;
-        walkDistanceRef.current += Math.abs(dz);
+      // Smootherstep Hermite quintic easing curve: S(t) = 6t^5 - 15t^4 + 10t^3
+      // Provides 0 velocity and 0 acceleration at both t=0 and t=1, giving pure physical smoothness
+      const smootherstep = (t: number) => {
+        const ct = Math.min(Math.max(t, 0), 1);
+        return ct * ct * ct * (ct * (6 * ct - 15) + 10);
+      };
 
-        // Footstep cadence
-        if (walkDistanceRef.current - lastFootstepDistRef.current > 0.75) {
+      // Velocity bell curve for step cadence and bobbing amplitude
+      const getSpeedScale = (t: number) => {
+        const ct = Math.min(Math.max(t, 0), 1);
+        return (30 * ct * ct * (1 - ct) * (1 - ct)) / 1.875;
+      };
+
+      // --- USER REQUEST: "讓走路的過程更順滑" ---
+      if (sitStateRef.current === 'walking_to_table') {
+        const WALK_DURATION = 2.5; // 2.5 seconds total for 3.05m journey
+        walkProgressRef.current = Math.min(1, walkProgressRef.current + delta / WALK_DURATION);
+
+        const t = walkProgressRef.current;
+        const easedT = smootherstep(t);
+        const currentZ = THREE.MathUtils.lerp(ENTRANCE_Z, SEATED_Z, easedT);
+        playerPosRef.current.z = currentZ;
+
+        const speedScale = getSpeedScale(t);
+
+        // Walking head bob: amplitude scales with current speed (0 at start, gentle mid-walk, 0 at arrival)
+        walkPhaseRef.current += delta * 7.5 * Math.max(0.2, speedScale);
+        const walkBob = Math.sin(walkPhaseRef.current) * 0.015 * speedScale;
+        camera.position.set(0, STAND_HEIGHT + walkBob, currentZ);
+
+        // Footstep sounds triggered at natural pacing during walk
+        walkDistanceRef.current += delta * speedScale * 2.2;
+        if (walkDistanceRef.current - lastFootstepDistRef.current > 0.70 && speedScale > 0.15) {
           lastFootstepDistRef.current = walkDistanceRef.current;
           playFootstep();
           if (typeof navigator !== 'undefined' && navigator.vibrate) {
-            try { navigator.vibrate(6); } catch {}
+            try { navigator.vibrate(5); } catch {}
           }
         }
 
-        // Natural walking head bob
-        const walkBob = Math.sin(walkDistanceRef.current * 7.5) * 0.016;
-        camera.position.set(0, STAND_HEIGHT + walkBob, playerPosRef.current.z);
-
-        // Keep view centered forward towards the tea table & bonsai while walking
+        // Camera stays locked forward facing the tea table & bonsai
         targetYawRef.current = CENTER_YAW;
         targetPitchRef.current = 0;
         cameraYawRef.current = CENTER_YAW;
         cameraPitchRef.current = 0;
 
-        // Reached the south cushion by the tea table
-        if (playerPosRef.current.z <= SEATED_Z) {
+        // Arrival at cushion: transition smoothly to sitting down
+        if (walkProgressRef.current >= 1) {
           playerPosRef.current.z = SEATED_Z;
+          sitProgressRef.current = 0;
           sitStateRef.current = 'sitting_down';
           setSitState('sitting_down');
         }
       } else if (sitStateRef.current === 'sitting_down') {
-        // Smooth transition: lowering camera from standing eye height (1.55m) down to cushion seat height (0.68m)
-        playerPosRef.current.y = THREE.MathUtils.lerp(playerPosRef.current.y, SEATED_HEIGHT, 0.065);
-        camera.position.set(0, playerPosRef.current.y, SEATED_Z);
+        const SIT_DURATION = 0.85;
+        sitProgressRef.current = Math.min(1, sitProgressRef.current + delta / SIT_DURATION);
 
+        const sitT = sitProgressRef.current;
+        const easedSit = smootherstep(sitT);
+        const currentY = THREE.MathUtils.lerp(STAND_HEIGHT, SEATED_HEIGHT, easedSit);
+        playerPosRef.current.y = currentY;
+
+        // Subtle natural head dip as you lower yourself onto the cushion, then gaze back up
+        const glanceDip = -Math.sin(easedSit * Math.PI) * 0.055;
         cameraYawRef.current = CENTER_YAW;
-        cameraPitchRef.current = 0;
+        cameraPitchRef.current = glanceDip;
 
-        if (Math.abs(playerPosRef.current.y - SEATED_HEIGHT) < 0.008) {
+        camera.position.set(0, currentY, SEATED_Z);
+
+        if (sitProgressRef.current >= 1) {
           playerPosRef.current.y = SEATED_HEIGHT;
           targetYawRef.current = CENTER_YAW;
           targetPitchRef.current = 0;
+          cameraYawRef.current = CENTER_YAW;
+          cameraPitchRef.current = 0;
           sitStateRef.current = 'seated';
           setSitState('seated');
         }
       } else if (sitStateRef.current === 'standing_up') {
-        // Smoothly rise back up to standing eye height (1.55m)
-        playerPosRef.current.y = THREE.MathUtils.lerp(playerPosRef.current.y, STAND_HEIGHT, 0.07);
-        targetYawRef.current = THREE.MathUtils.lerp(targetYawRef.current, CENTER_YAW, 0.1);
-        cameraYawRef.current = THREE.MathUtils.lerp(cameraYawRef.current, CENTER_YAW, 0.1);
-        targetPitchRef.current = THREE.MathUtils.lerp(targetPitchRef.current, 0, 0.1);
-        cameraPitchRef.current = THREE.MathUtils.lerp(cameraPitchRef.current, 0, 0.1);
-        camera.position.set(0, playerPosRef.current.y, playerPosRef.current.z);
+        const STAND_DURATION = 0.75;
+        standProgressRef.current = Math.min(1, standProgressRef.current + delta / STAND_DURATION);
 
-        if (Math.abs(playerPosRef.current.y - STAND_HEIGHT) < 0.008) {
+        const standT = standProgressRef.current;
+        const easedStand = smootherstep(standT);
+        const currentY = THREE.MathUtils.lerp(SEATED_HEIGHT, STAND_HEIGHT, easedStand);
+        playerPosRef.current.y = currentY;
+
+        targetYawRef.current = THREE.MathUtils.lerp(targetYawRef.current, CENTER_YAW, 0.12);
+        cameraYawRef.current = THREE.MathUtils.lerp(cameraYawRef.current, CENTER_YAW, 0.12);
+        targetPitchRef.current = THREE.MathUtils.lerp(targetPitchRef.current, 0, 0.12);
+        cameraPitchRef.current = THREE.MathUtils.lerp(cameraPitchRef.current, 0, 0.12);
+
+        camera.position.set(0, currentY, SEATED_Z);
+
+        if (standProgressRef.current >= 1) {
           playerPosRef.current.y = STAND_HEIGHT;
           sitStateRef.current = 'standing_entrance';
           setSitState('standing_entrance');
@@ -1004,9 +1137,15 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
   const handleSitOrStand = (e?: React.SyntheticEvent) => {
     if (e) e.stopPropagation();
     if (sitStateRef.current === 'standing_entrance') {
+      walkProgressRef.current = 0;
+      sitProgressRef.current = 0;
+      walkPhaseRef.current = 0;
+      lastFootstepDistRef.current = 0;
+      walkDistanceRef.current = 0;
       sitStateRef.current = 'walking_to_table';
       setSitState('walking_to_table');
     } else if (sitStateRef.current === 'seated') {
+      standProgressRef.current = 0;
       sitStateRef.current = 'standing_up';
       setSitState('standing_up');
     }
