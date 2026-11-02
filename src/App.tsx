@@ -488,6 +488,15 @@ const MEMBER_CATEGORIES: {
   },
 ];
 
+const getCategoryForFighter = (id: number | null | undefined): MemberCategory => {
+  if (!id) return 'producer';
+  if (id === 1 || id === 8) return 'producer';
+  if (id >= 2 && id <= 7) return 'cubepixel';
+  if (id >= 11 && id <= 14) return 'yojiuta';
+  if (id >= 15) return 'independent';
+  return 'producer';
+};
+
 const PURPLE_TEXTS = [
   '君の推し',
   '君の推し',
@@ -692,10 +701,20 @@ const CharacterSelect: React.FC<{
   onPageChange?: (id: string) => void; 
   onSpecialPage?: (id: number) => void;
   onTriggerLogin?: () => void;
-}> = ({ onHome, onPageChange, onSpecialPage, onTriggerLogin }) => {
-  const [selectedCategory, setSelectedCategory] = useState<MemberCategory | null>(null);
-  const [isDanmakuActive, setIsDanmakuActive] = useState<boolean>(true);
-  const [showButtons, setShowButtons] = useState<boolean>(false);
+  selectedCategory: MemberCategory | null;
+  setSelectedCategory: (cat: MemberCategory | null) => void;
+  skipDanmaku?: boolean;
+}> = ({ 
+  onHome, 
+  onPageChange, 
+  onSpecialPage, 
+  onTriggerLogin,
+  selectedCategory,
+  setSelectedCategory,
+  skipDanmaku = false,
+}) => {
+  const [isDanmakuActive, setIsDanmakuActive] = useState<boolean>(!skipDanmaku && !selectedCategory);
+  const [showButtons, setShowButtons] = useState<boolean>(skipDanmaku || !!selectedCategory);
 
   const handleLastBulletEntered = React.useCallback(() => {
     setShowButtons(true);
@@ -705,7 +724,29 @@ const CharacterSelect: React.FC<{
     setIsDanmakuActive(false);
   }, []);
 
-  const [activeCategoryIndex, setActiveCategoryIndex] = useState<number>(0);
+  const [activeCategoryIndex, setActiveCategoryIndex] = useState<number>(() => {
+    if (selectedCategory) {
+      const idx = MEMBER_CATEGORIES.findIndex(c => c.id === selectedCategory);
+      return idx >= 0 ? idx : 0;
+    }
+    return 0;
+  });
+
+  useEffect(() => {
+    if (selectedCategory) {
+      const idx = MEMBER_CATEGORIES.findIndex(c => c.id === selectedCategory);
+      if (idx >= 0) setActiveCategoryIndex(idx);
+      setIsDanmakuActive(false);
+      setShowButtons(true);
+    }
+  }, [selectedCategory]);
+
+  useEffect(() => {
+    if (skipDanmaku) {
+      setIsDanmakuActive(false);
+      setShowButtons(true);
+    }
+  }, [skipDanmaku]);
   const wheelContainerRef = useRef<HTMLDivElement>(null);
   const lastWheelTime = useRef<number>(0);
 
@@ -1069,7 +1110,11 @@ const CharacterSelect: React.FC<{
           {/* Top Return and Category Switcher Bar */}
           <div className="w-full flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-white/10">
             <button
-              onClick={() => setSelectedCategory(null)}
+              onClick={() => {
+                setSelectedCategory(null);
+                setIsDanmakuActive(false);
+                setShowButtons(true);
+              }}
               className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/25 text-xs sm:text-sm font-mono font-bold text-white tracking-widest uppercase cursor-pointer transition-all active:scale-95 hover:border-white/40 shadow-lg"
             >
               <ArrowLeft className="w-4 h-4 text-[#7CFC00]" />
@@ -2120,12 +2165,12 @@ const UmiriSpecialPage: React.FC<{ fighterId: number; onBack: () => void; onSecr
           whileHover={{ scale: 1.1, x: 5 }}
           whileTap={{ scale: 0.9 }}
           onClick={onBack}
-          className="absolute top-8 left-8 z-[1010] flex items-center gap-4 text-white hover:text-white/80 group"
+          className="absolute top-8 left-8 z-[1010] flex items-center gap-4 text-white hover:text-white/80 group cursor-pointer"
         >
           <div className="w-10 h-10 rounded-full border-2 border-white flex items-center justify-center group-hover:bg-white group-hover:text-[#1a233a] transition-all">
             <span className="text-xl">←</span>
           </div>
-          <span className="font-black tracking-widest text-xs uppercase">Back to Members</span>
+          <span className="font-black tracking-widest text-xs uppercase">返回成員選擇 // BACK TO MEMBERS</span>
         </motion.button>
 
         {/* Centered Message Box */}
@@ -2202,12 +2247,12 @@ const UmiriSpecialPage: React.FC<{ fighterId: number; onBack: () => void; onSecr
         whileHover={{ scale: 1.1, x: 5 }}
         whileTap={{ scale: 0.9 }}
         onClick={onBack}
-        className="absolute top-8 left-8 z-[1010] flex items-center gap-4 text-white hover:text-white/80 group"
+        className="absolute top-8 left-8 z-[1010] flex items-center gap-4 text-white hover:text-white/80 group cursor-pointer"
       >
         <div className="w-10 h-10 rounded-full border-2 border-white flex items-center justify-center group-hover:bg-white group-hover:text-black transition-all">
           <span className="text-xl">←</span>
         </div>
-        <span className="font-black tracking-widest text-xs uppercase">Back to Members</span>
+        <span className="font-black tracking-widest text-xs uppercase">返回成員選擇 // BACK TO MEMBERS</span>
       </motion.button>
 
       {/* Main Content - Center Screen Control Block */}
@@ -2876,9 +2921,9 @@ const BroadcastStudioPage: React.FC<{
       {/* Header */}
       <div className="h-20 bg-[#2d1b4d] border-b-4 border-white/10 flex items-center justify-between px-8">
         <div className="flex items-center gap-8">
-          <button onClick={onBack} className="flex items-center gap-3 text-white/60 hover:text-white transition-colors">
+          <button onClick={onBack} className="flex items-center gap-3 text-white/60 hover:text-white transition-colors cursor-pointer">
             <div className="w-8 h-8 border-2 border-current flex items-center justify-center font-bold">←</div>
-            <span className="text-xs font-pixel uppercase tracking-widest">Exit</span>
+            <span className="text-xs font-pixel uppercase tracking-widest">返回成員選擇 // BACK TO MEMBERS</span>
           </button>
           <div className="flex items-center gap-3">
             <Radio size={20} className="text-white/40" />
@@ -3122,6 +3167,17 @@ export default function App() {
   const [isUILocked, setIsUILocked] = useState(false);
   const [isRopeBroken, setIsRopeBroken] = useState(false);
   const [activeSubPage, setActiveSubPage] = useState<string | null>(null);
+  const [selectedMemberCategory, setSelectedMemberCategory] = useState<MemberCategory | null>(null);
+  const [skipDanmakuOnReturn, setSkipDanmakuOnReturn] = useState<boolean>(false);
+
+  const handleBackToMemberSelection = () => {
+    const category = selectedMemberCategory || getCategoryForFighter(selectedFighterId);
+    setSelectedMemberCategory(category);
+    setActiveSubPage('members');
+    setSkipDanmakuOnReturn(true);
+    setGameState('next_page');
+    setIsAdminLoginTriggered(false);
+  };
   const [showDarkRedSubPage, setShowDarkRedSubPage] = useState(false);
   const [showAllNewsSubpage, setShowAllNewsSubpage] = useState(false);
   const [isWitchHour, setIsWitchHour] = useState<boolean>(() => new Date().getHours() === 0);
@@ -3552,7 +3608,7 @@ export default function App() {
           <UmiriSpecialPage 
             key={`umiri_special-${selectedFighterId}`} 
             fighterId={selectedFighterId} 
-            onBack={() => setGameState('next_page')} 
+            onBack={handleBackToMemberSelection} 
             onSecretUnlock={() => {
               setGameState('next_page');
               setActiveSubPage('disabled');
@@ -3567,10 +3623,7 @@ export default function App() {
         ) : gameState === 'idol_studio' ? (
           <BroadcastStudioPage 
             key="idol_studio" 
-            onBack={() => {
-              setGameState('next_page');
-              setIsAdminLoginTriggered(false);
-            }} 
+            onBack={handleBackToMemberSelection} 
             isAdmin={isAdmin}
             setIsAdmin={setIsAdmin}
             adminMemberId={adminMemberId}
@@ -3640,7 +3693,11 @@ export default function App() {
             <div className="relative">
               {/* Global Home Trigger - Top Left Square */}
               <div 
-                onClick={() => setActiveSubPage(null)}
+                onClick={() => {
+                  setActiveSubPage(null);
+                  setSelectedMemberCategory(null);
+                  setSkipDanmakuOnReturn(false);
+                }}
                 className="absolute top-0 left-0 w-80 h-80 z-[100] cursor-pointer group pointer-events-auto"
                 title="返回主頁"
               >
@@ -3669,6 +3726,10 @@ export default function App() {
                           if (heart.id === 'visual') {
                             setGameState('special_thanks');
                           } else {
+                            if (heart.id === 'members' && activeSubPage !== 'members') {
+                              setSelectedMemberCategory(null);
+                              setSkipDanmakuOnReturn(false);
+                            }
                             setActiveSubPage(heart.id);
                           }
                         }}
@@ -3805,10 +3866,19 @@ export default function App() {
 
                     {activeSubPage === 'members' ? (
                       <CharacterSelect 
-                        onHome={() => setActiveSubPage(null)} 
+                        onHome={() => {
+                          setActiveSubPage(null);
+                          setSelectedMemberCategory(null);
+                          setSkipDanmakuOnReturn(false);
+                        }} 
                         onPageChange={(id) => setActiveSubPage(id)} 
+                        selectedCategory={selectedMemberCategory}
+                        setSelectedCategory={setSelectedMemberCategory}
+                        skipDanmaku={skipDanmakuOnReturn}
                         onSpecialPage={(id) => {
                           setSelectedFighterId(id);
+                          setSelectedMemberCategory(selectedMemberCategory || getCategoryForFighter(id));
+                          setSkipDanmakuOnReturn(true);
                           if (id === 8) {
                             setGameState('idol_studio');
                           } else {
