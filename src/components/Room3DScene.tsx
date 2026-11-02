@@ -6,10 +6,9 @@ import {
   VolumeX, 
   DoorClosed, 
   Layers,
-  ArrowUp,
-  Armchair,
+  Lightbulb,
+  LightbulbOff,
   Eye,
-  Lock,
   Sparkles
 } from 'lucide-react';
 
@@ -21,7 +20,7 @@ interface Room3DSceneProps {
   playFootstep: () => void;
 }
 
-export type SitState = 'standing_entrance' | 'walking_to_table' | 'sitting_down' | 'seated' | 'standing_up';
+export type SitState = 'walking_to_table' | 'sitting_down' | 'seated';
 
 export const Room3DScene: React.FC<Room3DSceneProps> = ({
   onExitRoom,
@@ -32,43 +31,48 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Angle constraints: 60° horizontal range (±30° from forward), slight pitch down and up
-  // Rotated 180°: CENTER_YAW = 0 looks straight forward (-Z) towards the front wooden desk & bonsai
+  // User Request: "刪除抬頭 降低左右視角轉動 將視角轉動方式從360度改為T字(左右 下視角)"
   const CENTER_YAW = 0; 
-  const YAW_RANGE_HALF = (35 * Math.PI) / 180; // 35 degrees each side = 70 degrees total
+  const YAW_RANGE_HALF = (20 * Math.PI) / 180; // 降低左右視角轉動：左右各 20° (共 40° 視角)
   const MIN_YAW = CENTER_YAW - YAW_RANGE_HALF;
   const MAX_YAW = CENTER_YAW + YAW_RANGE_HALF;
 
-  const MIN_PITCH = (-20 * Math.PI) / 180; // 低頭看茶几茶具 (~20 degrees down)
-  const MAX_PITCH = (25 * Math.PI) / 180; // 抬頭看木樑挑高天花板 (~25 degrees up)
+  const MIN_PITCH = (-26 * Math.PI) / 180; // 下視角：俯視茶几茶具與檯燈 (~26 degrees down)
+  const MAX_PITCH = 0; // 刪除抬頭：平視水平線為頂限，不可抬頭 (0 degrees)
 
-  // Room Dimensions (User Request: 將房間改為10米*10米)
-  const ROOM_WIDTH = 10.0;
-  const ROOM_HEIGHT = 3.2;
-  const ROOM_DEPTH = 10.0;
-  const TABLE_DEPTH = 0.75; // 牆邊木桌深度
-  const TABLE_HEIGHT = 1.0; // 牆邊木桌高度 (高檯設計)
+  // Room Dimensions (User Request: 房間的寬度改為10*7米)
+  const ROOM_WIDTH = 10.0; // 寬度 10 米
+  const ROOM_HEIGHT = 3.0; // 挑高 3 米
+  const ROOM_DEPTH = 7.0;  // 深度 7 米
+  const TABLE_DEPTH = 0.70; // 牆邊木桌深度
+  const TABLE_HEIGHT = 0.95; // 牆邊木桌高度
 
   // Key Positions
   const STAND_HEIGHT = 1.55;
-  const SEATED_HEIGHT = 0.68; // 盤腿/屈膝坐於坐墊時的視線高度
-  const ENTRANCE_Z = 4.2; // 站在房門前 (背對房門，面朝茶几與盆栽)
-  const SEATED_Z = 1.15; // 圓形茶几南側坐墊位置 (圓几正前方，半徑 0.85m + 坐墊中心 0.30m)
+  const SEATED_HEIGHT = 0.68; // 坐姿視線高度
+  const ENTRANCE_Z = 2.8; // 進門起點 (背對房門，門在 Z = 3.5m)
+  const SEATED_Z = 1.15; // 圓形茶几南側坐墊位置 (圓几半徑 0.85m + 坐墊中心 0.30m)
 
   // HUD & Game State
   const [yawOffsetDeg, setYawOffsetDeg] = useState(0);
-  const [sitState, setSitState] = useState<SitState>('standing_entrance');
+  const [pitchOffsetDeg, setPitchOffsetDeg] = useState(0);
+  // User Request: 一進來就勻速走到茶几旁坐下
+  const [sitState, setSitState] = useState<SitState>('walking_to_table');
+  const [isLampOn, setIsLampOn] = useState(true);
 
   // References for render loop & input handling
-  const sitStateRef = useRef<SitState>('standing_entrance');
+  const sitStateRef = useRef<SitState>('walking_to_table');
   useEffect(() => {
     sitStateRef.current = sitState;
   }, [sitState]);
 
-  // Smooth Kinetic Animation Progress Trackers
-  const walkProgressRef = useRef<number>(0);
+  // Table Lamp 3D Object Refs for interactive toggle
+  const lampLightRef = useRef<THREE.PointLight | null>(null);
+  const lampBulbMatRef = useRef<THREE.MeshBasicMaterial | null>(null);
+  const lampShadeMatRef = useRef<THREE.MeshStandardMaterial | null>(null);
+
+  // Animation Progress Tracker
   const sitProgressRef = useRef<number>(0);
-  const standProgressRef = useRef<number>(0);
   const walkPhaseRef = useRef<number>(0);
 
   // Touch look tracking (enabled ONLY when seated at table)
@@ -85,7 +89,7 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
   const targetYawRef = useRef<number>(CENTER_YAW);
   const targetPitchRef = useRef<number>(0);
 
-  // Player position: spawns just in front of the door at Z = 4.2, standing at 1.55m
+  // Player position: starts at entrance Z = 2.8, standing at 1.55m
   const playerPosRef = useRef<THREE.Vector3>(new THREE.Vector3(0, STAND_HEIGHT, ENTRANCE_Z));
   const walkDistanceRef = useRef<number>(0);
   const lastFootstepDistRef = useRef<number>(0);
@@ -746,10 +750,15 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
     lampGroup.add(lampBulb);
 
     // Table Lamp Point Light casting warm intimate glow on the tabletop & surroundings
-    const tableLampLight = new THREE.PointLight(0xffdf9a, 2.8, 5.2, 1.25);
+    const tableLampLight = new THREE.PointLight(0xffdf9a, isLampOn ? 2.8 : 0, 5.2, 1.25);
     tableLampLight.position.y = 0.27;
     tableLampLight.castShadow = true;
     lampGroup.add(tableLampLight);
+
+    // Save refs for dynamic toggle
+    lampLightRef.current = tableLampLight;
+    lampBulbMatRef.current = lampBulb.material as THREE.MeshBasicMaterial;
+    lampShadeMatRef.current = lampShadeMat;
 
     centerTeaGroup.add(lampGroup);
 
@@ -898,45 +907,25 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
     const renderLoop = () => {
       const delta = Math.min(clock.getDelta(), 0.1);
 
-      // Smootherstep Hermite quintic easing curve: S(t) = 6t^5 - 15t^4 + 10t^3
-      // Provides 0 velocity and 0 acceleration at both t=0 and t=1, giving pure physical smoothness
-      const smootherstep = (t: number) => {
-        const ct = Math.min(Math.max(t, 0), 1);
-        return ct * ct * ct * (ct * (6 * ct - 15) + 10);
-      };
-
-      // Velocity bell curve for step cadence and bobbing amplitude
-      const getSpeedScale = (t: number) => {
-        const ct = Math.min(Math.max(t, 0), 1);
-        return (30 * ct * ct * (1 - ct) * (1 - ct)) / 1.875;
-      };
-
-      // --- USER REQUEST: "讓走路的過程更順滑" ---
+      // --- USER REQUEST: "刪除按鈕 並且設計為一進來就勻速走到茶几旁坐下" ---
       if (sitStateRef.current === 'walking_to_table') {
-        const WALK_DURATION = 2.5; // 2.5 seconds total for 3.05m journey
-        walkProgressRef.current = Math.min(1, walkProgressRef.current + delta / WALK_DURATION);
+        const CONSTANT_SPEED = 1.15; // 勻速前進 (1.15 米/秒)
+        playerPosRef.current.z -= CONSTANT_SPEED * delta;
 
-        const t = walkProgressRef.current;
-        const easedT = smootherstep(t);
-        const currentZ = THREE.MathUtils.lerp(ENTRANCE_Z, SEATED_Z, easedT);
-        playerPosRef.current.z = currentZ;
-
-        const speedScale = getSpeedScale(t);
-
-        // Walking head bob: amplitude scales with current speed (0 at start, gentle mid-walk, 0 at arrival)
-        walkPhaseRef.current += delta * 7.5 * Math.max(0.2, speedScale);
-        const walkBob = Math.sin(walkPhaseRef.current) * 0.015 * speedScale;
-        camera.position.set(0, STAND_HEIGHT + walkBob, currentZ);
-
-        // Footstep sounds triggered at natural pacing during walk
-        walkDistanceRef.current += delta * speedScale * 2.2;
-        if (walkDistanceRef.current - lastFootstepDistRef.current > 0.70 && speedScale > 0.15) {
+        // Footstep cadence
+        walkDistanceRef.current += CONSTANT_SPEED * delta;
+        if (walkDistanceRef.current - lastFootstepDistRef.current > 0.65) {
           lastFootstepDistRef.current = walkDistanceRef.current;
           playFootstep();
           if (typeof navigator !== 'undefined' && navigator.vibrate) {
-            try { navigator.vibrate(5); } catch {}
+            try { navigator.vibrate(6); } catch {}
           }
         }
+
+        // Gentle rhythmic head bob at constant walking cadence
+        walkPhaseRef.current += delta * 7.5;
+        const walkBob = Math.sin(walkPhaseRef.current) * 0.012;
+        camera.position.set(0, STAND_HEIGHT + walkBob, playerPosRef.current.z);
 
         // Camera stays locked forward facing the tea table & bonsai
         targetYawRef.current = CENTER_YAW;
@@ -945,23 +934,23 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
         cameraPitchRef.current = 0;
 
         // Arrival at cushion: transition smoothly to sitting down
-        if (walkProgressRef.current >= 1) {
+        if (playerPosRef.current.z <= SEATED_Z) {
           playerPosRef.current.z = SEATED_Z;
           sitProgressRef.current = 0;
           sitStateRef.current = 'sitting_down';
           setSitState('sitting_down');
         }
       } else if (sitStateRef.current === 'sitting_down') {
-        const SIT_DURATION = 0.85;
+        const SIT_DURATION = 0.85; // 0.85 秒自然緩緩落座
         sitProgressRef.current = Math.min(1, sitProgressRef.current + delta / SIT_DURATION);
 
         const sitT = sitProgressRef.current;
-        const easedSit = smootherstep(sitT);
+        const easedSit = sitT * sitT * (3 - 2 * sitT);
         const currentY = THREE.MathUtils.lerp(STAND_HEIGHT, SEATED_HEIGHT, easedSit);
         playerPosRef.current.y = currentY;
 
-        // Subtle natural head dip as you lower yourself onto the cushion, then gaze back up
-        const glanceDip = -Math.sin(easedSit * Math.PI) * 0.055;
+        // Subtle natural head dip as you lower yourself onto the cushion
+        const glanceDip = -Math.sin(easedSit * Math.PI) * 0.045;
         cameraYawRef.current = CENTER_YAW;
         cameraPitchRef.current = glanceDip;
 
@@ -976,45 +965,21 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
           sitStateRef.current = 'seated';
           setSitState('seated');
         }
-      } else if (sitStateRef.current === 'standing_up') {
-        const STAND_DURATION = 0.75;
-        standProgressRef.current = Math.min(1, standProgressRef.current + delta / STAND_DURATION);
-
-        const standT = standProgressRef.current;
-        const easedStand = smootherstep(standT);
-        const currentY = THREE.MathUtils.lerp(SEATED_HEIGHT, STAND_HEIGHT, easedStand);
-        playerPosRef.current.y = currentY;
-
-        targetYawRef.current = THREE.MathUtils.lerp(targetYawRef.current, CENTER_YAW, 0.12);
-        cameraYawRef.current = THREE.MathUtils.lerp(cameraYawRef.current, CENTER_YAW, 0.12);
-        targetPitchRef.current = THREE.MathUtils.lerp(targetPitchRef.current, 0, 0.12);
-        cameraPitchRef.current = THREE.MathUtils.lerp(cameraPitchRef.current, 0, 0.12);
-
-        camera.position.set(0, currentY, SEATED_Z);
-
-        if (standProgressRef.current >= 1) {
-          playerPosRef.current.y = STAND_HEIGHT;
-          sitStateRef.current = 'standing_entrance';
-          setSitState('standing_entrance');
-        }
       } else if (sitStateRef.current === 'seated') {
-        // Seated comfortably at tea table: allow smooth interactive look around
-        cameraYawRef.current = THREE.MathUtils.lerp(cameraYawRef.current, targetYawRef.current, 0.18);
-        cameraPitchRef.current = THREE.MathUtils.lerp(cameraPitchRef.current, targetPitchRef.current, 0.18);
+        // Seated at tea table: allow smooth T-shape look around (yaw ±20°, pitch 0° to -26° down to table)
+        cameraYawRef.current = THREE.MathUtils.lerp(cameraYawRef.current, targetYawRef.current, 0.16);
+        cameraPitchRef.current = THREE.MathUtils.lerp(cameraPitchRef.current, targetPitchRef.current, 0.16);
         camera.position.set(0, SEATED_HEIGHT, SEATED_Z);
-      } else {
-        // Standing at entrance
-        cameraYawRef.current = CENTER_YAW;
-        cameraPitchRef.current = 0;
-        camera.position.set(0, STAND_HEIGHT, playerPosRef.current.z);
       }
 
       camera.rotation.y = cameraYawRef.current;
       camera.rotation.x = cameraPitchRef.current;
 
-      // HUD values
+      // HUD angles
       const currentYawOffset = Math.round((cameraYawRef.current - CENTER_YAW) * (180 / Math.PI));
+      const currentPitchOffset = Math.round(cameraPitchRef.current * (180 / Math.PI));
       setYawOffsetDeg(currentYawOffset);
+      setPitchOffsetDeg(currentPitchOffset);
 
       renderer.render(scene, camera);
       animationId = requestAnimationFrame(renderLoop);
@@ -1060,7 +1025,7 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
     };
   }, [playFootstep, CENTER_YAW, ENTRANCE_Z, SEATED_Z, STAND_HEIGHT, SEATED_HEIGHT]);
 
-  // --- TOUCH HANDLERS (VIEW ROTATION ONLY WHEN SEATED) ---
+  // --- TOUCH HANDLERS (T-SHAPE VIEW ROTATION ONLY WHEN SEATED) ---
   const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     if (sitStateRef.current !== 'seated') return;
 
@@ -1083,11 +1048,11 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
         const deltaY = touch.clientY - lookLastPosRef.current.y;
         lookLastPosRef.current = { x: touch.clientX, y: touch.clientY };
 
-        const sensitivity = 0.0035;
+        const sensitivity = 0.0032;
         targetYawRef.current -= deltaX * sensitivity;
         targetPitchRef.current -= deltaY * sensitivity;
 
-        // Clamp to 70° horizontal (±35°) and slight look up/down
+        // User Request: "刪除抬頭 降低左右視角轉動 將視角轉動方式從360度改為T字(左右 下視角)"
         targetYawRef.current = THREE.MathUtils.clamp(targetYawRef.current, MIN_YAW, MAX_YAW);
         targetPitchRef.current = THREE.MathUtils.clamp(targetPitchRef.current, MIN_PITCH, MAX_PITCH);
       }
@@ -1103,7 +1068,7 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
     }
   };
 
-  // --- DESKTOP MOUSE LOOK (ENABLED ONLY WHEN SEATED) ---
+  // --- DESKTOP MOUSE LOOK (T-SHAPE ENABLED ONLY WHEN SEATED) ---
   const handleMouseDown = (e: React.MouseEvent) => {
     if (sitStateRef.current !== 'seated') return;
     isMouseDownRef.current = true;
@@ -1116,10 +1081,11 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
     const deltaY = e.clientY - mouseLastPosRef.current.y;
     mouseLastPosRef.current = { x: e.clientX, y: e.clientY };
 
-    const sensitivity = 0.0028;
+    const sensitivity = 0.0026;
     targetYawRef.current -= deltaX * sensitivity;
     targetPitchRef.current -= deltaY * sensitivity;
 
+    // User Request: "刪除抬頭 降低左右視角轉動 將視角轉動方式從360度改為T字(左右 下視角)"
     targetYawRef.current = THREE.MathUtils.clamp(targetYawRef.current, MIN_YAW, MAX_YAW);
     targetPitchRef.current = THREE.MathUtils.clamp(targetPitchRef.current, MIN_PITCH, MAX_PITCH);
   };
@@ -1133,37 +1099,26 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
     targetPitchRef.current = 0;
   };
 
-  // --- BUTTON CONTROL: 坐下 / 站起 ---
-  const handleSitOrStand = (e?: React.SyntheticEvent) => {
-    if (e) e.stopPropagation();
-    if (sitStateRef.current === 'standing_entrance') {
-      walkProgressRef.current = 0;
-      sitProgressRef.current = 0;
-      walkPhaseRef.current = 0;
-      lastFootstepDistRef.current = 0;
-      walkDistanceRef.current = 0;
-      sitStateRef.current = 'walking_to_table';
-      setSitState('walking_to_table');
-    } else if (sitStateRef.current === 'seated') {
-      standProgressRef.current = 0;
-      sitStateRef.current = 'standing_up';
-      setSitState('standing_up');
-    }
+  // User Request: "給檯燈加上個按鈕 可以開關燈"
+  const handleToggleLamp = () => {
+    setIsLampOn((prev) => {
+      const next = !prev;
+      if (lampLightRef.current) {
+        lampLightRef.current.intensity = next ? 2.8 : 0;
+      }
+      if (lampBulbMatRef.current) {
+        lampBulbMatRef.current.color.set(next ? 0xffeacc : 0x221a12);
+      }
+      if (lampShadeMatRef.current) {
+        lampShadeMatRef.current.color.set(next ? 0xfff0dc : 0x4a3a2e);
+        lampShadeMatRef.current.emissive = new THREE.Color(next ? 0x332211 : 0x000000);
+      }
+      return next;
+    });
   };
 
-  // Keyboard shortcut (Space / Enter to Sit or Stand)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === ' ' || e.key === 'Enter') {
-        handleSitOrStand();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
   const isSeated = sitState === 'seated';
-  const isMoving = sitState === 'walking_to_table' || sitState === 'sitting_down' || sitState === 'standing_up';
+  const isMoving = sitState === 'walking_to_table' || sitState === 'sitting_down';
 
   return (
     <div 
@@ -1185,7 +1140,7 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
       />
 
       {/* Center Subtle Focus Ring */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-40">
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-30">
         <div className="w-2.5 h-2.5 rounded-full border border-amber-300/80 bg-white/20 shadow-sm" />
       </div>
 
@@ -1202,34 +1157,47 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
                 <span className="font-mono text-[11px] font-bold text-amber-300">
                   {yawOffsetDeg >= 0 ? `+${yawOffsetDeg}°` : `${yawOffsetDeg}°`}
                 </span>
-                <span className="text-[9px] text-white/50 font-mono">/ ±35°</span>
+                <span className="text-[9px] text-white/50 font-mono">/ ±20°</span>
                 <span className="text-[10px] text-white/30 font-mono">|</span>
-                <span className="font-mono text-[10px] text-amber-200/90">茶几座席</span>
-              </>
-            ) : isMoving ? (
-              <>
-                <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-spin" />
-                <span className="font-mono text-[10px] text-amber-200">
-                  {sitState === 'walking_to_table' ? '走向茶几中...' : sitState === 'sitting_down' ? '落座茶席中...' : '起身中...'}
+                <span className="font-mono text-[10px] text-amber-200/90">
+                  {pitchOffsetDeg < -3 ? `俯視 ${pitchOffsetDeg}°` : '平視'}
                 </span>
               </>
             ) : (
               <>
-                <Lock className="w-3.5 h-3.5 text-amber-400/80" />
+                <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-spin" />
                 <span className="font-mono text-[10px] text-amber-200">
-                  門邊站立 (背對房門)
+                  {sitState === 'walking_to_table' ? '走向茶几中...' : '入座茶席中...'}
                 </span>
               </>
             )}
           </div>
 
           <div className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-950/70 border border-amber-600/40 text-amber-200 text-[10px] font-mono font-bold">
-            <span>10m × 10m 寬敞茶室空間</span>
+            <span>10m × 7m 茶室空間</span>
           </div>
         </div>
 
         {/* Top Right Action Buttons */}
         <div className="flex items-center gap-2 pointer-events-auto">
+          {/* Table Lamp Switch Button */}
+          <button
+            onClick={handleToggleLamp}
+            className={`px-3 py-1.5 rounded-xl border backdrop-blur-md font-mono text-xs font-bold tracking-wider flex items-center gap-1.5 active:scale-95 transition-all shadow-md cursor-pointer ${
+              isLampOn
+                ? 'bg-amber-500/25 border-amber-400/60 text-amber-200 shadow-[0_0_15px_rgba(245,158,11,0.35)]'
+                : 'bg-black/70 border-white/20 text-white/50 hover:text-white'
+            }`}
+            title={isLampOn ? '關閉檯燈' : '開啟檯燈'}
+          >
+            {isLampOn ? (
+              <Lightbulb className="w-3.5 h-3.5 text-amber-300 drop-shadow-[0_0_6px_rgba(251,191,36,0.8)]" />
+            ) : (
+              <LightbulbOff className="w-3.5 h-3.5 text-white/40" />
+            )}
+            <span>檯燈：{isLampOn ? '開' : '關'}</span>
+          </button>
+
           {/* Sound Toggle */}
           <button
             onClick={onToggleSound}
@@ -1276,79 +1244,28 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
           {isSeated ? (
             <>
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span className="text-amber-200 font-bold">已在茶几旁就座 • 可滑動環顧茶室空間 (±35°)</span>
-            </>
-          ) : isMoving ? (
-            <>
-              <Sparkles className="w-3 h-3 text-amber-400/90 animate-spin" />
-              <span>正在前往茶席入座...</span>
+              <span className="text-amber-200 font-bold">已在茶几旁就座 • T字視角 (左右±20° • 俯視茶几)</span>
             </>
           ) : (
             <>
-              <Armchair className="w-3 h-3 text-amber-400/90" />
-              <span>點擊下方「坐下」走至房間中央茶几入座</span>
+              <Sparkles className="w-3 h-3 text-amber-400/90 animate-spin" />
+              <span>自動勻速前往茶几入座中...</span>
             </>
           )}
         </div>
       </div>
 
-      {/* --- USER REQUEST: 刪除移動按鈕 並新增一個按鈕「坐下」 (按下則走到茶几邊坐下) --- */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-30 select-none flex items-center justify-center">
-        <button
-          type="button"
-          onClick={handleSitOrStand}
-          disabled={isMoving}
-          className={`group flex items-center gap-3.5 px-8 py-4 rounded-2xl border-2 transition-all duration-300 select-none cursor-pointer shadow-[0_8px_32px_rgba(0,0,0,0.75)] ${
-            isMoving
-              ? 'bg-amber-950/80 border-amber-500/50 text-amber-300/80 cursor-wait'
-              : isSeated
-              ? 'bg-black/85 hover:bg-black/95 border-amber-400/70 text-amber-200 active:scale-95 hover:border-amber-400 shadow-[0_0_25px_rgba(245,158,11,0.25)]'
-              : 'bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 hover:brightness-110 border-amber-300 text-white active:scale-95 shadow-[0_0_30px_rgba(245,158,11,0.5)]'
-          }`}
-        >
-          <div className="p-2 rounded-xl bg-black/30">
-            {isSeated ? (
-              <ArrowUp className="w-5 h-5 text-amber-300 group-hover:-translate-y-0.5 transition-transform" />
-            ) : isMoving ? (
-              <Sparkles className="w-5 h-5 text-amber-300 animate-spin" />
-            ) : (
-              <Armchair className="w-5 h-5 text-white group-hover:scale-110 transition-transform" />
-            )}
-          </div>
-          <div className="flex flex-col items-start">
-            <span className="font-mono text-base font-bold tracking-wider">
-              {isSeated
-                ? '站起'
-                : sitState === 'walking_to_table'
-                ? '走向茶几中...'
-                : sitState === 'sitting_down'
-                ? '入座茶几中...'
-                : sitState === 'standing_up'
-                ? '起身中...'
-                : '坐下'}
-            </span>
-            <span className="text-[10px] text-white/75 font-mono tracking-tight">
-              {isSeated
-                ? '點擊起身返回站立'
-                : isMoving
-                ? '自動行進至茶席'
-                : '走到茶几邊坐下'}
-            </span>
-          </div>
-        </button>
-      </div>
-
-      {/* Bottom Right Guidance Badge */}
-      <div className="absolute bottom-6 right-6 pointer-events-none z-20 hidden sm:flex flex-col items-end gap-1.5">
+      {/* Bottom Center Guidance Notice */}
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 pointer-events-none z-20 flex flex-col items-center gap-1">
         {isSeated ? (
-          <div className="px-3.5 py-1.5 rounded-xl bg-amber-950/80 backdrop-blur-md border border-amber-500/40 text-amber-200 text-[11px] font-mono tracking-wider flex items-center gap-2 shadow-lg">
-            <Eye className="w-3.5 h-3.5 text-amber-400" />
-            <span>左右滑動環顧茶室 (±35°)</span>
+          <div className="px-4 py-2 rounded-xl bg-black/70 backdrop-blur-md border border-white/15 text-amber-200/90 text-xs font-mono tracking-wider flex items-center gap-2 shadow-lg">
+            <Eye className="w-4 h-4 text-amber-400" />
+            <span>滑動屏幕：左右環顧 (±20°) 或 向下俯視茶具檯燈</span>
           </div>
         ) : (
-          <div className="px-3.5 py-1.5 rounded-xl bg-black/60 backdrop-blur-md border border-white/10 text-white/50 text-[10px] font-mono tracking-wider flex items-center gap-2">
-            <Lock className="w-3 h-3 text-white/40" />
-            <span>就座茶几後可環顧空間</span>
+          <div className="px-4 py-2 rounded-xl bg-black/70 backdrop-blur-md border border-white/15 text-white/70 text-xs font-mono tracking-wider flex items-center gap-2 shadow-lg">
+            <Sparkles className="w-4 h-4 text-amber-300 animate-spin" />
+            <span>正在勻速步向茶席入座...</span>
           </div>
         )}
       </div>

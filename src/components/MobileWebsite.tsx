@@ -453,9 +453,10 @@ export const MobileWebsite: React.FC<MobileWebsiteProps> = ({
   // 'walking' -> Perspective slow walk towards the single door panel
   // 'door_reached' -> Door enlarged so round knob lock (喇叭鎖) is clearly visible
   // 'door_opening' -> Knob turns and door swings inward
-  // 'room' -> 3D empty room with look-around viewpoint & virtual joystick
+  // 'text_transition' -> Black background transition with welcome messages
+  // 'room' -> 3D empty room with look-around viewpoint
   // 'explored' -> Explored hub behind the door
-  const [sceneState, setSceneState] = useState<'landing' | 'walking' | 'door_reached' | 'door_opening' | 'room' | 'explored'>('landing');
+  const [sceneState, setSceneState] = useState<'landing' | 'walking' | 'door_reached' | 'door_opening' | 'text_transition' | 'room' | 'explored'>('landing');
 
   // Walking progress from 0 (far) to 1 (at door)
   const [walkProgress, setWalkProgress] = useState(0);
@@ -559,11 +560,20 @@ export const MobileWebsite: React.FC<MobileWebsiteProps> = ({
       sfx.playDoorCreak();
     }, 280);
 
-    // Transition directly into the 3D empty room!
+    // User Request: 在開門到進房間之前新增一段黑背景文字小轉場
     setTimeout(() => {
-      setSceneState('room');
-    }, 1250);
+      setSceneState('text_transition');
+    }, 1200);
   };
+
+  // Auto-advance from text transition into the 3D room after displaying messages
+  useEffect(() => {
+    if (sceneState !== 'text_transition') return;
+    const timer = setTimeout(() => {
+      setSceneState('room');
+    }, 3800);
+    return () => clearTimeout(timer);
+  }, [sceneState]);
 
   // Return back to the initial landing screen
   const handleResetToLanding = () => {
@@ -831,6 +841,55 @@ export const MobileWebsite: React.FC<MobileWebsiteProps> = ({
                 </button>
               </div>
             )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ======================================================== */}
+      {/* 2.5 BLACK BACKGROUND TEXT TRANSITION (User Request) */}
+      {/* ======================================================== */}
+      <AnimatePresence mode="wait">
+        {sceneState === 'text_transition' && (
+          <motion.div
+            key="text-transition-screen"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.7 }}
+            className="absolute inset-0 w-full h-full z-50 bg-[#080605] flex flex-col items-center justify-center p-8 text-center select-none cursor-pointer"
+            onClick={() => setSceneState('room')}
+          >
+            <div className="max-w-md w-full space-y-8 flex flex-col items-center">
+              {/* Message 1 */}
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.9, delay: 0.25 }}
+                className="text-amber-100 font-serif text-lg sm:text-2xl tracking-[0.2em] font-medium leading-relaxed drop-shadow-[0_2px_10px_rgba(251,191,36,0.15)]"
+              >
+                「歡迎光臨保持可愛漫研社的網站」
+              </motion.div>
+
+              {/* Message 2 */}
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.9, delay: 1.3 }}
+                className="text-amber-300/85 font-serif text-sm sm:text-lg tracking-[0.18em] leading-relaxed italic"
+              >
+                「記得幫我關門 會有蚊子」
+              </motion.div>
+
+              {/* Tap hint */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 0.45 }}
+                transition={{ duration: 0.8, delay: 2.2 }}
+                className="pt-6 text-[10px] text-white/50 font-mono tracking-widest flex items-center gap-1.5"
+              >
+                <span>點擊任意處或稍待自動進房...</span>
+              </motion.div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
