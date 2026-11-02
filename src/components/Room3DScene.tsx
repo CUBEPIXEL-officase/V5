@@ -44,8 +44,8 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
   const ROOM_WIDTH = 4.6;
   const ROOM_HEIGHT = 2.65;
   const ROOM_DEPTH = 5.2;
-  const TABLE_DEPTH = 0.80;
-  const TABLE_HEIGHT = 0.95; // 提高木桌高度 (原 0.76m 提升至 0.95m 高檯高度)
+  const TABLE_DEPTH = 0.70; // 牆邊木桌深度
+  const TABLE_HEIGHT = 0.95; // 牆邊木桌高度 (高檯設計)
 
   // Collision limits:
   // Front: Table front edge is at -ROOM_DEPTH / 2 + TABLE_DEPTH
@@ -440,10 +440,10 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
     bbB2.position.set(ROOM_WIDTH / 2 - backWallSideWidth / 2, 0.05, ROOM_DEPTH / 2 - 0.02);
     roomGroup.add(bbB2);
 
-    // --- 4. SMALL WOODEN TABLE (WALL-TO-WALL AGAINST FRONT WALL) ---
+    // --- 4. WALL-SIDE WOODEN TABLE (牆邊木桌 - 寬度縮小，移去舊物件，置放盆栽) ---
     const tableGroup = new THREE.Group();
-    const TABLE_WIDTH = ROOM_WIDTH; // Spans full width of front wall
-    const TABLE_TOP_THICK = 0.06;
+    const TABLE_WIDTH = 2.6; // 寬度稍微縮小 (由原本滿牆 4.6m 縮為 2.6m，兩側留出空間)
+    const TABLE_TOP_THICK = 0.055;
 
     const tableMat = new THREE.MeshStandardMaterial({
       map: tabletopTexture,
@@ -457,7 +457,7 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
       metalness: 0.05,
     });
 
-    // Tabletop Slab spanning wall-to-wall
+    // Tabletop Slab
     const topGeo = new THREE.BoxGeometry(TABLE_WIDTH, TABLE_TOP_THICK, TABLE_DEPTH);
     const tableTop = new THREE.Mesh(topGeo, tableMat);
     tableTop.position.set(0, TABLE_HEIGHT - TABLE_TOP_THICK / 2, 0);
@@ -465,94 +465,278 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
     tableTop.receiveShadow = true;
     tableGroup.add(tableTop);
 
-    // Under-table apron front fascia
-    const apronGeo = new THREE.BoxGeometry(TABLE_WIDTH, 0.07, 0.04);
+    // Front apron rail
+    const apronGeo = new THREE.BoxGeometry(TABLE_WIDTH - 0.12, 0.07, 0.035);
     const apronFront = new THREE.Mesh(apronGeo, tableDarkWoodMat);
-    apronFront.position.set(0, TABLE_HEIGHT - TABLE_TOP_THICK - 0.035, TABLE_DEPTH / 2 - 0.03);
+    apronFront.position.set(0, TABLE_HEIGHT - TABLE_TOP_THICK - 0.035, TABLE_DEPTH / 2 - 0.04);
     tableGroup.add(apronFront);
 
-    // Gable End Legs
-    const legGeoL = new THREE.BoxGeometry(0.06, TABLE_HEIGHT - TABLE_TOP_THICK, TABLE_DEPTH - 0.04);
-    const legL = new THREE.Mesh(legGeoL, tableDarkWoodMat);
-    legL.position.set(-TABLE_WIDTH / 2 + 0.03, (TABLE_HEIGHT - TABLE_TOP_THICK) / 2, 0);
-    legL.castShadow = true;
-    tableGroup.add(legL);
+    // 4 Clean Corner Legs
+    const legThick = 0.065;
+    const legHeight = TABLE_HEIGHT - TABLE_TOP_THICK;
+    const legGeo = new THREE.BoxGeometry(legThick, legHeight, legThick);
 
-    const legR = new THREE.Mesh(legGeoL, tableDarkWoodMat);
-    legR.position.set(TABLE_WIDTH / 2 - 0.03, (TABLE_HEIGHT - TABLE_TOP_THICK) / 2, 0);
-    legR.castShadow = true;
-    tableGroup.add(legR);
-
-    // Intermediate support legs
-    [-TABLE_WIDTH / 3, TABLE_WIDTH / 3].forEach((xPos) => {
-      const midLegGeo = new THREE.BoxGeometry(0.08, TABLE_HEIGHT - TABLE_TOP_THICK, 0.08);
-      const midLeg = new THREE.Mesh(midLegGeo, tableDarkWoodMat);
-      midLeg.position.set(xPos, (TABLE_HEIGHT - TABLE_TOP_THICK) / 2, TABLE_DEPTH / 2 - 0.08);
-      midLeg.castShadow = true;
-      tableGroup.add(midLeg);
+    const legPositions = [
+      [-TABLE_WIDTH / 2 + 0.06, legHeight / 2, -TABLE_DEPTH / 2 + 0.06],
+      [TABLE_WIDTH / 2 - 0.06, legHeight / 2, -TABLE_DEPTH / 2 + 0.06],
+      [-TABLE_WIDTH / 2 + 0.06, legHeight / 2, TABLE_DEPTH / 2 - 0.06],
+      [TABLE_WIDTH / 2 - 0.06, legHeight / 2, TABLE_DEPTH / 2 - 0.06],
+    ];
+    legPositions.forEach(([lx, ly, lz]) => {
+      const leg = new THREE.Mesh(legGeo, tableDarkWoodMat);
+      leg.position.set(lx, ly, lz);
+      leg.castShadow = true;
+      tableGroup.add(leg);
     });
 
-    // --- Tabletop Accents ---
-    // Brass Desk Lamp
-    const lampGroup = new THREE.Group();
-    lampGroup.position.set(-TABLE_WIDTH * 0.25, TABLE_HEIGHT, -0.08);
+    // --- BONSAI POTTED PLANT ON WALL TABLE (牆邊木桌上的精緻盆栽) ---
+    const bonsaiGroup = new THREE.Group();
+    bonsaiGroup.position.set(0, TABLE_HEIGHT, 0);
 
-    const lampBaseGeo = new THREE.CylinderGeometry(0.11, 0.12, 0.025, 20);
-    const lampBase = new THREE.Mesh(lampBaseGeo, brassMat);
-    lampBase.position.y = 0.0125;
-    lampGroup.add(lampBase);
-
-    const lampStemGeo = new THREE.CylinderGeometry(0.012, 0.012, 0.42, 12);
-    const lampStem = new THREE.Mesh(lampStemGeo, brassMat);
-    lampStem.position.set(0, 0.22, 0);
-    lampGroup.add(lampStem);
-
-    const lampShadeGeo = new THREE.ConeGeometry(0.14, 0.16, 20, 1, true);
-    const lampShadeMat = new THREE.MeshStandardMaterial({
-      color: 0x22130a,
-      roughness: 0.35,
-      side: THREE.DoubleSide,
+    // 1. Ceramic Pot (深色陶藝盆)
+    const potMat = new THREE.MeshStandardMaterial({
+      color: 0x1d1b19,
+      roughness: 0.38,
+      metalness: 0.15,
     });
-    const lampShade = new THREE.Mesh(lampShadeGeo, lampShadeMat);
-    lampShade.position.set(0, 0.42, 0);
-    lampShade.rotation.x = Math.PI;
-    lampGroup.add(lampShade);
+    const potGeo = new THREE.CylinderGeometry(0.20, 0.14, 0.14, 24);
+    const pot = new THREE.Mesh(potGeo, potMat);
+    pot.position.y = 0.07;
+    pot.castShadow = true;
+    pot.receiveShadow = true;
+    bonsaiGroup.add(pot);
 
-    const bulbGeo = new THREE.SphereGeometry(0.03, 12, 12);
-    const bulbMat = new THREE.MeshBasicMaterial({ color: 0xffe2aa });
-    const bulb = new THREE.Mesh(bulbGeo, bulbMat);
-    bulb.position.set(0, 0.38, 0);
-    lampGroup.add(bulb);
+    // Pot Rim
+    const rimGeo = new THREE.TorusGeometry(0.20, 0.016, 12, 24);
+    const rim = new THREE.Mesh(rimGeo, potMat);
+    rim.position.y = 0.14;
+    rim.rotation.x = Math.PI / 2;
+    bonsaiGroup.add(rim);
 
-    const deskLampLight = new THREE.PointLight(0xffd594, 2.4, 4.0, 1.4);
-    deskLampLight.position.set(0, 0.36, 0);
-    deskLampLight.castShadow = true;
-    lampGroup.add(deskLampLight);
-
-    tableGroup.add(lampGroup);
-
-    // Wooden Tray on Desk Center
-    const trayGeo = new THREE.BoxGeometry(0.38, 0.02, 0.26);
-    const trayMat = new THREE.MeshStandardMaterial({ color: 0x1f1109, roughness: 0.4 });
-    const tray = new THREE.Mesh(trayGeo, trayMat);
-    tray.position.set(0, TABLE_HEIGHT + 0.01, 0.05);
-    tray.receiveShadow = true;
-    tableGroup.add(tray);
-
-    // Cyber-Pixel Plaque on Desk
-    const plaqueGeo = new THREE.BoxGeometry(0.24, 0.06, 0.03);
-    const plaqueMat = new THREE.MeshStandardMaterial({
-      color: 0x180d18,
-      roughness: 0.2,
-      metalness: 0.8,
+    // Pot Soil (深色濕潤盆土)
+    const soilMat = new THREE.MeshStandardMaterial({
+      color: 0x120c08,
+      roughness: 0.95,
     });
-    const plaque = new THREE.Mesh(plaqueGeo, plaqueMat);
-    plaque.position.set(0, TABLE_HEIGHT + 0.03, 0.05);
-    plaque.rotation.x = -0.25;
-    tableGroup.add(plaque);
+    const soilGeo = new THREE.CylinderGeometry(0.19, 0.19, 0.02, 24);
+    const soil = new THREE.Mesh(soilGeo, soilMat);
+    soil.position.y = 0.135;
+    bonsaiGroup.add(soil);
+
+    // Moss Clumps on Soil Surface
+    const mossMat = new THREE.MeshStandardMaterial({
+      color: 0x2e4a21,
+      roughness: 0.9,
+    });
+    [
+      [-0.08, 0.142, 0.05, 0.045],
+      [0.09, 0.142, -0.04, 0.05],
+      [0.02, 0.142, 0.10, 0.04],
+      [-0.05, 0.142, -0.09, 0.042],
+    ].forEach(([mx, my, mz, mr]) => {
+      const moss = new THREE.Mesh(new THREE.SphereGeometry(mr, 10, 8), mossMat);
+      moss.position.set(mx, my, mz);
+      moss.scale.set(1.4, 0.45, 1.2);
+      bonsaiGroup.add(moss);
+    });
+
+    // 2. Bonsai Curved Trunk & Branches (曲幹老松主幹)
+    const barkMat = new THREE.MeshStandardMaterial({
+      color: 0x2c1b12,
+      roughness: 0.85,
+      metalness: 0.05,
+    });
+
+    // Trunk Segment 1 (Base)
+    const trunk1 = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.05, 0.16, 12), barkMat);
+    trunk1.position.set(0.01, 0.20, 0.01);
+    trunk1.rotation.set(0.12, 0.2, -0.22);
+    trunk1.castShadow = true;
+    bonsaiGroup.add(trunk1);
+
+    // Trunk Segment 2 (Mid Curve)
+    const trunk2 = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.036, 0.16, 12), barkMat);
+    trunk2.position.set(-0.035, 0.32, 0.03);
+    trunk2.rotation.set(-0.15, -0.1, 0.35);
+    trunk2.castShadow = true;
+    bonsaiGroup.add(trunk2);
+
+    // Trunk Segment 3 (Crown Lead)
+    const trunk3 = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.026, 0.14, 12), barkMat);
+    trunk3.position.set(0.02, 0.43, 0.01);
+    trunk3.rotation.set(0.1, 0.3, -0.18);
+    trunk3.castShadow = true;
+    bonsaiGroup.add(trunk3);
+
+    // Left lateral branch
+    const branchL = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.020, 0.18, 10), barkMat);
+    branchL.position.set(-0.10, 0.35, 0.04);
+    branchL.rotation.set(-0.2, -0.4, 1.15);
+    branchL.castShadow = true;
+    bonsaiGroup.add(branchL);
+
+    // Right lateral branch
+    const branchR = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.020, 0.19, 10), barkMat);
+    branchR.position.set(0.11, 0.40, -0.02);
+    branchR.rotation.set(0.2, 0.3, -1.05);
+    branchR.castShadow = true;
+    bonsaiGroup.add(branchR);
+
+    // 3. Foliage Clouds (翠綠松團層次)
+    const leafMatDeep = new THREE.MeshStandardMaterial({
+      color: 0x1e421c,
+      roughness: 0.65,
+    });
+    const leafMatMid = new THREE.MeshStandardMaterial({
+      color: 0x2d5c29,
+      roughness: 0.6,
+    });
+    const leafMatBright = new THREE.MeshStandardMaterial({
+      color: 0x3d7037,
+      roughness: 0.55,
+    });
+
+    const foliageClusters = [
+      // Apex / Crown
+      { x: 0.01, y: 0.52, z: 0.00, sx: 0.16, sy: 0.08, sz: 0.14, mat: leafMatBright },
+      { x: 0.04, y: 0.49, z: -0.03, sx: 0.14, sy: 0.07, sz: 0.13, mat: leafMatMid },
+      // Left branch foliage
+      { x: -0.18, y: 0.38, z: 0.06, sx: 0.17, sy: 0.07, sz: 0.14, mat: leafMatMid },
+      { x: -0.15, y: 0.35, z: 0.02, sx: 0.13, sy: 0.06, sz: 0.12, mat: leafMatDeep },
+      // Right branch foliage
+      { x: 0.20, y: 0.43, z: -0.03, sx: 0.18, sy: 0.075, sz: 0.15, mat: leafMatBright },
+      { x: 0.16, y: 0.40, z: 0.02, sx: 0.14, sy: 0.065, sz: 0.12, mat: leafMatMid },
+      // Mid shelf foliage
+      { x: -0.04, y: 0.44, z: -0.06, sx: 0.12, sy: 0.06, sz: 0.11, mat: leafMatDeep },
+      { x: 0.08, y: 0.37, z: 0.05, sx: 0.13, sy: 0.06, sz: 0.11, mat: leafMatMid },
+    ];
+
+    foliageClusters.forEach((c) => {
+      const fGeo = new THREE.SphereGeometry(1, 12, 10);
+      const foliage = new THREE.Mesh(fGeo, c.mat);
+      foliage.position.set(c.x, c.y, c.z);
+      foliage.scale.set(c.sx, c.sy, c.sz);
+      foliage.castShadow = true;
+      foliage.receiveShadow = true;
+      bonsaiGroup.add(foliage);
+    });
+
+    // Soft subtle spotlight highlighting the bonsai
+    const bonsaiSpot = new THREE.PointLight(0xffeed6, 1.4, 3.5, 1.2);
+    bonsaiSpot.position.set(0, 0.75, 0.25);
+    bonsaiSpot.castShadow = true;
+    bonsaiGroup.add(bonsaiSpot);
+
+    tableGroup.add(bonsaiGroup);
 
     tableGroup.position.set(0, 0, -ROOM_DEPTH / 2 + TABLE_DEPTH / 2);
     roomGroup.add(tableGroup);
+
+    // --- 4B. CENTER WOODEN TEA TABLE & FLOOR CUSHIONS (房間正中間木頭茶几與小坐墊) ---
+    const centerTeaGroup = new THREE.Group();
+    centerTeaGroup.position.set(0, 0, 0); // Exact center of the room
+
+    const TEA_TABLE_WIDTH = 1.18;
+    const TEA_TABLE_DEPTH = 0.64;
+    const TEA_TABLE_HEIGHT = 0.32;
+    const TEA_TABLE_TOP_THICK = 0.036;
+
+    // Tea Table Top Slab
+    const teaTopGeo = new THREE.BoxGeometry(TEA_TABLE_WIDTH, TEA_TABLE_TOP_THICK, TEA_TABLE_DEPTH);
+    const teaTop = new THREE.Mesh(teaTopGeo, tableMat);
+    teaTop.position.set(0, TEA_TABLE_HEIGHT - TEA_TABLE_TOP_THICK / 2, 0);
+    teaTop.castShadow = true;
+    teaTop.receiveShadow = true;
+    centerTeaGroup.add(teaTop);
+
+    // Tea Table Legs
+    const teaLegHeight = TEA_TABLE_HEIGHT - TEA_TABLE_TOP_THICK;
+    const teaLegThick = 0.052;
+    const teaLegGeo = new THREE.BoxGeometry(teaLegThick, teaLegHeight, teaLegThick);
+    const teaLegPositions = [
+      [-TEA_TABLE_WIDTH / 2 + 0.05, teaLegHeight / 2, -TEA_TABLE_DEPTH / 2 + 0.05],
+      [TEA_TABLE_WIDTH / 2 - 0.05, teaLegHeight / 2, -TEA_TABLE_DEPTH / 2 + 0.05],
+      [-TEA_TABLE_WIDTH / 2 + 0.05, teaLegHeight / 2, TEA_TABLE_DEPTH / 2 - 0.05],
+      [TEA_TABLE_WIDTH / 2 - 0.05, teaLegHeight / 2, TEA_TABLE_DEPTH / 2 - 0.05],
+    ];
+    teaLegPositions.forEach(([lx, ly, lz]) => {
+      const leg = new THREE.Mesh(teaLegGeo, tableDarkWoodMat);
+      leg.position.set(lx, ly, lz);
+      leg.castShadow = true;
+      centerTeaGroup.add(leg);
+    });
+
+    // Elegant tea tray on tea table
+    const teaTrayGeo = new THREE.BoxGeometry(0.30, 0.012, 0.20);
+    const teaTrayMat = new THREE.MeshStandardMaterial({ color: 0x1f120a, roughness: 0.5 });
+    const teaTray = new THREE.Mesh(teaTrayGeo, teaTrayMat);
+    teaTray.position.set(0, TEA_TABLE_HEIGHT + 0.006, 0);
+    teaTray.receiveShadow = true;
+    centerTeaGroup.add(teaTray);
+
+    // Dark clay teapot
+    const teapotGeo = new THREE.CylinderGeometry(0.038, 0.050, 0.058, 16);
+    const teaPotMat = new THREE.MeshStandardMaterial({ color: 0x2b332e, roughness: 0.35, metalness: 0.1 });
+    const teapot = new THREE.Mesh(teapotGeo, teaPotMat);
+    teapot.position.set(-0.05, TEA_TABLE_HEIGHT + 0.040, 0);
+    teapot.castShadow = true;
+    centerTeaGroup.add(teapot);
+
+    // Ceramic teacups
+    const cupMat = new THREE.MeshStandardMaterial({ color: 0xe8e2d8, roughness: 0.4 });
+    const cup1 = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.018, 0.034, 14), cupMat);
+    cup1.position.set(0.05, TEA_TABLE_HEIGHT + 0.028, -0.035);
+    cup1.castShadow = true;
+    centerTeaGroup.add(cup1);
+
+    const cup2 = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.018, 0.034, 14), cupMat);
+    cup2.position.set(0.05, TEA_TABLE_HEIGHT + 0.028, 0.035);
+    cup2.castShadow = true;
+    centerTeaGroup.add(cup2);
+
+    // --- Floor Cushions (小坐墊 / 和室厚坐墊) ---
+    const cushionMatCharcoal = new THREE.MeshStandardMaterial({
+      color: 0x2d2823, // 深炭灰織物
+      roughness: 0.85,
+    });
+    const cushionMatEarth = new THREE.MeshStandardMaterial({
+      color: 0x3a3229, // 溫暖大地色麻布
+      roughness: 0.85,
+    });
+
+    const cushionGeo = new THREE.CylinderGeometry(0.20, 0.21, 0.060, 24);
+    const cushionPositions = [
+      // Left cushion (西側)
+      { x: -TEA_TABLE_WIDTH / 2 - 0.24, z: 0, mat: cushionMatCharcoal },
+      // Right cushion (東側)
+      { x: TEA_TABLE_WIDTH / 2 + 0.24, z: 0, mat: cushionMatEarth },
+      // South cushion (南側 - 面朝前門)
+      { x: 0, z: TEA_TABLE_DEPTH / 2 + 0.24, mat: cushionMatEarth },
+      // North cushion (北側 - 面朝木桌盆栽)
+      { x: 0, z: -TEA_TABLE_DEPTH / 2 - 0.24, mat: cushionMatCharcoal },
+    ];
+
+    cushionPositions.forEach((pos) => {
+      const cushionGroup = new THREE.Group();
+      cushionGroup.position.set(pos.x, 0.03, pos.z);
+
+      const cushion = new THREE.Mesh(cushionGeo, pos.mat);
+      cushion.castShadow = true;
+      cushion.receiveShadow = true;
+      cushionGroup.add(cushion);
+
+      // Center tuft button
+      const buttonGeo = new THREE.SphereGeometry(0.016, 10, 8);
+      const buttonMat = new THREE.MeshStandardMaterial({ color: 0x16120e, roughness: 0.6 });
+      const button = new THREE.Mesh(buttonGeo, buttonMat);
+      button.position.y = 0.031;
+      button.scale.set(1, 0.4, 1);
+      cushionGroup.add(button);
+
+      centerTeaGroup.add(cushionGroup);
+    });
+
+    roomGroup.add(centerTeaGroup);
 
     scene.add(roomGroup);
 
@@ -895,7 +1079,7 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
           </div>
 
           <div className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-950/70 border border-amber-600/40 text-amber-200 text-[10px] font-mono font-bold">
-            <span>深木質空間 • 寬木桌</span>
+            <span>深木質空間 • 茶几與盆栽</span>
           </div>
         </div>
 
@@ -915,7 +1099,7 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
             <button
               onClick={handleResetCameraView}
               className="p-2 rounded-xl bg-black/70 hover:bg-black/90 backdrop-blur-md border border-white/15 text-white/80 active:scale-95 transition-all shadow-md cursor-pointer"
-              title="視角回正 (正對小木桌)"
+              title="視角回正 (正對木桌盆栽)"
             >
               <RotateCcw className="w-3.5 h-3.5 text-amber-300" />
             </button>
@@ -947,7 +1131,7 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
           {isAtTable ? (
             <>
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span className="text-amber-200 font-bold">已抵達木桌邊 • 可左右滑動環顧視角 (60°)</span>
+              <span className="text-amber-200 font-bold">已抵達木桌邊 • 可滑動環顧盆栽與房間 (60°)</span>
             </>
           ) : (
             <>
