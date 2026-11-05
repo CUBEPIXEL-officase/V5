@@ -501,23 +501,20 @@ export const MobileWebsite: React.FC<MobileWebsiteProps> = ({
   useEffect(() => {
     if (sceneState !== 'walking') return;
 
-    // Slowed down walking speed for calm, cinematic approach
-    const WALK_DURATION = 7600; 
+    // Optimized walking: 4.2 seconds smooth, leisurely approach
+    const WALK_DURATION = 4200; 
 
     const updateWalk = (now: number) => {
       const elapsed = now - walkStartTimeRef.current;
       const rawProgress = Math.min(elapsed / WALK_DURATION, 1);
       
-      // Smooth ease-in-out curve
-      const smoothProgress = rawProgress < 0.5
-        ? 2 * rawProgress * rawProgress
-        : 1 - Math.pow(-2 * rawProgress + 2, 2) / 2;
-
+      // Hermite smoothstep curve for natural walking pacing
+      const smoothProgress = rawProgress * rawProgress * (3 - 2 * rawProgress);
       setWalkProgress(smoothProgress);
 
-      // Footstep cadence: 7 gentle steps across the slower walk
-      const currentStep = Math.floor(rawProgress * 7);
-      if (currentStep > lastFootstepStepRef.current && currentStep < 7) {
+      // Footstep cadence: 6 gentle steps evenly spaced
+      const currentStep = Math.floor(rawProgress * 6);
+      if (currentStep > lastFootstepStepRef.current && currentStep < 6) {
         lastFootstepStepRef.current = currentStep;
         sfx.playFootstep();
         // Light, subtle vibration pulse
@@ -588,18 +585,16 @@ export const MobileWebsite: React.FC<MobileWebsiteProps> = ({
     handleStartExplore();
   };
 
-  // Calculate dynamic camera walking bobbing & scale
-  // Softened sinusoidal vertical bobbing (reduced from 9px to 3.2px)
+  // Dynamic camera walking bobbing & sway (natural rhythmic head motion)
   const cameraBobY = sceneState === 'walking' 
-    ? Math.sin(walkProgress * Math.PI * 14) * 3.2 
+    ? Math.sin(walkProgress * Math.PI * 12) * 3.0 
     : 0;
 
-  // Gentle lateral head sway (reduced from 4.5px to 1.5px)
   const cameraSwayX = sceneState === 'walking' 
-    ? Math.sin(walkProgress * Math.PI * 7) * 1.5 
+    ? Math.cos(walkProgress * Math.PI * 6) * 1.6 
     : 0;
   const cameraTilt = sceneState === 'walking' 
-    ? Math.sin(walkProgress * Math.PI * 7) * 0.22 
+    ? Math.sin(walkProgress * Math.PI * 6) * 0.22 
     : 0;
 
   // Door scale: starts at 0.13 (far in the distance), slowly magnifies to 2.15 (right in front with 喇叭鎖 clearly visible)
@@ -629,38 +624,17 @@ export const MobileWebsite: React.FC<MobileWebsiteProps> = ({
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-pink-500/15 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-1/4 left-1/2 -translate-x-1/2 translate-y-1/2 w-96 h-96 bg-amber-500/10 rounded-full blur-[130px] pointer-events-none" />
 
-      {/* Top Controls Bar (hidden during 3D room mode to give full screen viewport) */}
+      {/* Subtle Floating Sound Toggle (Discreet, no status bar) */}
       {sceneState !== 'room' && (
-        <header className="w-full max-w-md flex justify-between items-center text-xs px-4 pt-3 pb-2 z-40 border-b border-white/5 backdrop-blur-sm">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-pink-400 animate-ping inline-block" />
-            <span className="font-mono font-bold tracking-widest text-[10px] text-pink-300">
-              QPKS // CUBEPIXEL
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {/* Sound Toggle Button */}
-            <button 
-              onClick={toggleSound}
-              className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 active:scale-95 transition-all text-[11px] flex items-center gap-1 font-mono border border-white/10"
-              title="音效開關"
-            >
-              {soundEnabled ? <Volume2 className="w-3.5 h-3.5 text-amber-300" /> : <VolumeX className="w-3.5 h-3.5 text-white/40" />}
-            </button>
-
-            {/* Quick Return to Landing if in other states */}
-            {sceneState !== 'landing' && (
-              <button
-                onClick={handleResetToLanding}
-                className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15 text-white/80 active:scale-95 transition-all text-[10px] font-mono flex items-center gap-1 border border-white/15"
-              >
-                <RotateCcw className="w-3 h-3 text-pink-300" />
-                <span>首頁</span>
-              </button>
-            )}
-          </div>
-        </header>
+        <div className="absolute top-4 right-4 z-40">
+          <button 
+            onClick={toggleSound}
+            className="p-2 rounded-full bg-black/40 hover:bg-black/60 text-white/70 backdrop-blur-md active:scale-95 transition-all text-xs flex items-center justify-center border border-white/10 shadow-lg cursor-pointer"
+            title="音效開關"
+          >
+            {soundEnabled ? <Volume2 className="w-4 h-4 text-amber-300" /> : <VolumeX className="w-4 h-4 text-white/40" />}
+          </button>
+        </div>
       )}
 
       {/* ======================================================== */}
@@ -674,7 +648,7 @@ export const MobileWebsite: React.FC<MobileWebsiteProps> = ({
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
             transition={{ duration: 0.4 }}
-            className="w-full max-w-sm flex-1 flex flex-col items-center justify-center px-6 z-20 text-center gap-8 my-auto"
+            className="w-full max-w-sm flex-1 flex flex-col items-center justify-center px-6 z-20 text-center gap-10 my-auto"
           >
             {/* The Official LOGO */}
             <motion.div 
@@ -682,11 +656,11 @@ export const MobileWebsite: React.FC<MobileWebsiteProps> = ({
               transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut" }}
               className="relative flex flex-col items-center justify-center"
             >
-              <div className="w-36 h-36 sm:w-40 sm:h-40 rounded-3xl border-2 border-pink-400/50 shadow-[0_0_45px_rgba(244,114,182,0.45),inset_0_0_25px_rgba(244,114,182,0.2)] bg-black/60 backdrop-blur-md flex items-center justify-center p-4 relative overflow-hidden group">
+              <div className="w-40 h-40 sm:w-44 sm:h-44 rounded-3xl border-2 border-pink-400/50 shadow-[0_0_45px_rgba(244,114,182,0.45),inset_0_0_25px_rgba(244,114,182,0.2)] bg-black/60 backdrop-blur-md flex items-center justify-center p-4 relative overflow-hidden group">
                 <div className="absolute inset-0 bg-gradient-to-tr from-pink-500/25 via-transparent to-amber-400/25 pointer-events-none" />
                 <img 
                   src={LOGO_URL} 
-                  alt="紡塊像素 CubePixel Logo" 
+                  alt="Logo" 
                   className="w-full h-full object-contain drop-shadow-[0_0_25px_rgba(251,191,36,0.65)] relative z-10"
                   referrerPolicy="no-referrer"
                   onError={(e) => {
@@ -694,32 +668,20 @@ export const MobileWebsite: React.FC<MobileWebsiteProps> = ({
                   }}
                 />
               </div>
-
-              {/* Logo Brand Tag */}
-              <div className="mt-4 flex items-center gap-1.5 px-3 py-1 rounded-full bg-pink-500/15 border border-pink-400/40 text-pink-300 text-[11px] font-mono tracking-widest uppercase">
-                <Sparkles className="w-3 h-3 text-amber-300" />
-                <span>紡塊像素 CUBEPIXEL</span>
-              </div>
             </motion.div>
 
             {/* The Start Exploring Button (開始探索) */}
-            <div className="w-full flex flex-col items-center gap-3">
+            <div className="w-full flex flex-col items-center">
               <motion.button
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.96 }}
                 onClick={handleStartExplore}
                 className="w-full py-4 px-8 rounded-2xl bg-gradient-to-r from-pink-500 via-rose-500 to-amber-500 text-white font-black text-lg tracking-[0.25em] shadow-[0_0_35px_rgba(244,114,182,0.6)] border border-pink-300/50 flex items-center justify-center gap-3 relative overflow-hidden group cursor-pointer"
               >
-                {/* Button Ambient Shimmer */}
-                <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
                 <Compass className="w-5 h-5 text-amber-200 animate-spin" style={{ animationDuration: '8s' }} />
                 <span>開始探索</span>
                 <ArrowRight className="w-5 h-5 text-amber-200 group-hover:translate-x-1 transition-transform" />
               </motion.button>
-
-              <span className="text-[10px] text-white/40 font-mono tracking-widest">
-                TAP TO EMBARK ON THE JOURNEY
-              </span>
             </div>
           </motion.div>
         )}
@@ -784,61 +746,20 @@ export const MobileWebsite: React.FC<MobileWebsiteProps> = ({
               </div>
             </div>
 
-            {/* HUD / Status Info During Walking */}
-            <div className="absolute top-16 left-0 right-0 flex flex-col items-center justify-center gap-2 pointer-events-none z-30">
-              {sceneState === 'walking' && (
-                <div className="flex flex-col items-center gap-1.5 animate-pulse">
-                  <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/80 backdrop-blur-md border border-white/20 text-white text-[11px] font-mono tracking-wider shadow-lg">
-                    <Footprints className="w-3.5 h-3.5 text-pink-400 animate-bounce" />
-                    <span>視角漫步接近中... 距離 {remainingDistance}m</span>
-                  </div>
-
-                  {/* Footstep Dots Cadence */}
-                  <div className="flex items-center gap-1">
-                    {[0, 1, 2, 3, 4, 5, 6].map((i) => (
-                      <span 
-                        key={i} 
-                        className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
-                          walkProgress * 7 >= i ? 'bg-amber-300 scale-125' : 'bg-white/20'
-                        }`} 
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Clear Instruction when Door & Knob are reached */}
-              {sceneState === 'door_reached' && (
-                <motion.div 
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="pointer-events-auto flex flex-col items-center gap-2"
+            {/* Clean Door Interaction Button when Door & Knob are reached */}
+            {sceneState === 'door_reached' && (
+              <div className="absolute bottom-12 left-0 right-0 flex justify-center z-30">
+                <motion.button 
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={handleKnobAction}
+                  className="flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-amber-500 to-pink-500 text-white font-bold text-sm tracking-widest shadow-[0_0_30px_rgba(251,191,36,0.6)] border border-amber-200/60 cursor-pointer animate-pulse"
                 >
-                  <button
-                    onClick={handleKnobAction}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-amber-500 to-pink-500 text-white font-bold text-xs tracking-wider shadow-[0_0_30px_rgba(251,191,36,0.6)] border border-amber-200/60 active:scale-95 transition-transform cursor-pointer animate-pulse"
-                  >
-                    <Sparkles className="w-4 h-4 text-amber-200" />
-                    <span>輕觸喇叭鎖開門</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                  <span className="text-[10px] text-amber-300/80 font-mono tracking-widest drop-shadow">
-                    SPHERICAL KNOB LOCK UNLOCKED
-                  </span>
-                </motion.div>
-              )}
-            </div>
-
-            {/* Bottom Floating Walking Controls */}
-            {sceneState === 'walking' && (
-              <div className="absolute bottom-6 left-0 right-0 flex justify-center items-center gap-3 z-30">
-                <button
-                  onClick={handleSkipWalk}
-                  className="px-4 py-1.5 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white/80 text-[11px] font-mono tracking-wider active:scale-95 transition-all flex items-center gap-1.5 shadow-md"
-                >
-                  <span>直接走近門前 (Skip)</span>
-                  <ArrowRight className="w-3 h-3 text-pink-300" />
-                </button>
+                  <Sparkles className="w-4 h-4 text-amber-200" />
+                  <span>推開房門</span>
+                  <ChevronRight className="w-4 h-4" />
+                </motion.button>
               </div>
             )}
           </motion.div>
@@ -878,16 +799,6 @@ export const MobileWebsite: React.FC<MobileWebsiteProps> = ({
                 className="text-amber-300/85 font-serif text-sm sm:text-lg tracking-[0.18em] leading-relaxed italic"
               >
                 「記得幫我關門 會有蚊子」
-              </motion.div>
-
-              {/* Tap hint */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 0.45 }}
-                transition={{ duration: 0.8, delay: 2.2 }}
-                className="pt-6 text-[10px] text-white/50 font-mono tracking-widest flex items-center gap-1.5"
-              >
-                <span>點擊任意處或稍待自動進房...</span>
               </motion.div>
             </div>
           </motion.div>
