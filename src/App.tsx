@@ -1356,7 +1356,7 @@ const CharacterSelect: React.FC<{
   );
 };
 
-const PixelHeart: React.FC<{ color: string, onClick: () => void, label: string, isActive: boolean, size?: 'sm' | 'md', disabled?: boolean }> = ({ color, onClick, label, isActive, size = 'md', disabled = false }) => {
+const PixelHeart: React.FC<{ color: string, onClick: () => void, label: string, isActive: boolean, size?: 'xs' | 'sm' | 'md', disabled?: boolean }> = ({ color, onClick, label, isActive, size = 'md', disabled = false }) => {
   const heartPattern = [
     [0, 1, 1, 0, 1, 1, 0],
     [1, 2, 2, 1, 2, 2, 1],
@@ -1367,7 +1367,7 @@ const PixelHeart: React.FC<{ color: string, onClick: () => void, label: string, 
     [0, 0, 0, 1, 0, 0, 0],
   ];
 
-  const pixelSize = size === 'sm' ? 'w-2 h-2' : 'w-4 h-4 md:w-5 md:h-5';
+  const pixelSize = size === 'xs' ? 'w-1.5 h-1.5' : size === 'sm' ? 'w-2 h-2' : 'w-4 h-4 md:w-5 md:h-5';
 
   return (
     <div className="flex flex-col items-center translate-y-[1px]">
@@ -1375,7 +1375,7 @@ const PixelHeart: React.FC<{ color: string, onClick: () => void, label: string, 
         onClick={disabled ? undefined : onClick}
         whileHover={disabled ? {} : { scale: 1.15 }}
         whileTap={disabled ? {} : { scale: 0.9 }}
-        className={`${disabled ? 'opacity-40' : 'opacity-70 hover:opacity-90'} p-1.5 grid grid-cols-7 gap-0.5 transition-all duration-300 ${isActive ? 'scale-125 drop-shadow-[0_0_20px_rgba(255,255,255,0.6)] opacity-100' : ''}`}
+        className={`${disabled ? 'opacity-40' : 'opacity-70 hover:opacity-90'} ${size === 'xs' ? 'p-1' : 'p-1.5'} grid grid-cols-7 gap-0.5 transition-all duration-300 ${isActive ? 'scale-125 drop-shadow-[0_0_20px_rgba(255,255,255,0.6)] opacity-100' : ''}`}
       >
         {heartPattern.flat().map((pixel, i) => (
           <div 
@@ -3147,6 +3147,7 @@ const BroadcastStudioPage: React.FC<{
   );
 };
 export default function App() {
+  const isEmbeddedDesktop = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('desktop') === '1';
   const [isMobile, setIsMobile] = useState(false);
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [dimensions, setDimensions] = useState({ cols: 0, rows: 0 });
@@ -3194,12 +3195,16 @@ export default function App() {
   const [fullscreenToast, setFullscreenToast] = useState<string | null>(null);
   useEffect(() => {
     const handleResize = () => {
+      if (isEmbeddedDesktop) {
+        setIsMobile(false);
+        return;
+      }
       setIsMobile(window.innerWidth < 640);
     };
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [isEmbeddedDesktop]);
 
   // Internal Monitor Sizing Auto-Scale Detection Module
   const [windowDimensions, setWindowDimensions] = useState({ width: 1200, height: 800 });
@@ -3212,7 +3217,7 @@ export default function App() {
       const h = window.innerHeight;
       setWindowDimensions({ width: w, height: h });
       
-      if (!isScaleEnabled) {
+      if (!isScaleEnabled || isEmbeddedDesktop) {
         setDisplayScale(1);
         return;
       }
@@ -3235,10 +3240,83 @@ export default function App() {
     handleDimensionChange();
     window.addEventListener('resize', handleDimensionChange);
     return () => window.removeEventListener('resize', handleDimensionChange);
-  }, [isScaleEnabled]);
+  }, [isScaleEnabled, isEmbeddedDesktop]);
 
   const [isTutorialMinimized, setIsTutorialMinimized] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const gameStateRef = useRef(gameState);
+  gameStateRef.current = gameState;
+  const ropeVisibleRef = useRef(ropeVisible);
+  ropeVisibleRef.current = ropeVisible;
+  const isUILockedRef = useRef(isUILocked);
+  isUILockedRef.current = isUILocked;
+  const isRopeBrokenRef = useRef(isRopeBroken);
+  isRopeBrokenRef.current = isRopeBroken;
+
+  useEffect(() => {
+    const handleConsoleMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      const data = event.data;
+      if (!data || typeof data !== 'object') return;
+
+      if (data.type === 'console_pull_rope') {
+        if (gameStateRef.current === 'next_page' && ropeVisibleRef.current && !isRopeBrokenRef.current) {
+          if (!isUILockedRef.current) {
+            setIsUILocked(true);
+            bannerY.set(0);
+            if (scrollContainerRef.current && scrollContainerRef.current.scrollTop > 200) {
+              scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+          } else {
+            setIsRopeBroken(true);
+          }
+        }
+      } else if (data.type === 'console_scroll') {
+        const amount = typeof data.deltaY === 'number' ? data.deltaY : 0;
+        if (amount === 0) return;
+        const smooth = Boolean(data.smooth);
+        const scrollBehavior: ScrollBehavior = smooth ? 'smooth' : 'instant';
+
+        const candidates: HTMLElement[] = [];
+        const allEls = document.querySelectorAll<HTMLElement>('*');
+        allEls.forEach((el) => {
+          if (el.scrollHeight > el.clientHeight + 2) {
+            const style = window.getComputedStyle(el);
+            if (
+              (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
+              style.display !== 'none' &&
+              style.visibility !== 'hidden'
+            ) {
+              candidates.push(el);
+            }
+          }
+        });
+
+        candidates.reverse();
+
+        let scrolled = false;
+        for (const el of candidates) {
+          const canScrollDir =
+            amount > 0
+              ? el.scrollTop + el.clientHeight < el.scrollHeight - 1
+              : el.scrollTop > 1;
+          if (canScrollDir) {
+            el.scrollBy({ top: amount, behavior: scrollBehavior });
+            scrolled = true;
+            break;
+          }
+        }
+
+        if (!scrolled && scrollContainerRef.current) {
+          scrollContainerRef.current.scrollBy({ top: amount, behavior: scrollBehavior });
+        }
+      }
+    };
+
+    window.addEventListener('message', handleConsoleMessage);
+    return () => window.removeEventListener('message', handleConsoleMessage);
+  }, [bannerY]);
 
   const prevGameState = useRef(gameState);
 
@@ -3445,13 +3523,47 @@ export default function App() {
 
   // Handle Game Start
   const handleStart = () => {
+    const { line1, line2 } = getDesktopTransitionText();
+
+    if (isEmbeddedDesktop) {
+      setGameState('forming');
+      whiteBlocksGoneAt.current = null;
+      const generateMessageBlocks = (text: string, startRow: number) => {
+        const charWidth = 4;
+        const totalWidth = text.length * charWidth - 1;
+        const latestCols = Math.ceil(window.innerWidth / GRID_SIZE);
+        const startCol = Math.floor((latestCols - totalWidth) / 2);
+        const newBlocks: Block[] = [];
+        text.split('').forEach((char, charIdx) => {
+          const charMap = CHARS[char] || CHARS[' '];
+          charMap.forEach((rowArr, rIdx) => {
+            rowArr.forEach((pixel, cIdx) => {
+              if (pixel === 1) {
+                newBlocks.push({
+                  id: `msg-${text}-${charIdx}-${rIdx}-${cIdx}-${Math.random()}`,
+                  color: '#FFFFFF',
+                  column: startCol + charIdx * charWidth + cIdx,
+                  row: -Math.floor(Math.random() * 20) - 10,
+                  targetRow: startRow + rIdx
+                });
+              }
+            });
+          });
+        });
+        return newBlocks;
+      };
+      const latestRows = Math.ceil(window.innerHeight / GRID_SIZE);
+      const msg1 = generateMessageBlocks(line1, Math.floor(latestRows / 2) - 4);
+      const msg2 = generateMessageBlocks(line2, Math.floor(latestRows / 2) + 2);
+      setBlocks(prev => [...prev, ...msg1, ...msg2]);
+      return;
+    }
+
     // Show custom warning message
     setFullscreenToast("各位迷你像素 為了您的使用體驗 請不要退出全螢幕模式喔");
     setTimeout(() => {
       setFullscreenToast(null);
     }, 6000);
-
-    const { line1, line2 } = getDesktopTransitionText();
 
     // Request full screen
     if (document.documentElement.requestFullscreen) {
@@ -3562,6 +3674,10 @@ export default function App() {
 
   useEffect(() => {
     const checkDevice = () => {
+      if (isEmbeddedDesktop) {
+        setIsMobile(false);
+        return;
+      }
       const ua = navigator.userAgent;
       const isTouch = navigator.maxTouchPoints > 0;
       const isSmallWidth = window.innerWidth < 1024;
@@ -3580,7 +3696,7 @@ export default function App() {
     checkDevice();
     window.addEventListener('resize', checkDevice);
     return () => window.removeEventListener('resize', checkDevice);
-  }, []);
+  }, [isEmbeddedDesktop]);
 
   if (isMobile) {
     return (
@@ -3706,8 +3822,8 @@ export default function App() {
               </div>
 
               {/* Top-Left Navigation Overlay - Bound to Banner */}
-              <div className="absolute top-4 left-80 z-50 flex flex-col gap-6 pointer-events-auto">
-                <div className="flex gap-6">
+              <div className={`absolute z-50 flex flex-col gap-6 pointer-events-auto ${isEmbeddedDesktop ? 'top-3.5 left-72' : 'top-4 left-80'}`}>
+                <div className={`flex ${isEmbeddedDesktop ? 'gap-4' : 'gap-6'}`}>
                   {HEARTS.map((heart) => {
                     const isSecretHeartPublished = false; // 預設隱藏發布，灰色心不可點擊
                     const isDisabled = heart.id === 'disabled' ? !isSecretHeartPublished : (heart as any).disabled;
@@ -3716,7 +3832,7 @@ export default function App() {
                         key={heart.id}
                         color={heart.color}
                         label={heart.label}
-                        size="sm"
+                        size={isEmbeddedDesktop ? 'xs' : 'sm'}
                         isActive={activeSubPage === heart.id}
                         disabled={isDisabled}
                         onClick={() => {

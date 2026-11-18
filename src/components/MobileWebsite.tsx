@@ -273,30 +273,14 @@ const SingleDoorPanel: React.FC<SingleDoorPanelProps> = ({
         {/* Door Sill (門檻陰影與地板線) */}
         <div className="absolute -bottom-2.5 left-0 right-0 h-2.5 bg-[#140E0B] border-t border-[#3B2C24]" />
 
-        {/* Interior Void Light Beam Behind Door (開門時從門後透出的奇幻聖光) */}
+        {/* Interior Pure Black Void Behind Door (開門後為純黑素面) */}
         <div 
-          className="absolute inset-2.5 overflow-hidden rounded-t pointer-events-none"
+          className="absolute inset-2.5 overflow-hidden rounded-t pointer-events-none bg-black"
           style={{
-            background: isDoorOpen 
-              ? 'radial-gradient(ellipse at 50% 50%, rgba(255,235,170,0.95) 0%, rgba(244,114,182,0.8) 40%, rgba(99,102,241,0.6) 80%, rgba(15,23,42,0.9) 100%)' 
-              : 'rgba(5, 10, 20, 0.95)',
-            boxShadow: isDoorOpen ? '0 0 80px rgba(251,191,36,0.9), inset 0 0 50px rgba(255,255,255,0.8)' : 'none',
-            transition: 'all 0.8s ease-out'
+            background: '#000000',
+            boxShadow: 'none',
           }}
-        >
-          {isDoorOpen && (
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1.1 }}
-              transition={{ duration: 1 }}
-              className="absolute inset-0 flex flex-col items-center justify-center text-center p-4 bg-gradient-to-t from-pink-500/20 via-transparent to-amber-300/30"
-            >
-              <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-2xl animate-pulse">
-                <Sparkles className="w-8 h-8 text-amber-300" />
-              </div>
-            </motion.div>
-          )}
-        </div>
+        />
 
         {/* The Single Door Leaf (單扇門板本體) */}
         <motion.div
@@ -453,10 +437,11 @@ export const MobileWebsite: React.FC<MobileWebsiteProps> = ({
   // 'walking' -> Perspective slow walk towards the single door panel
   // 'door_reached' -> Door enlarged so round knob lock (喇叭鎖) is clearly visible
   // 'door_opening' -> Knob turns and door swings inward
+  // 'black_frame' -> Pure plain black transition frame before text
   // 'text_transition' -> Black background transition with welcome messages
-  // 'room' -> 3D empty room with look-around viewpoint
+  // 'room' -> 3D room seated directly at table
   // 'explored' -> Explored hub behind the door
-  const [sceneState, setSceneState] = useState<'landing' | 'walking' | 'door_reached' | 'door_opening' | 'text_transition' | 'room' | 'explored'>('landing');
+  const [sceneState, setSceneState] = useState<'landing' | 'walking' | 'door_reached' | 'door_opening' | 'black_frame' | 'text_transition' | 'room' | 'explored'>('landing');
 
   // Walking progress from 0 (far) to 1 (at door)
   const [walkProgress, setWalkProgress] = useState(0);
@@ -557,11 +542,20 @@ export const MobileWebsite: React.FC<MobileWebsiteProps> = ({
       sfx.playDoorCreak();
     }, 280);
 
-    // User Request: 在開門到進房間之前新增一段黑背景文字小轉場
+    // 1. 開門之後先進入純黑素面過渡幀
     setTimeout(() => {
-      setSceneState('text_transition');
-    }, 1200);
+      setSceneState('black_frame');
+    }, 1150);
   };
+
+  // Hold pure black plain screen briefly before welcome messages appear
+  useEffect(() => {
+    if (sceneState !== 'black_frame') return;
+    const timer = setTimeout(() => {
+      setSceneState('text_transition');
+    }, 750);
+    return () => clearTimeout(timer);
+  }, [sceneState]);
 
   // Auto-advance from text transition into the 3D room after displaying messages
   useEffect(() => {
@@ -767,40 +761,44 @@ export const MobileWebsite: React.FC<MobileWebsiteProps> = ({
       </AnimatePresence>
 
       {/* ======================================================== */}
-      {/* 2.5 BLACK BACKGROUND TEXT TRANSITION (User Request) */}
+      {/* 2.5 PURE BLACK FRAME & TEXT TRANSITION */}
       {/* ======================================================== */}
       <AnimatePresence mode="wait">
-        {sceneState === 'text_transition' && (
+        {(sceneState === 'black_frame' || sceneState === 'text_transition') && (
           <motion.div
-            key="text-transition-screen"
+            key="black-transition-screen"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.7 }}
-            className="absolute inset-0 w-full h-full z-50 bg-[#080605] flex flex-col items-center justify-center p-8 text-center select-none cursor-pointer"
-            onClick={() => setSceneState('room')}
+            transition={{ duration: 0.45 }}
+            className="absolute inset-0 w-full h-full z-50 bg-black flex flex-col items-center justify-center p-8 text-center select-none cursor-pointer"
+            onClick={() => {
+              if (sceneState === 'text_transition') setSceneState('room');
+            }}
           >
-            <div className="max-w-md w-full space-y-8 flex flex-col items-center">
-              {/* Message 1 */}
-              <motion.div
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.9, delay: 0.25 }}
-                className="text-amber-100 font-serif text-lg sm:text-2xl tracking-[0.2em] font-medium leading-relaxed drop-shadow-[0_2px_10px_rgba(251,191,36,0.15)]"
-              >
-                「歡迎光臨保持可愛漫研社的網站」
-              </motion.div>
+            {sceneState === 'text_transition' && (
+              <div className="max-w-md w-full space-y-8 flex flex-col items-center">
+                {/* Message 1 */}
+                <motion.div
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.9, delay: 0.15 }}
+                  className="text-amber-100 font-serif text-lg sm:text-2xl tracking-[0.2em] font-medium leading-relaxed drop-shadow-[0_2px_10px_rgba(251,191,36,0.15)]"
+                >
+                  「歡迎光臨保持可愛漫研社的網站」
+                </motion.div>
 
-              {/* Message 2 */}
-              <motion.div
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.9, delay: 1.3 }}
-                className="text-amber-300/85 font-serif text-sm sm:text-lg tracking-[0.18em] leading-relaxed italic"
-              >
-                「記得幫我關門 會有蚊子」
-              </motion.div>
-            </div>
+                {/* Message 2 */}
+                <motion.div
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.9, delay: 1.2 }}
+                  className="text-amber-300/85 font-serif text-sm sm:text-lg tracking-[0.18em] leading-relaxed italic"
+                >
+                  「記得幫我關門 會有蚊子」
+                </motion.div>
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

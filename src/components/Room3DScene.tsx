@@ -5,7 +5,8 @@ import {
   Volume2, 
   VolumeX, 
   DoorClosed, 
-  Layers
+  Layers,
+  X
 } from 'lucide-react';
 
 interface Room3DSceneProps {
@@ -13,17 +14,14 @@ interface Room3DSceneProps {
   onOpenMenu: () => void;
   soundEnabled: boolean;
   onToggleSound: () => void;
-  playFootstep: () => void;
+  playFootstep?: () => void;
 }
-
-export type SitState = 'walking_to_table' | 'sitting_down' | 'seated';
 
 export const Room3DScene: React.FC<Room3DSceneProps> = ({
   onExitRoom,
   onOpenMenu,
   soundEnabled,
   onToggleSound,
-  playFootstep,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -36,28 +34,28 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
   const MIN_PITCH = (-26 * Math.PI) / 180; // 下視角：俯視茶几茶具與檯燈 (~26 degrees down)
   const MAX_PITCH = 0; // 刪除抬頭：平視水平線為頂限，不可抬頭 (0 degrees)
 
-  // Room Dimensions (User Request: 房間的寬度改為10*7米)
+  // Room Dimensions (房間的寬度 10*7米)
   const ROOM_WIDTH = 10.0; // 寬度 10 米
   const ROOM_HEIGHT = 3.0; // 挑高 3 米
   const ROOM_DEPTH = 7.0;  // 深度 7 米
   const TABLE_DEPTH = 0.70; // 牆邊木桌深度
   const TABLE_HEIGHT = 0.95; // 牆邊木桌高度
 
-  // Key Positions
-  const STAND_HEIGHT = 1.55;
+  // Key Seated Position (直接坐在茶几南側坐墊前)
   const SEATED_HEIGHT = 0.68; // 坐姿視線高度
-  const ENTRANCE_Z = 2.8; // 進門起點 (背對房門，門在 Z = 3.5m)
   const SEATED_Z = 1.15; // 圓形茶几南側坐墊位置 (圓几半徑 0.85m + 坐墊中心 0.30m)
 
   // Game & Light State
-  const [sitState, setSitState] = useState<SitState>('walking_to_table');
   const [isLampOn, setIsLampOn] = useState(true);
+  const [isConsoleHeld, setIsConsoleHeld] = useState(false);
+  const [isScreenActive, setIsScreenActive] = useState(false);
 
-  // References for render loop & 3D interaction
-  const sitStateRef = useRef<SitState>('walking_to_table');
-  useEffect(() => {
-    sitStateRef.current = sitState;
-  }, [sitState]);
+  const desktopEmbedUrl = React.useMemo(() => {
+    if (typeof window === 'undefined') return '?desktop=1';
+    const url = new URL(window.location.href);
+    url.searchParams.set('desktop', '1');
+    return url.toString();
+  }, []);
 
   // Camera & Raycaster Refs
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -70,37 +68,58 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
   const lampBulbMatRef = useRef<THREE.MeshBasicMaterial | null>(null);
   const lampShadeMatRef = useRef<THREE.MeshStandardMaterial | null>(null);
 
-  // Animation Progress & Kinematic Stride Tracker
-  const sitProgressRef = useRef<number>(0);
-  const walkPhaseRef = useRef<number>(0);
-  const walkTimeRef = useRef<number>(0);
-  const stepTriggeredRef = useRef<boolean>(false);
+  // Blue-Violet Handheld Console 3D Refs & Hold Animation Tracker
+  const consoleGroupRef = useRef<THREE.Group | null>(null);
+  const isConsoleHeldRef = useRef<boolean>(false);
+  const consoleHoldLerpRef = useRef<number>(0);
+  const isScreenActiveRef = useRef<boolean>(false);
+  const screenOverlayRef = useRef<HTMLDivElement | null>(null);
+  const desktopIframeRef = useRef<HTMLIFrameElement | null>(null);
 
-  // Tap vs Drag tracking for Lamp Interaction
+  // Interactive 3D Handheld Control Refs (Left D-Pad Scroll & Right ABXY Pull Rope)
+  const dpadGroupRef = useRef<THREE.Group | null>(null);
+  const dpadRestZRef = useRef<number>(0);
+  const dpadUpHitboxRef = useRef<THREE.Mesh | null>(null);
+  const dpadDownHitboxRef = useRef<THREE.Mesh | null>(null);
+  const abxyHitboxRef = useRef<THREE.Mesh | null>(null);
+  const faceButtonMeshesRef = useRef<THREE.Mesh[]>([]);
+  const faceButtonRestZRef = useRef<number>(0);
+
+  const activeDpadDirRef = useRef<-1 | 0 | 1>(0);
+  const dpadPressStartTimeRef = useRef<number>(0);
+  const dpadHasScrolledRef = useRef<boolean>(false);
+  const activeConsoleTouchIdRef = useRef<number | null>(null);
+  const activeConsoleTouchRoleRef = useRef<'dpad' | 'abxy' | 'chassis' | null>(null);
+  const activeConsoleMouseRoleRef = useRef<'dpad' | 'abxy' | 'chassis' | null>(null);
+  const abxyPressedTimerRef = useRef<number>(0);
+  const pressedFaceBtnIdxRef = useRef<number | null>(null);
+
+  // Tap vs Drag tracking for 3D Object Interaction
   const touchStartPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const touchStartTime = useRef<number>(0);
   const touchHasMoved = useRef<boolean>(false);
+  const lastTouchTimeRef = useRef<number>(0);
 
   const mouseStartPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const mouseStartTime = useRef<number>(0);
   const mouseHasMoved = useRef<boolean>(false);
 
-  // Touch look tracking (enabled ONLY when seated at table)
+  // Touch look tracking (enabled immediately while seated)
   const lookTouchIdRef = useRef<number | null>(null);
   const lookLastPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  // Desktop mouse look tracking (enabled ONLY when seated at table)
+  // Desktop mouse look tracking (enabled immediately while seated)
   const isMouseDownRef = useRef(false);
   const mouseLastPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  // Camera angles (strictly locked to CENTER_YAW / 0 until seated at table)
+  // Camera angles (starts centered at 0, T-shape rotation active)
   const cameraYawRef = useRef<number>(CENTER_YAW);
   const cameraPitchRef = useRef<number>(0);
   const targetYawRef = useRef<number>(CENTER_YAW);
   const targetPitchRef = useRef<number>(0);
 
-  // Player position: starts at entrance Z = 2.8, standing at 1.55m
-  const playerPosRef = useRef<THREE.Vector3>(new THREE.Vector3(0, STAND_HEIGHT, ENTRANCE_Z));
+  // Player position: directly seated at tea table cushion
+  const playerPosRef = useRef<THREE.Vector3>(new THREE.Vector3(0, SEATED_HEIGHT, SEATED_Z));
 
   useEffect(() => {
     const container = containerRef.current;
@@ -114,7 +133,7 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
     const width = container.clientWidth || window.innerWidth;
     const height = container.clientHeight || window.innerHeight;
 
-    const camera = new THREE.PerspectiveCamera(65, width / height, 0.1, 80);
+    const camera = new THREE.PerspectiveCamera(65, width / height, 0.02, 80);
     camera.position.copy(playerPosRef.current);
     camera.rotation.order = 'YXZ';
     camera.rotation.y = CENTER_YAW;
@@ -858,6 +877,296 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
 
     scene.add(roomGroup);
 
+    // --- 4C. ENLARGED BLUE-VIOLET HANDHELD GAME CONSOLE (放大版 16:9 螢幕藍紫色掌上型遊戲機) ---
+    const createConsoleScreenTexture = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 640;
+      canvas.height = 360; // Exact 16:9 aspect ratio
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return new THREE.Texture();
+
+      // Match original desktop #001B3D dark ocean backdrop seamlessly
+      ctx.fillStyle = '#001B3D';
+      ctx.fillRect(0, 0, 640, 360);
+
+      // Subtle retro grid matching desktop landing
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+      ctx.lineWidth = 1;
+      for (let gx = 0; gx < 640; gx += 20) {
+        ctx.beginPath();
+        ctx.moveTo(gx, 0);
+        ctx.lineTo(gx, 360);
+        ctx.stroke();
+      }
+      for (let gy = 0; gy < 360; gy += 20) {
+        ctx.beginPath();
+        ctx.moveTo(0, gy);
+        ctx.lineTo(640, gy);
+        ctx.stroke();
+      }
+
+      // Scattered colorful tetris accent blocks
+      const previewBlocks = [
+        [44, 60, '#FF007F'], [96, 260, '#00E5FF'], [540, 80, '#FFD700'],
+        [560, 280, '#A855F7'], [120, 40, '#4ADE80'], [490, 220, '#F97316'],
+      ] as const;
+      previewBlocks.forEach(([bx, by, col]) => {
+        ctx.fillStyle = col;
+        ctx.fillRect(bx, by, 18, 18);
+      });
+
+      // Center title & Game Start prompt preview
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 28px sans-serif';
+      ctx.fillText('保持可愛漫研社', 320, 154);
+
+      ctx.strokeStyle = '#0077be';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(225, 200, 190, 44);
+      ctx.fillStyle = '#0077be';
+      ctx.font = 'bold 18px monospace';
+      ctx.fillText('GAME START', 320, 228);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      return texture;
+    };
+
+    const consoleScreenTex = createConsoleScreenTexture();
+
+    const consoleGroup = new THREE.Group();
+    const CONSOLE_W = 0.364;
+    const CONSOLE_H = 0.162;
+    const CONSOLE_R = 0.026;
+    const CONSOLE_D = 0.019;
+
+    // Rounded handheld body shape
+    const bodyShape = new THREE.Shape();
+    const hw = CONSOLE_W / 2;
+    const hh = CONSOLE_H / 2;
+    bodyShape.moveTo(-hw + CONSOLE_R, -hh);
+    bodyShape.lineTo(hw - CONSOLE_R, -hh);
+    bodyShape.quadraticCurveTo(hw, -hh, hw, -hh + CONSOLE_R);
+    bodyShape.lineTo(hw, hh - CONSOLE_R);
+    bodyShape.quadraticCurveTo(hw, hh, hw - CONSOLE_R, hh);
+    bodyShape.lineTo(-hw + CONSOLE_R, hh);
+    bodyShape.quadraticCurveTo(-hw, hh, -hw, hh - CONSOLE_R);
+    bodyShape.lineTo(-hw, -hh + CONSOLE_R);
+    bodyShape.quadraticCurveTo(-hw, -hh, -hw + CONSOLE_R, -hh);
+
+    const bodyGeo = new THREE.ExtrudeGeometry(bodyShape, {
+      depth: CONSOLE_D,
+      bevelEnabled: true,
+      bevelThickness: 0.003,
+      bevelSize: 0.003,
+      bevelSegments: 4,
+    });
+    bodyGeo.translate(0, 0, -CONSOLE_D / 2);
+
+    // Vivid Blue-Violet Chassis Material (藍紫色機身)
+    const consoleBodyMat = new THREE.MeshStandardMaterial({
+      color: 0x5c4be8,
+      roughness: 0.34,
+      metalness: 0.18,
+      emissive: 0x1b144a,
+      emissiveIntensity: 0.30,
+    });
+    const consoleBody = new THREE.Mesh(bodyGeo, consoleBodyMat);
+    consoleBody.castShadow = true;
+    consoleBody.receiveShadow = true;
+    consoleGroup.add(consoleBody);
+
+    // Dark Slate-Indigo Bezel around Enlarged 16:9 Screen
+    const SCREEN_W = 0.256;
+    const SCREEN_H = 0.144; // Exact 16:9 ratio (0.256 / 0.144 = 16/9)
+    const bezelGeo = new THREE.BoxGeometry(SCREEN_W + 0.008, SCREEN_H + 0.008, 0.003);
+    const bezelMat = new THREE.MeshStandardMaterial({
+      color: 0x110e1c,
+      roughness: 0.18,
+      metalness: 0.25,
+    });
+    const bezelMesh = new THREE.Mesh(bezelGeo, bezelMat);
+    bezelMesh.position.set(0, 0, CONSOLE_D / 2 + 0.0026);
+    consoleGroup.add(bezelMesh);
+
+    // Self-lit 16:9 LCD/OLED Display Screen
+    const screenGeo = new THREE.PlaneGeometry(SCREEN_W, SCREEN_H);
+    const screenMat = new THREE.MeshStandardMaterial({
+      map: consoleScreenTex,
+      emissiveMap: consoleScreenTex,
+      emissive: new THREE.Color(0xffffff),
+      emissiveIntensity: 0.85,
+      roughness: 0.15,
+      metalness: 0.05,
+    });
+    const screenMesh = new THREE.Mesh(screenGeo, screenMat);
+    screenMesh.position.set(0, 0, CONSOLE_D / 2 + 0.0046);
+    consoleGroup.add(screenMesh);
+
+    // Deep Indigo Trim Material for sticks, D-pad & shoulder triggers
+    const consoleTrimMat = new THREE.MeshStandardMaterial({
+      color: 0x261f47,
+      roughness: 0.4,
+      metalness: 0.2,
+    });
+    const stickRingMat = new THREE.MeshStandardMaterial({
+      color: 0x8273ff,
+      roughness: 0.3,
+    });
+    const dpadArrowMat = new THREE.MeshBasicMaterial({ color: 0xd8b4fe });
+
+    const CTRL_X = 0.157;
+    const UPPER_CTRL_Y = 0.022;
+    const STICK_Y = -0.036;
+
+    // Left Tactile D-Pad Cross Group (controls page scroll UP / DOWN)
+    const dpadGroup = new THREE.Group();
+    const dpadRestZ = CONSOLE_D / 2 + 0.0042;
+    dpadGroup.position.set(-CTRL_X, UPPER_CTRL_Y, dpadRestZ);
+    dpadRestZRef.current = dpadRestZ;
+
+    const dpadDiscGeo = new THREE.CylinderGeometry(0.020, 0.021, 0.002, 24);
+    dpadDiscGeo.rotateX(Math.PI / 2);
+    const dpadDisc = new THREE.Mesh(
+      dpadDiscGeo,
+      new THREE.MeshStandardMaterial({ color: 0x181330, roughness: 0.5 })
+    );
+    dpadDisc.position.z = -0.0012;
+    dpadGroup.add(dpadDisc);
+
+    const dpadH = new THREE.Mesh(new THREE.BoxGeometry(0.034, 0.011, 0.0048), consoleTrimMat);
+    dpadGroup.add(dpadH);
+
+    const dpadV = new THREE.Mesh(new THREE.BoxGeometry(0.011, 0.034, 0.0048), consoleTrimMat);
+    dpadGroup.add(dpadV);
+
+    // Subtle ▲ / ▼ directional pips on D-Pad vertical arms
+    const arrowGeo = new THREE.ConeGeometry(0.0032, 0.0048, 3);
+    const arrowUp = new THREE.Mesh(arrowGeo, dpadArrowMat);
+    arrowUp.position.set(0, 0.0125, 0.0028);
+    dpadGroup.add(arrowUp);
+
+    const arrowDown = new THREE.Mesh(arrowGeo, dpadArrowMat);
+    arrowDown.rotation.z = Math.PI;
+    arrowDown.position.set(0, -0.0125, 0.0028);
+    dpadGroup.add(arrowDown);
+
+    dpadGroupRef.current = dpadGroup;
+    consoleGroup.add(dpadGroup);
+
+    // Generous invisible touch hitboxes for D-Pad UP & DOWN
+    const dpadUpHitbox = new THREE.Mesh(
+      new THREE.BoxGeometry(0.048, 0.042, 0.030),
+      new THREE.MeshBasicMaterial({ visible: false })
+    );
+    dpadUpHitbox.position.set(-CTRL_X, UPPER_CTRL_Y + 0.021, CONSOLE_D / 2 + 0.006);
+    dpadUpHitbox.name = 'dpad_up_hitbox';
+    dpadUpHitboxRef.current = dpadUpHitbox;
+    consoleGroup.add(dpadUpHitbox);
+
+    const dpadDownHitbox = new THREE.Mesh(
+      new THREE.BoxGeometry(0.048, 0.042, 0.030),
+      new THREE.MeshBasicMaterial({ visible: false })
+    );
+    dpadDownHitbox.position.set(-CTRL_X, UPPER_CTRL_Y - 0.021, CONSOLE_D / 2 + 0.006);
+    dpadDownHitbox.name = 'dpad_down_hitbox';
+    dpadDownHitboxRef.current = dpadDownHitbox;
+    consoleGroup.add(dpadDownHitbox);
+
+    // Left & Right Analog Thumbsticks
+    const stickGeo = new THREE.CylinderGeometry(0.0115, 0.0115, 0.0055, 18);
+    stickGeo.rotateX(Math.PI / 2);
+    const ringGeo = new THREE.TorusGeometry(0.0124, 0.0016, 10, 20);
+
+    const leftStick = new THREE.Mesh(stickGeo, consoleTrimMat);
+    leftStick.position.set(-CTRL_X, STICK_Y, CONSOLE_D / 2 + 0.0044);
+    consoleGroup.add(leftStick);
+
+    const leftRing = new THREE.Mesh(ringGeo, stickRingMat);
+    leftRing.position.set(-CTRL_X, STICK_Y, CONSOLE_D / 2 + 0.003);
+    consoleGroup.add(leftRing);
+
+    const rightStick = new THREE.Mesh(stickGeo, consoleTrimMat);
+    rightStick.position.set(CTRL_X, STICK_Y, CONSOLE_D / 2 + 0.0044);
+    consoleGroup.add(rightStick);
+
+    const rightRing = new THREE.Mesh(ringGeo, stickRingMat);
+    rightRing.position.set(CTRL_X, STICK_Y, CONSOLE_D / 2 + 0.003);
+    consoleGroup.add(rightRing);
+
+    // Right 4 Face Buttons (ABXY - tapping any pulls the hemp rope)
+    const btnGeo = new THREE.CylinderGeometry(0.0066, 0.0066, 0.0048, 16);
+    btnGeo.rotateX(Math.PI / 2);
+    const btnRestZ = CONSOLE_D / 2 + 0.0044;
+    faceButtonRestZRef.current = btnRestZ;
+    faceButtonMeshesRef.current = [];
+    const faceButtons = [
+      { dx: 0, dy: 0.0145, color: 0x93c5fd },   // X
+      { dx: 0, dy: -0.0145, color: 0xfde68a },  // B
+      { dx: -0.0145, dy: 0, color: 0xc4b5fd },  // Y
+      { dx: 0.0145, dy: 0, color: 0xf472b6 },   // A
+    ];
+    faceButtons.forEach((b, idx) => {
+      const btn = new THREE.Mesh(
+        btnGeo,
+        new THREE.MeshStandardMaterial({ color: b.color, roughness: 0.28, emissive: b.color, emissiveIntensity: 0.28 })
+      );
+      btn.position.set(CTRL_X + b.dx, UPPER_CTRL_Y + b.dy, btnRestZ);
+      btn.name = `abxy_btn_${idx}`;
+      faceButtonMeshesRef.current.push(btn);
+      consoleGroup.add(btn);
+    });
+
+    // Generous invisible touch hitbox covering all 4 right-side ABXY buttons
+    const abxyHitbox = new THREE.Mesh(
+      new THREE.BoxGeometry(0.052, 0.068, 0.030),
+      new THREE.MeshBasicMaterial({ visible: false })
+    );
+    abxyHitbox.position.set(CTRL_X, UPPER_CTRL_Y, CONSOLE_D / 2 + 0.006);
+    abxyHitbox.name = 'abxy_hitbox';
+    abxyHitboxRef.current = abxyHitbox;
+    consoleGroup.add(abxyHitbox);
+
+    // Power LED Indicator
+    const ledMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(0.003, 10, 10),
+      new THREE.MeshBasicMaterial({ color: 0x6ee7b7 })
+    );
+    ledMesh.position.set(0.145, 0.064, CONSOLE_D / 2 + 0.0032);
+    consoleGroup.add(ledMesh);
+
+    // Shoulder Triggers L & R along top edge
+    const shoulderGeo = new THREE.BoxGeometry(0.056, 0.010, 0.014);
+    const shoulderL = new THREE.Mesh(shoulderGeo, consoleTrimMat);
+    shoulderL.position.set(-0.132, hh + 0.001, 0);
+    consoleGroup.add(shoulderL);
+
+    const shoulderR = new THREE.Mesh(shoulderGeo, consoleTrimMat);
+    shoulderR.position.set(0.132, hh + 0.001, 0);
+    consoleGroup.add(shoulderR);
+
+    // Dedicated invisible interaction hitbox for easy mobile tap/click when on table
+    const consoleHitbox = new THREE.Mesh(
+      new THREE.BoxGeometry(0.42, 0.22, 0.09),
+      new THREE.MeshBasicMaterial({ visible: false })
+    );
+    consoleHitbox.name = 'console_hitbox';
+    consoleGroup.add(consoleHitbox);
+
+    // Resting world pose on the round wooden tea table (south-west front of table)
+    const consoleTablePos = new THREE.Vector3(-0.20, TEA_TABLE_HEIGHT + 0.015, 0.36);
+    const consoleTableQuat = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(-Math.PI / 2, 0.20, 0, 'YXZ')
+    );
+
+    consoleGroup.position.copy(consoleTablePos);
+    consoleGroup.quaternion.copy(consoleTableQuat);
+    consoleGroup.scale.setScalar(1.0);
+
+    consoleGroupRef.current = consoleGroup;
+    scene.add(consoleGroup);
+
     // --- 5. ATMOSPHERIC WARM LIGHTING RIG ---
     const ambientLight = new THREE.AmbientLight(0xffecd6, 0.85);
     scene.add(ambientLight);
@@ -921,101 +1230,129 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
 
     // --- 6. ANIMATION & RENDER LOOP ---
     let animationId: number;
-    let clock = new THREE.Clock();
+    const clock = new THREE.Clock();
+    const tempForward = new THREE.Vector3();
+    const tempHeldPos = new THREE.Vector3();
+    const tempZAxis = new THREE.Vector3(0, 0, 1);
+    const tempRollQuat = new THREE.Quaternion();
+    const tempHeldQuat = new THREE.Quaternion();
+    const tempCenterPos = new THREE.Vector3();
+    const tempRightPos = new THREE.Vector3();
+    const tempTopPos = new THREE.Vector3();
 
     const renderLoop = () => {
       const delta = Math.min(clock.getDelta(), 0.1);
 
-      // --- USER REQUEST: "優化走路" ---
-      if (sitStateRef.current === 'walking_to_table') {
-        const TOTAL_WALK_TIME = 2.0; // 2.0 秒從門口流暢步入茶席
-        walkTimeRef.current = Math.min(TOTAL_WALK_TIME, walkTimeRef.current + delta);
-        const progress = walkTimeRef.current / TOTAL_WALK_TIME;
-
-        // Smooth cubic ease-in-out curve for natural physical acceleration & deceleration
-        const smoothProgress = progress < 0.5 
-          ? 4 * progress * progress * progress 
-          : 1 - Math.pow(-2 * progress + 2, 3) / 2;
-        
-        playerPosRef.current.z = THREE.MathUtils.lerp(ENTRANCE_Z, SEATED_Z, smoothProgress);
-
-        // Velocity envelope for natural head bobbing and hip sway
-        const speedFactor = Math.sin(progress * Math.PI);
-
-        // Realistic walking stride kinematics (~1.8 steps per second)
-        walkPhaseRef.current += delta * 7.4 * Math.max(0.35, speedFactor);
-
-        // Vertical bobbing (up/down twice per full stride cycle)
-        const walkBobY = Math.sin(walkPhaseRef.current * 2) * 0.015 * speedFactor;
-
-        // Subtle lateral weight sway (left/right once per stride cycle)
-        const walkSwayX = Math.cos(walkPhaseRef.current) * 0.008 * speedFactor;
-
-        // Micro camera roll tilt with each footfall
-        const walkRollZ = Math.sin(walkPhaseRef.current) * 0.0035 * speedFactor;
-
-        camera.position.set(walkSwayX, STAND_HEIGHT + walkBobY, playerPosRef.current.z);
-        camera.rotation.z = walkRollZ;
-
-        // Footstep audio triggered at the lowest point of the footfall
-        const stepDip = Math.sin(walkPhaseRef.current * 2);
-        if (stepDip < -0.85 && !stepTriggeredRef.current && speedFactor > 0.15) {
-          stepTriggeredRef.current = true;
-          playFootstep();
-          if (typeof navigator !== 'undefined' && navigator.vibrate) {
-            try { navigator.vibrate(6); } catch {}
-          }
-        } else if (stepDip > 0) {
-          stepTriggeredRef.current = false;
-        }
-
-        cameraYawRef.current = CENTER_YAW;
-        cameraPitchRef.current = 0;
-
-        // Smooth transition directly into sitting down at arrival
-        if (progress >= 1) {
-          playerPosRef.current.z = SEATED_Z;
-          camera.rotation.z = 0;
-          sitProgressRef.current = 0;
-          sitStateRef.current = 'sitting_down';
-          setSitState('sitting_down');
-        }
-      } else if (sitStateRef.current === 'sitting_down') {
-        const SIT_DURATION = 0.85; // 0.85 秒自然緩緩落座
-        sitProgressRef.current = Math.min(1, sitProgressRef.current + delta / SIT_DURATION);
-
-        const sitT = sitProgressRef.current;
-        const easedSit = sitT * sitT * (3 - 2 * sitT);
-        const currentY = THREE.MathUtils.lerp(STAND_HEIGHT, SEATED_HEIGHT, easedSit);
-        playerPosRef.current.y = currentY;
-
-        // Subtle natural head dip as you lower yourself onto the cushion
-        const glanceDip = -Math.sin(easedSit * Math.PI) * 0.045;
-        cameraYawRef.current = CENTER_YAW;
-        cameraPitchRef.current = glanceDip;
-        camera.rotation.z = 0;
-
-        camera.position.set(0, currentY, SEATED_Z);
-
-        if (sitProgressRef.current >= 1) {
-          playerPosRef.current.y = SEATED_HEIGHT;
-          targetYawRef.current = CENTER_YAW;
-          targetPitchRef.current = 0;
-          cameraYawRef.current = CENTER_YAW;
-          cameraPitchRef.current = 0;
-          sitStateRef.current = 'seated';
-          setSitState('seated');
-        }
-      } else if (sitStateRef.current === 'seated') {
-        // Seated at tea table: allow smooth T-shape look around (yaw ±20°, pitch 0° to -26° down to table)
-        cameraYawRef.current = THREE.MathUtils.lerp(cameraYawRef.current, targetYawRef.current, 0.16);
-        cameraPitchRef.current = THREE.MathUtils.lerp(cameraPitchRef.current, targetPitchRef.current, 0.16);
-        camera.position.set(0, SEATED_HEIGHT, SEATED_Z);
-        camera.rotation.z = 0;
-      }
-
+      // Directly seated at the tea table: smooth T-shape look around (yaw ±20°, pitch 0° to -26° down)
+      cameraYawRef.current = THREE.MathUtils.lerp(cameraYawRef.current, targetYawRef.current, 0.16);
+      cameraPitchRef.current = THREE.MathUtils.lerp(cameraPitchRef.current, targetPitchRef.current, 0.16);
+      camera.position.set(0, SEATED_HEIGHT, SEATED_Z);
+      camera.rotation.z = 0;
       camera.rotation.y = cameraYawRef.current;
       camera.rotation.x = cameraPitchRef.current;
+      camera.updateMatrixWorld();
+
+      // Smoothly animate Blue-Violet Handheld Console between Tea Table and Close-Up Landscape View
+      const targetHold = isConsoleHeldRef.current ? 1 : 0;
+      if (consoleHoldLerpRef.current < targetHold) {
+        consoleHoldLerpRef.current = Math.min(1, consoleHoldLerpRef.current + delta * 3.8);
+      } else if (consoleHoldLerpRef.current > targetHold) {
+        consoleHoldLerpRef.current = Math.max(0, consoleHoldLerpRef.current - delta * 4.2);
+      }
+
+      if (consoleGroupRef.current) {
+        const l = consoleHoldLerpRef.current;
+        if (l <= 0.0001) {
+          consoleGroupRef.current.position.copy(consoleTablePos);
+          consoleGroupRef.current.quaternion.copy(consoleTableQuat);
+          consoleGroupRef.current.scale.setScalar(1.0);
+        } else {
+          const eased = l < 0.5 ? 4 * l * l * l : 1 - Math.pow(-2 * l + 2, 3) / 2;
+
+          // Bring handheld much closer to camera & flip to landscape orientation on portrait screens
+          const HOLD_DIST = 0.20;
+          const visH = 2 * HOLD_DIST * Math.tan(THREE.MathUtils.degToRad(32.5));
+          const visW = visH * camera.aspect;
+          const isPortrait = camera.aspect < 1.0;
+
+          tempRollQuat.setFromAxisAngle(tempZAxis, isPortrait ? -Math.PI / 2 : 0);
+          tempHeldQuat.copy(camera.quaternion).multiply(tempRollQuat);
+
+          const heldSpanW = isPortrait ? CONSOLE_H : CONSOLE_W;
+          const heldSpanH = isPortrait ? CONSOLE_W : CONSOLE_H;
+          const heldScale = Math.min((visW * 0.96) / heldSpanW, (visH * 0.96) / heldSpanH);
+
+          tempForward.set(0, 0, -1).applyQuaternion(camera.quaternion);
+          tempHeldPos
+            .copy(camera.position)
+            .addScaledVector(tempForward, HOLD_DIST);
+
+          consoleGroupRef.current.position.lerpVectors(consoleTablePos, tempHeldPos, eased);
+          consoleGroupRef.current.quaternion.slerpQuaternions(consoleTableQuat, tempHeldQuat, eased);
+          const s = THREE.MathUtils.lerp(1.0, heldScale, eased);
+          consoleGroupRef.current.scale.setScalar(s);
+        }
+
+        // Tactile D-Pad press & continuous scroll when held
+        if (dpadGroupRef.current) {
+          const dir = activeDpadDirRef.current;
+          const targetTiltX = dir === -1 ? -0.15 : dir === 1 ? 0.15 : 0;
+          const targetDpadZ = dir !== 0 ? dpadRestZRef.current - 0.0014 : dpadRestZRef.current;
+          dpadGroupRef.current.rotation.x = THREE.MathUtils.lerp(dpadGroupRef.current.rotation.x, targetTiltX, 0.35);
+          dpadGroupRef.current.position.z = THREE.MathUtils.lerp(dpadGroupRef.current.position.z, targetDpadZ, 0.35);
+
+          if (dir !== 0 && isConsoleHeldRef.current && isScreenActiveRef.current) {
+            if (performance.now() - dpadPressStartTimeRef.current >= 140) {
+              dpadHasScrolledRef.current = true;
+              desktopIframeRef.current?.contentWindow?.postMessage(
+                { type: 'console_scroll', deltaY: dir * (delta * 760), smooth: false },
+                window.location.origin
+              );
+            }
+          }
+        }
+
+        // Tactile ABXY button press depression animation
+        if (abxyPressedTimerRef.current > 0) {
+          abxyPressedTimerRef.current = Math.max(0, abxyPressedTimerRef.current - delta);
+        }
+        faceButtonMeshesRef.current.forEach((btnMesh, idx) => {
+          const isPressed = abxyPressedTimerRef.current > 0 && pressedFaceBtnIdxRef.current === idx;
+          const targetBtnZ = isPressed ? faceButtonRestZRef.current - 0.0024 : faceButtonRestZRef.current;
+          btnMesh.position.z = THREE.MathUtils.lerp(btnMesh.position.z, targetBtnZ, 0.45);
+        });
+
+        // Synchronize interactive 16:9 desktop website overlay precisely over the 3D screen aperture
+        const shouldActivateScreen = isConsoleHeldRef.current && l >= 0.97;
+        if (shouldActivateScreen !== isScreenActiveRef.current) {
+          isScreenActiveRef.current = shouldActivateScreen;
+          setIsScreenActive(shouldActivateScreen);
+        }
+
+        if (shouldActivateScreen && screenOverlayRef.current) {
+          const viewW = container.clientWidth || window.innerWidth;
+          const viewH = container.clientHeight || window.innerHeight;
+          consoleGroupRef.current.updateMatrixWorld(true);
+
+          tempCenterPos.set(0, 0, 0).applyMatrix4(screenMesh.matrixWorld).project(camera);
+          tempRightPos.set(SCREEN_W / 2, 0, 0).applyMatrix4(screenMesh.matrixWorld).project(camera);
+          tempTopPos.set(0, SCREEN_H / 2, 0).applyMatrix4(screenMesh.matrixWorld).project(camera);
+
+          const cx = (tempCenterPos.x * 0.5 + 0.5) * viewW;
+          const cy = (-tempCenterPos.y * 0.5 + 0.5) * viewH;
+          const rx = (tempRightPos.x * 0.5 + 0.5) * viewW;
+          const ry = (-tempRightPos.y * 0.5 + 0.5) * viewH;
+          const tx = (tempTopPos.x * 0.5 + 0.5) * viewW;
+          const ty = (-tempTopPos.y * 0.5 + 0.5) * viewH;
+
+          const pxW = Math.hypot((rx - cx) * 2, (ry - cy) * 2);
+          const pxH = Math.hypot((tx - cx) * 2, (ty - cy) * 2);
+          const angleRad = Math.atan2(ry - cy, rx - cx);
+
+          screenOverlayRef.current.style.transform =
+            `translate3d(${cx}px, ${cy}px, 0) translate(-50%, -50%) rotate(${angleRad}rad) scale(${pxW / 1600}, ${pxH / 900})`;
+        }
+      }
 
       renderer.render(scene, camera);
       animationId = requestAnimationFrame(renderLoop);
@@ -1053,15 +1390,16 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
       wallTexture.dispose();
       tabletopTexture.dispose();
       ceilingTexture.dispose();
+      consoleScreenTex.dispose();
       renderer.dispose();
 
       if (renderer.domElement && container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement);
       }
     };
-  }, [playFootstep, CENTER_YAW, ENTRANCE_Z, SEATED_Z, STAND_HEIGHT, SEATED_HEIGHT]);
+  }, [CENTER_YAW, SEATED_Z, SEATED_HEIGHT]);
 
-  // User Request: "將檯燈的開關改為點擊檯燈本身"
+  // Toggle Table Lamp when tapped
   const handleToggleLamp = () => {
     setIsLampOn((prev) => {
       const next = !prev;
@@ -1079,39 +1417,182 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
     });
   };
 
-  // Raycast to check if table lamp or its hitbox was tapped
-  const checkLampTap = (clientX: number, clientY: number): boolean => {
-    if (!containerRef.current || !cameraRef.current || !lampGroupRef.current) return false;
+  // Toggle Handheld Console between Tea Table and Close-Up Interactive Landscape View
+  const handleToggleConsole = (hold: boolean) => {
+    isConsoleHeldRef.current = hold;
+    setIsConsoleHeld(hold);
+    if (!hold) {
+      isScreenActiveRef.current = false;
+      setIsScreenActive(false);
+      activeDpadDirRef.current = 0;
+      activeConsoleTouchIdRef.current = null;
+      activeConsoleTouchRoleRef.current = null;
+      activeConsoleMouseRoleRef.current = null;
+    }
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      try { navigator.vibrate(18); } catch {}
+    }
+  };
+
+  // Raycast held console controls: Left D-Pad (scroll up/down), Right ABXY (pull rope), or chassis/outside
+  const raycastHeldConsole = (
+    clientX: number,
+    clientY: number
+  ): { role: 'dpad_up' | 'dpad_down' | 'abxy' | 'chassis' | 'outside'; btnIdx?: number } => {
+    if (!containerRef.current || !cameraRef.current) return { role: 'outside' };
+    const rect = containerRef.current.getBoundingClientRect();
+    const x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    const y = -((clientY - rect.top) / rect.height) * 2 + 1;
+    raycasterRef.current.setFromCamera(new THREE.Vector2(x, y), cameraRef.current);
+
+    const controlTargets = [
+      dpadUpHitboxRef.current,
+      dpadDownHitboxRef.current,
+      abxyHitboxRef.current,
+    ].filter((obj): obj is THREE.Mesh => obj !== null);
+
+    const ctrlHits = raycasterRef.current.intersectObjects(controlTargets, false);
+    if (ctrlHits.length > 0) {
+      const hit = ctrlHits[0];
+      if (hit.object.name === 'dpad_up_hitbox') return { role: 'dpad_up' };
+      if (hit.object.name === 'dpad_down_hitbox') return { role: 'dpad_down' };
+      if (hit.object.name === 'abxy_hitbox') {
+        let closestIdx = 0;
+        let minDist = Infinity;
+        const tmpWorld = new THREE.Vector3();
+        faceButtonMeshesRef.current.forEach((btnMesh, idx) => {
+          btnMesh.getWorldPosition(tmpWorld);
+          const d = tmpWorld.distanceToSquared(hit.point);
+          if (d < minDist) {
+            minDist = d;
+            closestIdx = idx;
+          }
+        });
+        return { role: 'abxy', btnIdx: closestIdx };
+      }
+    }
+
+    if (consoleGroupRef.current) {
+      const bodyHits = raycasterRef.current.intersectObjects(consoleGroupRef.current.children, true);
+      if (bodyHits.length > 0) {
+        return { role: 'chassis' };
+      }
+    }
+
+    return { role: 'outside' };
+  };
+
+  // Press D-Pad / ABXY helper (called on touchStart / mouseDown while console is held)
+  const triggerHeldControlDown = (
+    hit: { role: 'dpad_up' | 'dpad_down' | 'abxy' | 'chassis' | 'outside'; btnIdx?: number }
+  ): 'dpad' | 'abxy' | 'chassis' | null => {
+    if (hit.role === 'dpad_up' || hit.role === 'dpad_down') {
+      activeDpadDirRef.current = hit.role === 'dpad_up' ? -1 : 1;
+      dpadPressStartTimeRef.current = performance.now();
+      dpadHasScrolledRef.current = false;
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        try { navigator.vibrate(10); } catch {}
+      }
+      return 'dpad';
+    }
+    if (hit.role === 'abxy') {
+      abxyPressedTimerRef.current = 0.18;
+      pressedFaceBtnIdxRef.current = hit.btnIdx ?? 0;
+      desktopIframeRef.current?.contentWindow?.postMessage(
+        { type: 'console_pull_rope' },
+        window.location.origin
+      );
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        try { navigator.vibrate(18); } catch {}
+      }
+      return 'abxy';
+    }
+    if (hit.role === 'chassis') {
+      return 'chassis';
+    }
+    return null;
+  };
+
+  const releaseHeldDpad = () => {
+    const dir = activeDpadDirRef.current;
+    if (dir !== 0 && !dpadHasScrolledRef.current && isScreenActiveRef.current) {
+      desktopIframeRef.current?.contentWindow?.postMessage(
+        { type: 'console_scroll', deltaY: dir * 240, smooth: true },
+        window.location.origin
+      );
+    }
+    activeDpadDirRef.current = 0;
+  };
+
+  // Raycast tap handler: Console pickup/putdown & Table Lamp toggle
+  const handleSceneTap = (clientX: number, clientY: number): boolean => {
+    if (isConsoleHeldRef.current) {
+      const hit = raycastHeldConsole(clientX, clientY);
+      if (hit.role === 'outside') {
+        handleToggleConsole(false);
+        return true;
+      }
+      return false;
+    }
+
+    if (!containerRef.current || !cameraRef.current) return false;
     const rect = containerRef.current.getBoundingClientRect();
     const x = ((clientX - rect.left) / rect.width) * 2 - 1;
     const y = -((clientY - rect.top) / rect.height) * 2 + 1;
 
     raycasterRef.current.setFromCamera(new THREE.Vector2(x, y), cameraRef.current);
-    const intersects = raycasterRef.current.intersectObjects(lampGroupRef.current.children, true);
 
-    if (intersects.length > 0) {
-      handleToggleLamp();
-      if (typeof navigator !== 'undefined' && navigator.vibrate) {
-        try { navigator.vibrate(18); } catch {}
+    // 1. Check Blue-Violet Handheld Console tap first
+    if (consoleGroupRef.current) {
+      const consoleHits = raycasterRef.current.intersectObjects(consoleGroupRef.current.children, true);
+      if (consoleHits.length > 0) {
+        handleToggleConsole(true);
+        return true;
       }
-      return true;
     }
+
+    // 2. Check Table Lamp tap
+    if (lampGroupRef.current) {
+      const lampHits = raycasterRef.current.intersectObjects(lampGroupRef.current.children, true);
+      if (lampHits.length > 0) {
+        handleToggleLamp();
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          try { navigator.vibrate(18); } catch {}
+        }
+        return true;
+      }
+    }
+
     return false;
   };
 
-  // --- TOUCH HANDLERS (T-SHAPE ROTATION & LAMP TAP) ---
+  // --- TOUCH HANDLERS (T-SHAPE ROTATION + CONSOLE CONTROLS/LAMP TAP) ---
   const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    lastTouchTimeRef.current = performance.now();
     if (e.touches.length === 1) {
       const touch = e.touches[0];
       touchStartPos.current = { x: touch.clientX, y: touch.clientY };
       touchStartTime.current = performance.now();
       touchHasMoved.current = false;
+
+      if (isConsoleHeldRef.current && isScreenActiveRef.current) {
+        const hit = raycastHeldConsole(touch.clientX, touch.clientY);
+        const role = triggerHeldControlDown(hit);
+        if (role) {
+          activeConsoleTouchIdRef.current = touch.identifier;
+          activeConsoleTouchRoleRef.current = role;
+          lookTouchIdRef.current = null;
+          return;
+        }
+      }
+
       lookLastPosRef.current = { x: touch.clientX, y: touch.clientY };
       lookTouchIdRef.current = touch.identifier;
     }
   };
 
   const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    lastTouchTimeRef.current = performance.now();
     for (let i = 0; i < e.changedTouches.length; i++) {
       const touch = e.changedTouches[i];
       if (touch.identifier === lookTouchIdRef.current) {
@@ -1121,7 +1602,7 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
           touchHasMoved.current = true;
         }
 
-        if (sitStateRef.current === 'seated') {
+        if (!isConsoleHeldRef.current) {
           const deltaX = touch.clientX - lookLastPosRef.current.x;
           const deltaY = touch.clientY - lookLastPosRef.current.y;
           lookLastPosRef.current = { x: touch.clientX, y: touch.clientY };
@@ -1130,7 +1611,7 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
           targetYawRef.current -= deltaX * sensitivity;
           targetPitchRef.current -= deltaY * sensitivity;
 
-          // User Request: T-Shape viewing (±20° yaw, 0° to -26° pitch down, no looking up)
+          // T-Shape viewing (±20° yaw, 0° to -26° pitch down, no looking up)
           targetYawRef.current = THREE.MathUtils.clamp(targetYawRef.current, MIN_YAW, MAX_YAW);
           targetPitchRef.current = THREE.MathUtils.clamp(targetPitchRef.current, MIN_PITCH, MAX_PITCH);
         }
@@ -1139,36 +1620,58 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
   };
 
   const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    lastTouchTimeRef.current = performance.now();
     for (let i = 0; i < e.changedTouches.length; i++) {
       const touch = e.changedTouches[i];
+      if (touch.identifier === activeConsoleTouchIdRef.current) {
+        if (activeConsoleTouchRoleRef.current === 'dpad') {
+          releaseHeldDpad();
+        }
+        activeConsoleTouchIdRef.current = null;
+        activeConsoleTouchRoleRef.current = null;
+        continue;
+      }
       if (touch.identifier === lookTouchIdRef.current) {
         const duration = performance.now() - touchStartTime.current;
-        // If it's a tap without drag, check for lamp hit
         if (!touchHasMoved.current && duration < 400) {
-          checkLampTap(touch.clientX, touch.clientY);
+          handleSceneTap(touch.clientX, touch.clientY);
         }
         lookTouchIdRef.current = null;
       }
     }
   };
 
-  // --- DESKTOP MOUSE LOOK & LAMP CLICK ---
+  // --- DESKTOP MOUSE LOOK + CONSOLE CONTROLS/LAMP CLICK ---
   const handleMouseDown = (e: React.MouseEvent) => {
+    if (performance.now() - lastTouchTimeRef.current < 600) return;
     mouseStartPos.current = { x: e.clientX, y: e.clientY };
     mouseStartTime.current = performance.now();
     mouseHasMoved.current = false;
     mouseLastPosRef.current = { x: e.clientX, y: e.clientY };
+
+    if (isConsoleHeldRef.current && isScreenActiveRef.current) {
+      const hit = raycastHeldConsole(e.clientX, e.clientY);
+      const role = triggerHeldControlDown(hit);
+      if (role) {
+        activeConsoleMouseRoleRef.current = role;
+        isMouseDownRef.current = false;
+        return;
+      }
+    }
+
+    activeConsoleMouseRoleRef.current = null;
     isMouseDownRef.current = true;
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
+    if (performance.now() - lastTouchTimeRef.current < 600) return;
     const dx = e.clientX - mouseStartPos.current.x;
     const dy = e.clientY - mouseStartPos.current.y;
     if (Math.hypot(dx, dy) > 6) {
       mouseHasMoved.current = true;
     }
 
-    if (sitStateRef.current === 'seated' && isMouseDownRef.current) {
+    if (!isConsoleHeldRef.current && isMouseDownRef.current) {
       const deltaX = e.clientX - mouseLastPosRef.current.x;
       const deltaY = e.clientY - mouseLastPosRef.current.y;
       mouseLastPosRef.current = { x: e.clientX, y: e.clientY };
@@ -1183,11 +1686,27 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
   };
 
   const handleMouseUp = (e: React.MouseEvent) => {
+    if (performance.now() - lastTouchTimeRef.current < 600) return;
+    if (activeConsoleMouseRoleRef.current) {
+      if (activeConsoleMouseRoleRef.current === 'dpad') {
+        releaseHeldDpad();
+      }
+      activeConsoleMouseRoleRef.current = null;
+      return;
+    }
     isMouseDownRef.current = false;
     const duration = performance.now() - mouseStartTime.current;
     if (!mouseHasMoved.current && duration < 400) {
-      checkLampTap(e.clientX, e.clientY);
+      handleSceneTap(e.clientX, e.clientY);
     }
+  };
+
+  const handleMouseLeave = () => {
+    isMouseDownRef.current = false;
+    if (activeConsoleMouseRoleRef.current === 'dpad') {
+      releaseHeldDpad();
+    }
+    activeConsoleMouseRoleRef.current = null;
   };
 
   const handleResetCameraView = () => {
@@ -1195,11 +1714,11 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
     targetPitchRef.current = 0;
   };
 
-  const isSeated = sitState === 'seated';
-
   return (
     <div 
-      className="absolute inset-0 w-full h-full select-none overflow-hidden touch-none bg-[#0c0907]"
+      className={`absolute inset-0 w-full h-full select-none overflow-hidden bg-[#0c0907] ${
+        isConsoleHeld ? '' : 'touch-none'
+      }`}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -1207,22 +1726,88 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseLeave}
     >
       {/* 3D WebGL Canvas */}
       <div 
         ref={containerRef} 
-        className={`absolute inset-0 w-full h-full ${
-          isSeated ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'
+        className={`absolute inset-0 w-full h-full touch-none ${
+          isConsoleHeld ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'
         }`} 
       />
 
+      {/* Live Touch-Interactive 16:9 Original Desktop Website Overlay on Console Screen */}
+      {isConsoleHeld && (
+        <div
+          ref={screenOverlayRef}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: 1600,
+            height: 900,
+            transformOrigin: 'center center',
+            zIndex: 25,
+            opacity: isScreenActive ? 1 : 0,
+            pointerEvents: isScreenActive ? 'auto' : 'none',
+            touchAction: 'auto',
+            transition: 'opacity 180ms ease-out',
+          }}
+          className="overflow-hidden bg-[#001B3D] rounded-[8px] shadow-[0_0_24px_rgba(0,0,0,0.6)]"
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onMouseMove={(e) => e.stopPropagation()}
+          onMouseUp={(e) => e.stopPropagation()}
+        >
+          <iframe
+            ref={desktopIframeRef}
+            src={desktopEmbedUrl}
+            title="保持可愛漫研社 電腦版網站"
+            width={1600}
+            height={900}
+            className="w-[1600px] h-[900px] border-0 block"
+            style={{ touchAction: 'auto' }}
+          />
+        </div>
+      )}
+
+      {/* Put-Down Console Button when holding handheld */}
+      {isConsoleHeld && (
+        <div
+          className="absolute top-4 left-4 z-30 pointer-events-auto"
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onMouseUp={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={() => handleToggleConsole(false)}
+            className="px-3.5 py-2 rounded-full bg-black/65 hover:bg-black/85 backdrop-blur-md border border-indigo-400/40 text-white font-mono text-xs font-bold flex items-center gap-1.5 active:scale-95 transition-all shadow-lg cursor-pointer"
+            title="放回茶几"
+          >
+            <X className="w-3.5 h-3.5 text-indigo-300" />
+            <span>放回茶几</span>
+          </button>
+        </div>
+      )}
+
       {/* Center Subtle Focus Ring */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-25">
-        <div className="w-2.5 h-2.5 rounded-full border border-amber-300/70 bg-white/15 shadow-sm" />
-      </div>
+      {!isConsoleHeld && (
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-25">
+          <div className="w-2.5 h-2.5 rounded-full border border-amber-300/70 bg-white/15 shadow-sm" />
+        </div>
+      )}
 
       {/* Top Right Clean Floating Actions (No status bar or cluttering text) */}
-      <div className="absolute top-4 right-4 flex items-center gap-2 pointer-events-auto z-30">
+      <div
+        className="absolute top-4 right-4 flex items-center gap-2 pointer-events-auto z-30"
+        onTouchStart={(e) => e.stopPropagation()}
+        onTouchEnd={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+        onMouseUp={(e) => e.stopPropagation()}
+      >
         {/* Sound Toggle */}
         <button
           onClick={onToggleSound}
@@ -1232,8 +1817,8 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
           {soundEnabled ? <Volume2 className="w-4 h-4 text-amber-300" /> : <VolumeX className="w-4 h-4 text-white/40" />}
         </button>
 
-        {/* Reset View Button (only when seated) */}
-        {isSeated && (
+        {/* Reset View Button */}
+        {!isConsoleHeld && (
           <button
             onClick={handleResetCameraView}
             className="p-2.5 rounded-full bg-black/50 hover:bg-black/70 backdrop-blur-md border border-white/15 text-white/80 active:scale-95 transition-all shadow-md cursor-pointer"
