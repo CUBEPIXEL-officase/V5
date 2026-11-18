@@ -15,8 +15,15 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
   // User Request: "刪除抬頭 降低左右視角轉動 將視角轉動方式從360度改為T字(左右 下視角)"
   const CENTER_YAW = 0; 
   const YAW_RANGE_HALF = (20 * Math.PI) / 180; // 降低左右視角轉動：左右各 20° (共 40° 視角)
-  const MIN_YAW = CENTER_YAW - YAW_RANGE_HALF;
-  const MAX_YAW = CENTER_YAW + YAW_RANGE_HALF;
+
+  const getYawRangeHalf = () => {
+    const cam = cameraRef.current;
+    if (!cam) return YAW_RANGE_HALF;
+    const halfFovYRad = THREE.MathUtils.degToRad(cam.fov * 0.5);
+    const halfFovXRad = Math.atan(Math.tan(halfFovYRad) * cam.aspect);
+    // Keep desktop at ±20°, while allowing narrow/portrait viewports to pan smoothly to the left wall corner (~62° horizontal edge)
+    return Math.max(YAW_RANGE_HALF, THREE.MathUtils.degToRad(62) - halfFovXRad);
+  };
 
   const MIN_PITCH = (-26 * Math.PI) / 180; // 下視角：俯視茶几茶具與檯燈 (~26 degrees down)
   const MAX_PITCH = 0; // 刪除抬頭：平視水平線為頂限，不可抬頭 (0 degrees)
@@ -32,10 +39,12 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
   const SEATED_HEIGHT = 0.68; // 坐姿視線高度
   const SEATED_Z = 1.15; // 圓形茶几南側坐墊位置 (圓几半徑 0.85m + 坐墊中心 0.30m)
 
-  // Game & Light State
+  // Game, Camera Location & Light State
   const [isLampOn, setIsLampOn] = useState(true);
   const [isConsoleHeld, setIsConsoleHeld] = useState(false);
   const [isScreenActive, setIsScreenActive] = useState(false);
+  const [viewLocation, setViewLocation] = useState<'table' | 'cabinet'>('table');
+  const viewLocationRef = useRef<'table' | 'cabinet'>('table');
 
   const desktopEmbedUrl = React.useMemo(() => {
     if (typeof window === 'undefined') return '?desktop=1';
@@ -652,6 +661,99 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
     tableGroup.position.set(0, 0, -ROOM_DEPTH / 2 + TABLE_DEPTH / 2);
     roomGroup.add(tableGroup);
 
+    // --- 4A-2. LASER-ENGRAVED WOODEN STUDIO PLAQUE ON FRONT WALL (正前方橫桌偏左牆面木牌) ---
+    const textureLoader = new THREE.TextureLoader();
+    const plaqueTexture = textureLoader.load('/assets/studio_plaque_tex.png');
+    plaqueTexture.colorSpace = THREE.SRGBColorSpace;
+    plaqueTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+    const studioPlaqueGroup = new THREE.Group();
+    const PLAQUE_W = 0.62;
+    const PLAQUE_H = 0.40; // ~1.55 : 1 ratio matching reference photo
+    const PLAQUE_R = 0.034;
+
+    const plaqueShape = new THREE.Shape();
+    const pw = PLAQUE_W / 2;
+    const ph = PLAQUE_H / 2;
+    plaqueShape.moveTo(-pw + PLAQUE_R, -ph);
+    plaqueShape.lineTo(pw - PLAQUE_R, -ph);
+    plaqueShape.quadraticCurveTo(pw, -ph, pw, -ph + PLAQUE_R);
+    plaqueShape.lineTo(pw, ph - PLAQUE_R);
+    plaqueShape.quadraticCurveTo(pw, ph, pw - PLAQUE_R, ph);
+    plaqueShape.lineTo(-pw + PLAQUE_R, ph);
+    plaqueShape.quadraticCurveTo(-pw, ph, -pw, ph - PLAQUE_R);
+    plaqueShape.lineTo(-pw, -ph + PLAQUE_R);
+    plaqueShape.quadraticCurveTo(-pw, -ph, -pw + PLAQUE_R, -ph);
+
+    // 1. Solid Timber Board with Dark Laser-Charred Beveled Rim
+    const plaqueBoardGeo = new THREE.ExtrudeGeometry(plaqueShape, {
+      depth: 0.016,
+      bevelEnabled: true,
+      bevelThickness: 0.002,
+      bevelSize: 0.002,
+      bevelSegments: 3,
+      curveSegments: 12,
+    });
+    const plaqueEdgeMat = new THREE.MeshStandardMaterial({
+      color: 0x3b2010, // Charred walnut laser-cut rim
+      roughness: 0.62,
+      metalness: 0.04,
+    });
+    const plaqueBoard = new THREE.Mesh(plaqueBoardGeo, plaqueEdgeMat);
+    plaqueBoard.position.z = 0.008;
+    plaqueBoard.castShadow = true;
+    plaqueBoard.receiveShadow = true;
+    studioPlaqueGroup.add(plaqueBoard);
+
+    // 2. Front Laser-Engraved Beech Wood Grain Surface
+    const plaqueFaceGeo = new THREE.ShapeGeometry(plaqueShape, 12);
+    const uvAttr = plaqueFaceGeo.attributes.uv;
+    for (let i = 0; i < uvAttr.count; i++) {
+      const px = uvAttr.getX(i);
+      const py = uvAttr.getY(i);
+      uvAttr.setXY(i, (px + pw) / PLAQUE_W, (py + ph) / PLAQUE_H);
+    }
+    uvAttr.needsUpdate = true;
+
+    const plaqueFaceMat = new THREE.MeshStandardMaterial({
+      map: plaqueTexture,
+      color: 0xffffff,
+      roughness: 0.52,
+      metalness: 0.02,
+    });
+    const plaqueFace = new THREE.Mesh(plaqueFaceGeo, plaqueFaceMat);
+    plaqueFace.position.z = 0.0265;
+    plaqueFace.receiveShadow = true;
+    studioPlaqueGroup.add(plaqueFace);
+
+    // 3. Recessed Rear Wall Mounting Standoffs (6mm shadow offset off slat wall)
+    const standoffGeo = new THREE.CylinderGeometry(0.012, 0.012, 0.008, 12);
+    standoffGeo.rotateX(Math.PI / 2);
+    const standoffMat = new THREE.MeshStandardMaterial({
+      color: 0x1e1610,
+      roughness: 0.5,
+      metalness: 0.4,
+    });
+    [
+      [-pw + 0.08, ph - 0.07],
+      [pw - 0.08, ph - 0.07],
+      [-pw + 0.08, -ph + 0.07],
+      [pw - 0.08, -ph + 0.07],
+    ].forEach(([sx, sy]) => {
+      const peg = new THREE.Mesh(standoffGeo, standoffMat);
+      peg.position.set(sx, sy, 0.004);
+      studioPlaqueGroup.add(peg);
+    });
+
+    // Mount on front wall within the left half of the wall table span (table X ∈ [-1.30, +1.30])
+    studioPlaqueGroup.position.set(-0.82, 1.52, -ROOM_DEPTH / 2);
+    roomGroup.add(studioPlaqueGroup);
+
+    // Gentle warm accent light highlighting the wooden studio plaque
+    const plaqueSpot = new THREE.PointLight(0xffeed6, 1.05, 2.8, 1.3);
+    plaqueSpot.position.set(-0.82, 1.85, -ROOM_DEPTH / 2 + 0.65);
+    roomGroup.add(plaqueSpot);
+
     // --- 4B. ENLARGED CIRCULAR WOODEN TEA TABLE & TABLE LAMP (放大並改為圓形木茶几，附設雅緻檯燈) ---
     const centerTeaGroup = new THREE.Group();
     centerTeaGroup.position.set(0, 0, 0); // Exact center of the room
@@ -787,34 +889,115 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
 
     centerTeaGroup.add(lampGroup);
 
-    // --- TEA SET (茶盤與茶具) ---
-    // Elegant tea tray placed in front-center of table
-    const teaTrayGeo = new THREE.BoxGeometry(0.32, 0.014, 0.22);
-    const teaTrayMat = new THREE.MeshStandardMaterial({ color: 0x1f120a, roughness: 0.5 });
-    const teaTray = new THREE.Mesh(teaTrayGeo, teaTrayMat);
-    teaTray.position.set(0.10, TEA_TABLE_HEIGHT + 0.007, 0.10);
-    teaTray.receiveShadow = true;
-    centerTeaGroup.add(teaTray);
+    // --- 40CM ROUND PADDLE FAN ON TEA TABLE (優化版 40 公分直徑圓扇) ---
+    const fanTexture = textureLoader.load('/assets/round_fan_tex.png');
+    fanTexture.colorSpace = THREE.SRGBColorSpace;
+    fanTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
 
-    // Dark clay teapot
-    const teapotGeo = new THREE.CylinderGeometry(0.038, 0.050, 0.058, 16);
-    const teaPotMat = new THREE.MeshStandardMaterial({ color: 0x2b332e, roughness: 0.35, metalness: 0.1 });
-    const teapot = new THREE.Mesh(teapotGeo, teaPotMat);
-    teapot.position.set(0.04, TEA_TABLE_HEIGHT + 0.040, 0.10);
-    teapot.castShadow = true;
-    centerTeaGroup.add(teapot);
+    const fanGroup = new THREE.Group();
+    const FAN_RADIUS = 0.20; // Diameter = 40 cm (0.40 m)
 
-    // Ceramic teacups
-    const cupMat = new THREE.MeshStandardMaterial({ color: 0xe8e2d8, roughness: 0.4 });
-    const cup1 = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.018, 0.034, 14), cupMat);
-    cup1.position.set(0.16, TEA_TABLE_HEIGHT + 0.028, 0.06);
-    cup1.castShadow = true;
-    centerTeaGroup.add(cup1);
+    const fanPlasticMat = new THREE.MeshStandardMaterial({
+      color: 0x131418,
+      roughness: 0.56,
+      metalness: 0.08,
+    });
+    const fanPrintMat = new THREE.MeshPhysicalMaterial({
+      map: fanTexture,
+      color: 0xffffff,
+      roughness: 0.30,
+      metalness: 0.02,
+      clearcoat: 0.65,
+      clearcoatRoughness: 0.22,
+      alphaTest: 0.45,
+    });
 
-    const cup2 = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.018, 0.034, 14), cupMat);
-    cup2.position.set(0.16, TEA_TABLE_HEIGHT + 0.028, 0.14);
-    cup2.castShadow = true;
-    centerTeaGroup.add(cup2);
+    // 1. Solid PP plastic backing core disk (40 cm diameter)
+    const fanCoreGeo = new THREE.CylinderGeometry(FAN_RADIUS - 0.001, FAN_RADIUS - 0.001, 0.0020, 64);
+    fanCoreGeo.rotateX(Math.PI / 2);
+    const fanCore = new THREE.Mesh(fanCoreGeo, fanPlasticMat);
+    fanCore.castShadow = true;
+    fanCore.receiveShadow = true;
+    fanGroup.add(fanCore);
+
+    // 2. Crisp 1024px printed laminated circular fan face
+    const fanFace = new THREE.Mesh(new THREE.CircleGeometry(FAN_RADIUS - 0.001, 64), fanPrintMat);
+    fanFace.position.z = 0.0015;
+    fanFace.receiveShadow = true;
+    fanGroup.add(fanFace);
+
+    // 3. Outer molded black plastic rim framing the artwork cleanly without covering edge lettering
+    const fanRim = new THREE.Mesh(new THREE.TorusGeometry(FAN_RADIUS + 0.0022, 0.0038, 14, 72), fanPlasticMat);
+    fanRim.castShadow = true;
+    fanGroup.add(fanRim);
+
+    // 4. Flared neck junction joining blade bottom edge into ribbed handle
+    const neckShape = new THREE.Shape();
+    neckShape.moveTo(-0.044, -FAN_RADIUS + 0.004);
+    neckShape.lineTo(0.044, -FAN_RADIUS + 0.004);
+    neckShape.quadraticCurveTo(0.020, -FAN_RADIUS - 0.020, 0.015, -FAN_RADIUS - 0.045);
+    neckShape.lineTo(-0.015, -FAN_RADIUS - 0.045);
+    neckShape.quadraticCurveTo(-0.020, -FAN_RADIUS - 0.020, -0.044, -FAN_RADIUS + 0.004);
+    neckShape.closePath();
+
+    const neckGeo = new THREE.ExtrudeGeometry(neckShape, {
+      depth: 0.0056,
+      bevelEnabled: true,
+      bevelThickness: 0.001,
+      bevelSize: 0.001,
+      bevelSegments: 2,
+    });
+    neckGeo.translate(0, 0, -0.0028);
+    const fanNeck = new THREE.Mesh(neckGeo, fanPlasticMat);
+    fanNeck.castShadow = true;
+    fanGroup.add(fanNeck);
+
+    // Molded V-shaped structural gusset ribs along neck junction
+    [-0.014, 0, 0.014].forEach((offsetX, idx) => {
+      const neckRib = new THREE.Mesh(new THREE.BoxGeometry(0.0022, 0.044, 0.0082), fanPlasticMat);
+      neckRib.position.set(offsetX * 0.65, -FAN_RADIUS - 0.018, 0);
+      neckRib.rotation.z = (idx - 1) * -0.28;
+      fanGroup.add(neckRib);
+    });
+
+    // 5. Ribbed black handle shaft
+    const HANDLE_LEN = 0.145;
+    const handleBar = new THREE.Mesh(
+      new THREE.BoxGeometry(0.030, HANDLE_LEN, 0.0068),
+      fanPlasticMat
+    );
+    handleBar.position.set(0, -FAN_RADIUS - 0.042 - HANDLE_LEN / 2 + 0.01, 0);
+    handleBar.castShadow = true;
+    fanGroup.add(handleBar);
+
+    const ribGeo = new THREE.BoxGeometry(0.0024, HANDLE_LEN + 0.012, 0.0092);
+    [-0.010, -0.0035, 0.0035, 0.010].forEach((rx) => {
+      const rib = new THREE.Mesh(ribGeo, fanPlasticMat);
+      rib.position.set(rx, -FAN_RADIUS - 0.042 - HANDLE_LEN / 2 + 0.01, 0);
+      fanGroup.add(rib);
+    });
+
+    // 6. Tail circular medallion ring + mini character sticker at end of handle
+    const TAIL_Y = -FAN_RADIUS - 0.042 - HANDLE_LEN - 0.018;
+    const tailRing = new THREE.Mesh(new THREE.TorusGeometry(0.032, 0.0040, 14, 40), fanPlasticMat);
+    tailRing.position.set(0, TAIL_Y, 0);
+    tailRing.castShadow = true;
+    fanGroup.add(tailRing);
+
+    const tailBackingGeo = new THREE.CylinderGeometry(0.031, 0.031, 0.0044, 36);
+    tailBackingGeo.rotateX(Math.PI / 2);
+    const tailBacking = new THREE.Mesh(tailBackingGeo, fanPlasticMat);
+    tailBacking.position.set(0, TAIL_Y, 0);
+    fanGroup.add(tailBacking);
+
+    const tailSticker = new THREE.Mesh(new THREE.CircleGeometry(0.029, 36), fanPrintMat);
+    tailSticker.position.set(0, TAIL_Y, 0.0028);
+    fanGroup.add(tailSticker);
+
+    // Lay flat face-up on the right half of the tea table, angled neatly toward the seated viewer
+    fanGroup.position.set(0.25, TEA_TABLE_HEIGHT + 0.0055, 0.01);
+    fanGroup.rotation.set(-Math.PI / 2, 0, 0.22);
+    centerTeaGroup.add(fanGroup);
 
     // --- Floor Cushions (小坐墊 / 環繞圓几的和室厚坐墊) ---
     const cushionMatCharcoal = new THREE.MeshStandardMaterial({
@@ -861,6 +1044,420 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
     });
 
     roomGroup.add(centerTeaGroup);
+
+    // --- 4F. 180CM STANDING DISPLAY RACK ON FAR-LEFT SIDE (左側盡頭側面的 180 公分立牌展架) ---
+    const displayRackGroup = new THREE.Group();
+    const RACK_TOTAL_H = 1.80; // Real-world 180 cm height
+    const FOOT_H = 0.012;
+    const FRAME_BAR = 0.032;
+    const FRAME_DEPTH = 0.038;
+    const POSTER_W = 0.745;
+    const POSTER_H = 1.614; // Exact 720 : 1560 (1 : 2.167) ratio matching photo
+    const RACK_W = POSTER_W + FRAME_BAR * 2; // ~0.809 m
+    const BASE_D = 0.44;
+
+    const displayPosterTexture = textureLoader.load('/assets/display_rack_poster.png');
+    displayPosterTexture.colorSpace = THREE.SRGBColorSpace;
+    displayPosterTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+    const rackMetalMat = new THREE.MeshStandardMaterial({
+      color: 0x16171b,
+      roughness: 0.36,
+      metalness: 0.65,
+    });
+    const rackBaseMat = new THREE.MeshStandardMaterial({
+      color: 0x1c1e24,
+      roughness: 0.46,
+      metalness: 0.52,
+    });
+    const rackFootMat = new THREE.MeshStandardMaterial({
+      color: 0x0b0b0d,
+      roughness: 0.85,
+      metalness: 0.05,
+    });
+
+    // 1. Four low rubber floor pads grounded flush at Y = 0
+    const footGeo = new THREE.CylinderGeometry(0.020, 0.022, FOOT_H, 12);
+    [
+      [-RACK_W / 2 + 0.05, -BASE_D / 2 + 0.05],
+      [RACK_W / 2 - 0.05, -BASE_D / 2 + 0.05],
+      [-RACK_W / 2 + 0.05, BASE_D / 2 - 0.05],
+      [RACK_W / 2 - 0.05, BASE_D / 2 - 0.05],
+    ].forEach(([fx, fz]) => {
+      const foot = new THREE.Mesh(footGeo, rackFootMat);
+      foot.position.set(fx, FOOT_H / 2, fz);
+      displayRackGroup.add(foot);
+    });
+
+    // 2. Weighted Sloped Black Steel Wedge Base (Y = 0.012m up to bottom of frame)
+    const FRAME_BOTTOM_Y = RACK_TOTAL_H - (POSTER_H + FRAME_BAR * 2); // ~0.122m
+    const wedgeShape = new THREE.Shape();
+    wedgeShape.moveTo(-BASE_D / 2, 0);
+    wedgeShape.lineTo(BASE_D / 2, 0);
+    wedgeShape.lineTo(BASE_D / 2, 0.028);
+    wedgeShape.lineTo(0.055, FRAME_BOTTOM_Y - FOOT_H + 0.014);
+    wedgeShape.lineTo(-0.055, FRAME_BOTTOM_Y - FOOT_H + 0.014);
+    wedgeShape.lineTo(-BASE_D / 2, 0.028);
+    wedgeShape.closePath();
+
+    const wedgeGeo = new THREE.ExtrudeGeometry(wedgeShape, {
+      depth: RACK_W,
+      bevelEnabled: true,
+      bevelThickness: 0.003,
+      bevelSize: 0.003,
+      bevelSegments: 2,
+    });
+    // Rotate so extruded span aligns along X centered at 0, and profile lies in Y-Z plane
+    wedgeGeo.rotateY(Math.PI / 2);
+    wedgeGeo.translate(-RACK_W / 2, FOOT_H, 0);
+    const wedgeBase = new THREE.Mesh(wedgeGeo, rackBaseMat);
+    wedgeBase.castShadow = true;
+    wedgeBase.receiveShadow = true;
+    displayRackGroup.add(wedgeBase);
+
+    // 3. Outer Matte-Black Aluminum Poster Frame (exact top at Y = 1.800 m)
+    const FRAME_BODY_H = POSTER_H + FRAME_BAR * 2; // 1.678 m
+    const topBar = new THREE.Mesh(
+      new THREE.BoxGeometry(RACK_W, FRAME_BAR, FRAME_DEPTH),
+      rackMetalMat
+    );
+    topBar.position.set(0, RACK_TOTAL_H - FRAME_BAR / 2, 0);
+    topBar.castShadow = true;
+    displayRackGroup.add(topBar);
+
+    const bottomBar = new THREE.Mesh(
+      new THREE.BoxGeometry(RACK_W, FRAME_BAR, FRAME_DEPTH),
+      rackMetalMat
+    );
+    bottomBar.position.set(0, FRAME_BOTTOM_Y + FRAME_BAR / 2, 0);
+    bottomBar.castShadow = true;
+    displayRackGroup.add(bottomBar);
+
+    const sideStileGeo = new THREE.BoxGeometry(FRAME_BAR, FRAME_BODY_H, FRAME_DEPTH);
+    [-1, 1].forEach((side) => {
+      const stile = new THREE.Mesh(sideStileGeo, rackMetalMat);
+      stile.position.set(side * (POSTER_W / 2 + FRAME_BAR / 2), FRAME_BOTTOM_Y + FRAME_BODY_H / 2, 0);
+      stile.castShadow = true;
+      stile.receiveShadow = true;
+      displayRackGroup.add(stile);
+    });
+
+    // 4. Solid Steel Backing Panel Inside Frame
+    const posterCenterY = FRAME_BOTTOM_Y + FRAME_BAR + POSTER_H / 2;
+    const rackBackPanel = new THREE.Mesh(
+      new THREE.BoxGeometry(POSTER_W + 0.006, POSTER_H + 0.006, 0.012),
+      rackBaseMat
+    );
+    rackBackPanel.position.set(0, posterCenterY, -0.004);
+    rackBackPanel.castShadow = true;
+    displayRackGroup.add(rackBackPanel);
+
+    // 5. Front Printed CubePixel / Umiri Recruitment Poster Graphic
+    const posterFrontMesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(POSTER_W, POSTER_H),
+      new THREE.MeshStandardMaterial({
+        map: displayPosterTexture,
+        color: 0xffffff,
+        roughness: 0.38,
+        metalness: 0.04,
+      })
+    );
+    posterFrontMesh.position.set(0, posterCenterY, 0.006);
+    posterFrontMesh.receiveShadow = true;
+    displayRackGroup.add(posterFrontMesh);
+
+    // Place sideways flush along the left wall at the far end of the room (左側盡頭側面)
+    displayRackGroup.position.set(-ROOM_WIDTH / 2 + 0.38, 0, -2.92);
+    displayRackGroup.rotation.y = Math.PI / 2;
+    roomGroup.add(displayRackGroup);
+
+    // Warm subtle corner fill light illuminating the 180cm display stand
+    const displayRackLight = new THREE.PointLight(0xffebd0, 1.45, 4.5, 1.25);
+    displayRackLight.position.set(-ROOM_WIDTH / 2 + 1.20, 2.25, -2.65);
+    roomGroup.add(displayRackLight);
+
+    // --- 4D. RIGHT-WALL HANGING SCROLL BANNER (右側櫃旁牆面的立體掛軸) ---
+    const scrollGroup = new THREE.Group();
+    const SCROLL_W = 0.56;
+    const SCROLL_H = 1.75; // Ratio ~1 : 3.125 matching the reference banner photo
+    const SHOULDER_RATIO = 1138 / 1600; // Vertical straight sides end at 71.1%
+    const TIP_RATIO = 1588 / 1600; // V-tip vertex at 99.25%
+    const scrollTexture = textureLoader.load('/assets/slytherin_banner_tex.png');
+    scrollTexture.colorSpace = THREE.SRGBColorSpace;
+    scrollTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+    // Build subdivided pentagonal cloth mesh with subtle natural fabric wave & packaging fold creases
+    const buildBannerClothGeo = (zOffset: number, flipFacing: boolean) => {
+      const cols = 12;
+      const rows = 40;
+      const positions: number[] = [];
+      const uvs: number[] = [];
+      const indices: number[] = [];
+
+      for (let r = 0; r <= rows; r++) {
+        const t = (r / rows) * TIP_RATIO;
+        const y = -t * SCROLL_H;
+        const halfWidthFrac =
+          t <= SHOULDER_RATIO
+            ? 1.0
+            : Math.max(0.002, 1 - (t - SHOULDER_RATIO) / (TIP_RATIO - SHOULDER_RATIO));
+
+        // Gentle cloth drape & faint horizontal fold ridges seen in the reference photo
+        const topPinned = Math.min(1, t / 0.08);
+        const foldRidge =
+          Math.exp(-Math.pow((t - 0.27) * 42, 2)) * 0.0045 +
+          Math.exp(-Math.pow((t - 0.52) * 42, 2)) * 0.0055 +
+          Math.exp(-Math.pow((t - 0.74) * 42, 2)) * 0.0045;
+
+        for (let c = 0; c <= cols; c++) {
+          const sNorm = c / cols - 0.5; // -0.5 .. +0.5
+          const x = sNorm * SCROLL_W * halfWidthFrac;
+
+          const centerCrease = (1 - Math.min(1, Math.abs(sNorm) * 6)) * 0.0045 * topPinned;
+          const lateralBillow = Math.cos(sNorm * Math.PI) * 0.007 * topPinned;
+          const z = zOffset + lateralBillow + centerCrease + foldRidge * topPinned;
+
+          positions.push(x, y, z);
+
+          // Map cleanly onto the rectified pentagon area inside slytherin_banner_tex.png
+          const u = 0.498 + (x / SCROLL_W) * (500 / 512);
+          const v = 1.0 - t;
+          uvs.push(u, v);
+        }
+      }
+
+      const stride = cols + 1;
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const a = r * stride + c;
+          const b = a + 1;
+          const d = (r + 1) * stride + c;
+          const e = d + 1;
+          if (!flipFacing) {
+            indices.push(a, d, b);
+            indices.push(b, d, e);
+          } else {
+            indices.push(a, b, d);
+            indices.push(b, e, d);
+          }
+        }
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geo.setIndex(indices);
+      geo.computeVertexNormals();
+      return geo;
+    };
+
+    // 1. Front printed teal cloth face
+    const scrollFrontGeo = buildBannerClothGeo(0.005, false);
+    const scrollFrontMat = new THREE.MeshStandardMaterial({
+      map: scrollTexture,
+      color: 0xffffff,
+      roughness: 0.76,
+      metalness: 0.04,
+      alphaTest: 0.45,
+      transparent: false,
+      side: THREE.FrontSide,
+    });
+    const scrollFrontMesh = new THREE.Mesh(scrollFrontGeo, scrollFrontMat);
+    scrollFrontMesh.castShadow = true;
+    scrollFrontMesh.receiveShadow = true;
+    scrollGroup.add(scrollFrontMesh);
+
+    // 2. Back dark cloth lining so the banner has realistic thickness from oblique corner angles
+    const scrollBackGeo = buildBannerClothGeo(0.001, true);
+    const scrollBackMat = new THREE.MeshStandardMaterial({
+      color: 0x092420,
+      roughness: 0.88,
+      metalness: 0.02,
+      side: THREE.FrontSide,
+    });
+    const scrollBackMesh = new THREE.Mesh(scrollBackGeo, scrollBackMat);
+    scrollGroup.add(scrollBackMesh);
+
+    // 3. Top stitched black fabric sleeve band (matches black top header bar in photo)
+    const SLEEVE_H = 0.042;
+    const sleeveGeo = new THREE.BoxGeometry(SCROLL_W + 0.006, SLEEVE_H, 0.014);
+    const sleeveMat = new THREE.MeshStandardMaterial({
+      color: 0x0e0f12,
+      roughness: 0.84,
+      metalness: 0.05,
+    });
+    const sleeveMesh = new THREE.Mesh(sleeveGeo, sleeveMat);
+    sleeveMesh.position.set(0, -SLEEVE_H / 2 + 0.002, 0.005);
+    sleeveMesh.castShadow = true;
+    scrollGroup.add(sleeveMesh);
+
+    // 4. Internal top horizontal dowel rod subtly emerging from both sleeve ends
+    const rodGeo = new THREE.CylinderGeometry(0.0055, 0.0055, SCROLL_W + 0.016, 14);
+    rodGeo.rotateZ(Math.PI / 2);
+    const rodMat = new THREE.MeshStandardMaterial({
+      color: 0x18120e,
+      roughness: 0.45,
+      metalness: 0.12,
+    });
+    const rodMesh = new THREE.Mesh(rodGeo, rodMat);
+    rodMesh.position.set(0, -SLEEVE_H / 2 + 0.002, 0.004);
+    scrollGroup.add(rodMesh);
+
+    // 5. Left & Right metallic brass grommet eyelets + wall pins in the top black strip
+    const grommetGeo = new THREE.TorusGeometry(0.011, 0.0034, 10, 22);
+    const pinGeo = new THREE.CylinderGeometry(0.0032, 0.0032, 0.024, 10);
+    pinGeo.rotateX(Math.PI / 2);
+    const pinMat = new THREE.MeshStandardMaterial({
+      color: 0x3b352c,
+      roughness: 0.35,
+      metalness: 0.8,
+    });
+
+    [-1, 1].forEach((side) => {
+      const gx = side * (SCROLL_W / 2 - 0.025);
+      const gy = -SLEEVE_H / 2 + 0.002;
+
+      const grommet = new THREE.Mesh(grommetGeo, brassMat);
+      grommet.position.set(gx, gy, 0.0125);
+      scrollGroup.add(grommet);
+
+      const wallPin = new THREE.Mesh(pinGeo, pinMat);
+      wallPin.position.set(gx, gy, 0.003);
+      scrollGroup.add(wallPin);
+    });
+
+    // Mount flush on the right wall directly beside the right side of the 6-tier cabinet
+    scrollGroup.position.set(ROOM_WIDTH / 2 - 0.014, 2.46, -2.78);
+    scrollGroup.rotation.y = -Math.PI / 2;
+    roomGroup.add(scrollGroup);
+
+    // Warm subtle corner light gently illuminating the hanging scroll banner
+    const scrollAccentLight = new THREE.PointLight(0xffebd0, 1.35, 3.8, 1.3);
+    scrollAccentLight.position.set(ROOM_WIDTH / 2 - 0.78, 2.55, -2.60);
+    roomGroup.add(scrollAccentLight);
+
+    // --- 4E. TWIN SIX-TIER DEEP DARK WOOD CABINETS (畫面右邊鏡頭底部的並排六層深木櫃) ---
+    const CAB_W = 1.12;
+    const CAB_D = 0.44;
+    const CAB_H = 2.16;
+    const PLINTH_H = 0.08;
+    const CROWN_H = 0.06;
+    const SIDE_THICK = 0.036;
+    const SHELF_THICK = 0.032;
+    const CAB_X = 3.95;
+    const CAB2_X = CAB_X - (CAB_W + 0.08); // 2.75: identical cabinet directly to the left (0.02m crown seam)
+    const CAB_Z = -3.26; // Back sits flush near front wall (-3.48), front face at -3.04
+
+    const cabDarkMat = new THREE.MeshStandardMaterial({
+      color: 0x1a0d07,
+      roughness: 0.52,
+      metalness: 0.06,
+    });
+    const cabBackMat = new THREE.MeshStandardMaterial({
+      color: 0x110804,
+      roughness: 0.72,
+      metalness: 0.03,
+    });
+
+    const createSixTierCabinet = () => {
+      const cab = new THREE.Group();
+
+      // 1. Grounded Plinth Base + Front Kickplate Trim
+      const plinthCore = new THREE.Mesh(
+        new THREE.BoxGeometry(CAB_W - 0.03, PLINTH_H, CAB_D - 0.03),
+        cabDarkMat
+      );
+      plinthCore.position.set(0, PLINTH_H / 2, -0.01);
+      plinthCore.castShadow = true;
+      plinthCore.receiveShadow = true;
+      cab.add(plinthCore);
+
+      const kickplate = new THREE.Mesh(
+        new THREE.BoxGeometry(CAB_W + 0.01, PLINTH_H * 0.85, 0.024),
+        tableDarkWoodMat
+      );
+      kickplate.position.set(0, (PLINTH_H * 0.85) / 2, CAB_D / 2 - 0.008);
+      cab.add(kickplate);
+
+      // 2. Left & Right Vertical Side Panels + Front Stile Molding
+      const bodyHeight = CAB_H - PLINTH_H - CROWN_H; // 2.02m
+      const sideGeo = new THREE.BoxGeometry(SIDE_THICK, bodyHeight, CAB_D);
+      const stileGeo = new THREE.BoxGeometry(0.044, bodyHeight, 0.014);
+
+      [-1, 1].forEach((side) => {
+        const sx = side * (CAB_W / 2 - SIDE_THICK / 2);
+        const sidePanel = new THREE.Mesh(sideGeo, tableMat);
+        sidePanel.position.set(sx, PLINTH_H + bodyHeight / 2, 0);
+        sidePanel.castShadow = true;
+        sidePanel.receiveShadow = true;
+        cab.add(sidePanel);
+
+        const frontStile = new THREE.Mesh(stileGeo, cabDarkMat);
+        frontStile.position.set(sx, PLINTH_H + bodyHeight / 2, CAB_D / 2 + 0.005);
+        frontStile.castShadow = true;
+        cab.add(frontStile);
+      });
+
+      // 3. Recessed Deep Dark Wood Back Panel
+      const cabBack = new THREE.Mesh(
+        new THREE.BoxGeometry(CAB_W - SIDE_THICK * 2 + 0.01, bodyHeight, 0.018),
+        cabBackMat
+      );
+      cabBack.position.set(0, PLINTH_H + bodyHeight / 2, -CAB_D / 2 + 0.01);
+      cabBack.receiveShadow = true;
+      cab.add(cabBack);
+
+      // 4. Seven Horizontal Shelves Creating Six Distinct Open Tiers (六層分隔層板)
+      const innerSpanW = CAB_W - SIDE_THICK * 2;
+      const shelfGeo = new THREE.BoxGeometry(innerSpanW, SHELF_THICK, CAB_D - 0.02);
+      const shelfLipGeo = new THREE.BoxGeometry(innerSpanW, SHELF_THICK + 0.004, 0.014);
+      const tierPitch = (bodyHeight - SHELF_THICK) / 6; // 6 equal vertical bays
+
+      for (let i = 0; i <= 6; i++) {
+        const sy = PLINTH_H + SHELF_THICK / 2 + i * tierPitch;
+        const shelf = new THREE.Mesh(shelfGeo, tableMat);
+        shelf.position.set(0, sy, 0.004);
+        shelf.castShadow = true;
+        shelf.receiveShadow = true;
+        cab.add(shelf);
+
+        const shelfLip = new THREE.Mesh(shelfLipGeo, cabDarkMat);
+        shelfLip.position.set(0, sy, CAB_D / 2 - 0.003);
+        cab.add(shelfLip);
+      }
+
+      // 5. Stepped Crown Cornice Trim along Top Edge
+      const lowerCrown = new THREE.Mesh(
+        new THREE.BoxGeometry(CAB_W + 0.028, CROWN_H * 0.45, CAB_D + 0.022),
+        cabDarkMat
+      );
+      lowerCrown.position.set(0, CAB_H - CROWN_H + (CROWN_H * 0.45) / 2, 0.008);
+      lowerCrown.castShadow = true;
+      cab.add(lowerCrown);
+
+      const upperCrown = new THREE.Mesh(
+        new THREE.BoxGeometry(CAB_W + 0.06, CROWN_H * 0.55, CAB_D + 0.044),
+        tableDarkWoodMat
+      );
+      upperCrown.position.set(0, CAB_H - (CROWN_H * 0.55) / 2, 0.014);
+      upperCrown.castShadow = true;
+      cab.add(upperCrown);
+
+      return cab;
+    };
+
+    const cabinetGroup = createSixTierCabinet();
+    cabinetGroup.position.set(CAB_X, 0, CAB_Z);
+    roomGroup.add(cabinetGroup);
+
+    const cabinetGroupLeft = createSixTierCabinet();
+    cabinetGroupLeft.position.set(CAB2_X, 0, CAB_Z);
+    roomGroup.add(cabinetGroupLeft);
+
+    // Subtle warm fill light highlighting both 6-tier dark wood cabinets
+    const cabinetAccentLight = new THREE.PointLight(0xffebd0, 1.5, 5.2, 1.25);
+    cabinetAccentLight.position.set((CAB_X + CAB2_X) / 2, 2.28, CAB_Z + 1.15);
+    roomGroup.add(cabinetAccentLight);
 
     scene.add(roomGroup);
 
@@ -1227,13 +1824,21 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
     const tempRightPos = new THREE.Vector3();
     const tempTopPos = new THREE.Vector3();
 
+    const TABLE_VIEW_POS = new THREE.Vector3(0, SEATED_HEIGHT, SEATED_Z);
+    const CABINET_VIEW_POS = new THREE.Vector3((CAB_X + CAB2_X) / 2, 1.10, CAB_Z + 2.75);
+
     const renderLoop = () => {
       const delta = Math.min(clock.getDelta(), 0.1);
 
-      // Directly seated at the tea table: smooth T-shape look around (yaw ±20°, pitch 0° to -26° down)
-      cameraYawRef.current = THREE.MathUtils.lerp(cameraYawRef.current, targetYawRef.current, 0.16);
-      cameraPitchRef.current = THREE.MathUtils.lerp(cameraPitchRef.current, targetPitchRef.current, 0.16);
-      camera.position.set(0, SEATED_HEIGHT, SEATED_Z);
+      // Smoothly move camera between tea table and 6-tier cabinet + T-shape look around
+      const targetPos = viewLocationRef.current === 'cabinet' ? CABINET_VIEW_POS : TABLE_VIEW_POS;
+      playerPosRef.current.x = THREE.MathUtils.damp(playerPosRef.current.x, targetPos.x, 4.6, delta);
+      playerPosRef.current.y = THREE.MathUtils.damp(playerPosRef.current.y, targetPos.y, 4.6, delta);
+      playerPosRef.current.z = THREE.MathUtils.damp(playerPosRef.current.z, targetPos.z, 4.6, delta);
+
+      cameraYawRef.current = THREE.MathUtils.damp(cameraYawRef.current, targetYawRef.current, 7.5, delta);
+      cameraPitchRef.current = THREE.MathUtils.damp(cameraPitchRef.current, targetPitchRef.current, 7.5, delta);
+      camera.position.copy(playerPosRef.current);
       camera.rotation.z = 0;
       camera.rotation.y = cameraYawRef.current;
       camera.rotation.x = cameraPitchRef.current;
@@ -1378,6 +1983,10 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
       tabletopTexture.dispose();
       ceilingTexture.dispose();
       consoleScreenTex.dispose();
+      scrollTexture.dispose();
+      displayPosterTexture.dispose();
+      fanTexture.dispose();
+      plaqueTexture.dispose();
       renderer.dispose();
 
       if (renderer.domElement && container.contains(renderer.domElement)) {
@@ -1529,28 +2138,45 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
 
     raycasterRef.current.setFromCamera(new THREE.Vector2(x, y), cameraRef.current);
 
-    // 1. Check Blue-Violet Handheld Console tap first
-    if (consoleGroupRef.current) {
-      const consoleHits = raycasterRef.current.intersectObjects(consoleGroupRef.current.children, true);
-      if (consoleHits.length > 0) {
-        handleToggleConsole(true);
-        return true;
-      }
-    }
-
-    // 2. Check Table Lamp tap
-    if (lampGroupRef.current) {
-      const lampHits = raycasterRef.current.intersectObjects(lampGroupRef.current.children, true);
-      if (lampHits.length > 0) {
-        handleToggleLamp();
-        if (typeof navigator !== 'undefined' && navigator.vibrate) {
-          try { navigator.vibrate(18); } catch {}
+    if (viewLocationRef.current === 'table') {
+      // 1. Check Blue-Violet Handheld Console tap first
+      if (consoleGroupRef.current) {
+        const consoleHits = raycasterRef.current.intersectObjects(consoleGroupRef.current.children, true);
+        if (consoleHits.length > 0) {
+          handleToggleConsole(true);
+          return true;
         }
-        return true;
+      }
+
+      // 2. Check Table Lamp tap
+      if (lampGroupRef.current) {
+        const lampHits = raycasterRef.current.intersectObjects(lampGroupRef.current.children, true);
+        if (lampHits.length > 0) {
+          handleToggleLamp();
+          if (typeof navigator !== 'undefined' && navigator.vibrate) {
+            try { navigator.vibrate(18); } catch {}
+          }
+          return true;
+        }
       }
     }
 
     return false;
+  };
+
+  // Move smoothly between the tea table and the front of the 6-tier dark wood cabinet
+  const handleToggleViewLocation = () => {
+    if (isConsoleHeldRef.current) {
+      handleToggleConsole(false);
+    }
+    const next: 'table' | 'cabinet' = viewLocationRef.current === 'table' ? 'cabinet' : 'table';
+    viewLocationRef.current = next;
+    setViewLocation(next);
+    targetYawRef.current = CENTER_YAW;
+    targetPitchRef.current = 0;
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      try { navigator.vibrate(15); } catch {}
+    }
   };
 
   // --- TOUCH HANDLERS (T-SHAPE ROTATION + CONSOLE CONTROLS/LAMP TAP) ---
@@ -1598,8 +2224,13 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
           targetYawRef.current -= deltaX * sensitivity;
           targetPitchRef.current -= deltaY * sensitivity;
 
-          // T-Shape viewing (±20° yaw, 0° to -26° pitch down, no looking up)
-          targetYawRef.current = THREE.MathUtils.clamp(targetYawRef.current, MIN_YAW, MAX_YAW);
+          // T-Shape viewing (yaw clamped dynamically so narrow screens can also reach the left-wall corner, 0° to -26° pitch down)
+          const yawHalf = getYawRangeHalf();
+          targetYawRef.current = THREE.MathUtils.clamp(
+            targetYawRef.current,
+            CENTER_YAW - yawHalf,
+            CENTER_YAW + yawHalf
+          );
           targetPitchRef.current = THREE.MathUtils.clamp(targetPitchRef.current, MIN_PITCH, MAX_PITCH);
         }
       }
@@ -1667,7 +2298,12 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
       targetYawRef.current -= deltaX * sensitivity;
       targetPitchRef.current -= deltaY * sensitivity;
 
-      targetYawRef.current = THREE.MathUtils.clamp(targetYawRef.current, MIN_YAW, MAX_YAW);
+      const yawHalf = getYawRangeHalf();
+      targetYawRef.current = THREE.MathUtils.clamp(
+        targetYawRef.current,
+        CENTER_YAW - yawHalf,
+        CENTER_YAW + yawHalf
+      );
       targetPitchRef.current = THREE.MathUtils.clamp(targetPitchRef.current, MIN_PITCH, MAX_PITCH);
     }
   };
@@ -1760,6 +2396,25 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-25">
           <div className="w-2.5 h-2.5 rounded-full border border-amber-300/70 bg-white/15 shadow-sm" />
         </div>
+      )}
+
+      {/* Bottom-Right Navigation Button: Move between Tea Table and 6-Tier Dark Wood Cabinet */}
+      {!isConsoleHeld && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleToggleViewLocation();
+          }}
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onMouseUp={(e) => e.stopPropagation()}
+          className="absolute bottom-5 right-5 z-30 px-4 py-2.5 rounded-lg bg-[#1c110a]/90 border border-amber-500/45 text-amber-100 text-sm font-medium tracking-wide shadow-[0_4px_16px_rgba(0,0,0,0.55)] hover:bg-[#2a1a10] hover:border-amber-400/75 active:scale-95 transition-all cursor-pointer select-none"
+        >
+          {viewLocation === 'cabinet' ? '回到茶几前面' : '去櫃子前面'}
+        </button>
       )}
     </div>
   );
