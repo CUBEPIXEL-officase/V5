@@ -7,8 +7,6 @@ import {
   RotateCcw, 
   ChevronRight, 
   X, 
-  Volume2, 
-  VolumeX, 
   Users, 
   Calendar, 
   Target, 
@@ -617,19 +615,6 @@ export const MobileWebsite: React.FC<MobileWebsiteProps> = ({
       {/* Atmospheric Neon Aura Lights */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-pink-500/15 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-1/4 left-1/2 -translate-x-1/2 translate-y-1/2 w-96 h-96 bg-amber-500/10 rounded-full blur-[130px] pointer-events-none" />
-
-      {/* Subtle Floating Sound Toggle (Discreet, no status bar) */}
-      {sceneState !== 'room' && (
-        <div className="absolute top-4 right-4 z-40">
-          <button 
-            onClick={toggleSound}
-            className="p-2 rounded-full bg-black/40 hover:bg-black/60 text-white/70 backdrop-blur-md active:scale-95 transition-all text-xs flex items-center justify-center border border-white/10 shadow-lg cursor-pointer"
-            title="音效開關"
-          >
-            {soundEnabled ? <Volume2 className="w-4 h-4 text-amber-300" /> : <VolumeX className="w-4 h-4 text-white/40" />}
-          </button>
-        </div>
-      )}
 
       {/* ======================================================== */}
       {/* 1. INITIAL LANDING SCREEN: STRICTLY LOGO & 開始探索 */}

@@ -704,6 +704,7 @@ const CharacterSelect: React.FC<{
   selectedCategory: MemberCategory | null;
   setSelectedCategory: (cat: MemberCategory | null) => void;
   skipDanmaku?: boolean;
+  isEmbeddedDesktop?: boolean;
 }> = ({ 
   onHome, 
   onPageChange, 
@@ -712,6 +713,7 @@ const CharacterSelect: React.FC<{
   selectedCategory,
   setSelectedCategory,
   skipDanmaku = false,
+  isEmbeddedDesktop = false,
 }) => {
   const [isDanmakuActive, setIsDanmakuActive] = useState<boolean>(!skipDanmaku && !selectedCategory);
   const [showButtons, setShowButtons] = useState<boolean>(skipDanmaku || !!selectedCategory);
@@ -804,7 +806,11 @@ const CharacterSelect: React.FC<{
   }));
 
   return (
-    <div className="relative w-full min-h-screen flex flex-col font-mono px-3 sm:px-6 md:px-10 lg:px-16 pb-24 justify-center items-center pt-24 sm:pt-28">
+    <div className={`relative w-full flex flex-col font-mono items-center ${
+      isEmbeddedDesktop
+        ? 'min-h-0 px-4 pb-36 justify-start pt-14'
+        : 'min-h-screen px-3 sm:px-6 md:px-10 lg:px-16 pb-24 justify-center pt-24 sm:pt-28'
+    }`}>
       {/* Kimi no Oshi Purple Danmaku Transition (With matching background #2D033B mask during flight) */}
       <AnimatePresence>
         {isDanmakuActive && (
@@ -824,13 +830,15 @@ const CharacterSelect: React.FC<{
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
-            className="w-full max-w-none flex flex-col items-center justify-center space-y-8 z-10"
+            className={`w-full max-w-none flex flex-col items-center justify-center z-10 ${isEmbeddedDesktop ? 'space-y-4' : 'space-y-8'}`}
           >
           {/* Top Bar (Title removed as requested, keeping division badge and danmaku replay) */}
           <div className="text-center">
-            <div className="inline-flex flex-wrap items-center justify-center gap-4 sm:gap-6">
-              <div className="inline-flex items-center gap-2.5 px-5 sm:px-7 py-2 sm:py-3 rounded-full bg-white/5 border border-white/10 text-xs sm:text-sm md:text-base font-mono uppercase tracking-[0.35em] text-[#7CFC00] shadow-md">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#7CFC00] animate-pulse" />
+            <div className={`inline-flex flex-wrap items-center justify-center ${isEmbeddedDesktop ? 'gap-3' : 'gap-4 sm:gap-6'}`}>
+              <div className={`inline-flex items-center gap-2 rounded-full bg-white/5 border border-white/10 font-mono uppercase text-[#7CFC00] shadow-md ${
+                isEmbeddedDesktop ? 'px-4 py-1.5 text-xs tracking-[0.25em]' : 'gap-2.5 px-5 sm:px-7 py-2 sm:py-3 text-xs sm:text-sm md:text-base tracking-[0.35em]'
+              }`}>
+                <span className="w-2 h-2 rounded-full bg-[#7CFC00] animate-pulse" />
                 <span>DIVISION SELECTION // 分類選單</span>
               </div>
               <motion.button
@@ -840,7 +848,9 @@ const CharacterSelect: React.FC<{
                   setShowButtons(false);
                   setIsDanmakuActive(true);
                 }}
-                className="px-5 sm:px-7 py-2 sm:py-3 rounded-full bg-[#D1B3FF]/10 hover:bg-[#D1B3FF]/20 border border-[#D1B3FF]/40 text-xs sm:text-sm md:text-base font-mono text-[#D1B3FF] transition-all cursor-pointer flex items-center gap-2 shadow-[0_0_20px_rgba(209,179,255,0.2)]"
+                className={`rounded-full bg-[#D1B3FF]/10 hover:bg-[#D1B3FF]/20 border border-[#D1B3FF]/40 font-mono text-[#D1B3FF] transition-all cursor-pointer flex items-center gap-2 shadow-[0_0_20px_rgba(209,179,255,0.2)] ${
+                  isEmbeddedDesktop ? 'px-4 py-1.5 text-xs' : 'px-5 sm:px-7 py-2 sm:py-3 text-xs sm:text-sm md:text-base'
+                }`}
                 title="重新播放彈幕轉場"
               >
                 <span>🎬</span>
@@ -852,27 +862,35 @@ const CharacterSelect: React.FC<{
           {/* 4 Category Carousel - Truly Fullscreen 4:3 Rectangles with Mouse Wheel Scroll Interaction */}
           <div 
             ref={wheelContainerRef}
-            className="relative w-full max-w-none h-[640px] sm:h-[740px] md:h-[840px] lg:h-[900px] xl:h-[960px] 2xl:h-[1020px] flex items-center justify-center select-none overflow-hidden py-6"
+            className={`relative w-full max-w-none flex items-center justify-center select-none overflow-hidden ${
+              isEmbeddedDesktop
+                ? 'h-[430px] py-2'
+                : 'h-[640px] sm:h-[740px] md:h-[840px] lg:h-[900px] xl:h-[960px] 2xl:h-[1020px] py-6'
+            }`}
           >
             {/* Top Fade Overlay */}
-            <div className="absolute top-0 left-0 right-0 h-20 sm:h-28 bg-gradient-to-b from-[#2D033B] to-transparent z-40 pointer-events-none" />
+            <div className={`absolute top-0 left-0 right-0 bg-gradient-to-b from-[#2D033B] to-transparent z-40 pointer-events-none ${isEmbeddedDesktop ? 'h-12' : 'h-20 sm:h-28'}`} />
 
             {/* Up Button Control */}
             <button
               onClick={() => setActiveCategoryIndex(prev => (prev - 1 + MEMBER_CATEGORIES.length) % MEMBER_CATEGORIES.length)}
-              className="absolute top-3 sm:top-5 z-50 p-3 sm:p-5 md:p-6 rounded-full bg-white/10 hover:bg-white/20 border-2 border-white/25 text-white/80 hover:text-white transition-all active:scale-90 cursor-pointer shadow-2xl backdrop-blur-xl"
+              className={`absolute z-50 rounded-full bg-white/10 hover:bg-white/20 border-2 border-white/25 text-white/80 hover:text-white transition-all active:scale-90 cursor-pointer shadow-2xl backdrop-blur-xl ${
+                isEmbeddedDesktop ? 'top-2 p-2.5' : 'top-3 sm:top-5 p-3 sm:p-5 md:p-6'
+              }`}
               title="切換上一個分類"
             >
-              <ChevronUp className="w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10" />
+              <ChevronUp className={isEmbeddedDesktop ? 'w-5 h-5' : 'w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10'} />
             </button>
 
             {/* Down Button Control */}
             <button
               onClick={() => setActiveCategoryIndex(prev => (prev + 1) % MEMBER_CATEGORIES.length)}
-              className="absolute bottom-3 sm:bottom-5 z-50 p-3 sm:p-5 md:p-6 rounded-full bg-white/10 hover:bg-white/20 border-2 border-white/25 text-white/80 hover:text-white transition-all active:scale-90 cursor-pointer shadow-2xl backdrop-blur-xl"
+              className={`absolute z-50 rounded-full bg-white/10 hover:bg-white/20 border-2 border-white/25 text-white/80 hover:text-white transition-all active:scale-90 cursor-pointer shadow-2xl backdrop-blur-xl ${
+                isEmbeddedDesktop ? 'bottom-2 p-2.5' : 'bottom-3 sm:bottom-5 p-3 sm:p-5 md:p-6'
+              }`}
               title="切換下一個分類"
             >
-              <ChevronDown className="w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10" />
+              <ChevronDown className={isEmbeddedDesktop ? 'w-5 h-5' : 'w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10'} />
             </button>
 
             {/* 4:3 Aspect Ratio Cards Stack - Fullscreen Responsive Dimensions */}
@@ -900,19 +918,19 @@ const CharacterSelect: React.FC<{
                   zIndex = 30;
                   filter = 'blur(0px)';
                 } else if (isAbove) {
-                  y = -220;
+                  y = isEmbeddedDesktop ? -115 : -220;
                   scale = 0.86;
                   opacity = 0.28;
                   zIndex = 15;
                   filter = 'blur(2px)';
                 } else if (isBelow) {
-                  y = 220;
+                  y = isEmbeddedDesktop ? 115 : 220;
                   scale = 0.86;
                   opacity = 0.28;
                   zIndex = 15;
                   filter = 'blur(2px)';
                 } else {
-                  y = diff > 0 ? 380 : -380;
+                  y = diff > 0 ? (isEmbeddedDesktop ? 220 : 380) : (isEmbeddedDesktop ? -220 : -380);
                   scale = 0.65;
                   opacity = 0;
                   zIndex = 0;
@@ -946,7 +964,11 @@ const CharacterSelect: React.FC<{
                         setActiveCategoryIndex(idx);
                       }
                     }}
-                    className={`absolute w-[94vw] sm:w-[88vw] md:w-[82vw] lg:w-[76vw] xl:w-[70vw] 2xl:w-[65vw] max-w-[1240px] aspect-[4/3] rounded-[32px] sm:rounded-[40px] md:rounded-[48px] bg-black/85 hover:bg-black/95 backdrop-blur-2xl border-2 sm:border-3 cursor-pointer transition-colors duration-300 overflow-hidden ${
+                    className={`absolute aspect-[4/3] bg-black/85 hover:bg-black/95 backdrop-blur-2xl cursor-pointer transition-colors duration-300 overflow-hidden ${
+                      isEmbeddedDesktop
+                        ? 'w-[500px] rounded-[28px] border-2'
+                        : 'w-[94vw] sm:w-[88vw] md:w-[82vw] lg:w-[76vw] xl:w-[70vw] 2xl:w-[65vw] max-w-[1240px] rounded-[32px] sm:rounded-[40px] md:rounded-[48px] border-2 sm:border-3'
+                    } ${
                       isCenter 
                         ? 'shadow-[0_25px_80px_rgba(0,0,0,0.95)]' 
                         : 'hover:opacity-60 shadow-xl'
@@ -962,21 +984,23 @@ const CharacterSelect: React.FC<{
                     />
 
                     {/* Corner Cyber Pixel Accents (Enlarged) */}
-                    <div className="absolute top-0 left-0 w-8 h-8 sm:w-12 sm:h-12 md:w-16 md:h-16 border-t-4 border-l-4" style={{ borderColor: cat.color }} />
-                    <div className="absolute top-0 right-0 w-8 h-8 sm:w-12 sm:h-12 md:w-16 md:h-16 border-t-4 border-r-4" style={{ borderColor: cat.color }} />
-                    <div className="absolute bottom-0 left-0 w-8 h-8 sm:w-12 sm:h-12 md:w-16 md:h-16 border-b-4 border-l-4" style={{ borderColor: cat.color }} />
-                    <div className="absolute bottom-0 right-0 w-8 h-8 sm:w-12 sm:h-12 md:w-16 md:h-16 border-b-4 border-r-4" style={{ borderColor: cat.color }} />
+                    <div className={`absolute top-0 left-0 border-t-4 border-l-4 ${isEmbeddedDesktop ? 'w-7 h-7' : 'w-8 h-8 sm:w-12 sm:h-12 md:w-16 md:h-16'}`} style={{ borderColor: cat.color }} />
+                    <div className={`absolute top-0 right-0 border-t-4 border-r-4 ${isEmbeddedDesktop ? 'w-7 h-7' : 'w-8 h-8 sm:w-12 sm:h-12 md:w-16 md:h-16'}`} style={{ borderColor: cat.color }} />
+                    <div className={`absolute bottom-0 left-0 border-b-4 border-l-4 ${isEmbeddedDesktop ? 'w-7 h-7' : 'w-8 h-8 sm:w-12 sm:h-12 md:w-16 md:h-16'}`} style={{ borderColor: cat.color }} />
+                    <div className={`absolute bottom-0 right-0 border-b-4 border-r-4 ${isEmbeddedDesktop ? 'w-7 h-7' : 'w-8 h-8 sm:w-12 sm:h-12 md:w-16 md:h-16'}`} style={{ borderColor: cat.color }} />
 
-                    {/* 4:3 Card Content Layout - Super Sized for True Fullscreen */}
-                    <div className="relative w-full h-full flex flex-col justify-between p-6 sm:p-10 md:p-14 lg:p-16 xl:p-20 z-10">
+                    {/* 4:3 Card Content Layout */}
+                    <div className={`relative w-full h-full flex flex-col justify-between z-10 ${isEmbeddedDesktop ? 'p-6' : 'p-6 sm:p-10 md:p-14 lg:p-16 xl:p-20'}`}>
                       {/* Top Header Row */}
                       <div className="w-full flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-3 sm:gap-4">
-                          <span className="text-sm sm:text-lg md:text-xl lg:text-2xl font-pixel font-bold text-white/50 tracking-widest">
+                        <div className={`flex items-center ${isEmbeddedDesktop ? 'gap-2.5' : 'gap-3 sm:gap-4'}`}>
+                          <span className={`font-pixel font-bold text-white/50 tracking-widest ${isEmbeddedDesktop ? 'text-xs' : 'text-sm sm:text-lg md:text-xl lg:text-2xl'}`}>
                             0{idx + 1} // 04
                           </span>
                           <span 
-                            className="text-xs sm:text-sm md:text-base lg:text-lg font-pixel px-4 sm:px-6 py-1.5 sm:py-2.5 rounded-xl uppercase tracking-wider font-bold shadow-lg"
+                            className={`font-pixel rounded-xl uppercase tracking-wider font-bold shadow-lg ${
+                              isEmbeddedDesktop ? 'text-xs px-3 py-1' : 'text-xs sm:text-sm md:text-base lg:text-lg px-4 sm:px-6 py-1.5 sm:py-2.5'
+                            }`}
                             style={{ 
                               backgroundColor: `${cat.color}25`, 
                               color: cat.color, 
@@ -986,17 +1010,23 @@ const CharacterSelect: React.FC<{
                             {cat.badge}
                           </span>
                         </div>
-                        <span className="text-xs sm:text-base md:text-lg lg:text-xl font-mono text-white/80 font-bold px-4 sm:px-6 py-1.5 sm:py-2.5 rounded-2xl bg-white/5 border border-white/10 shadow-sm">
+                        <span className={`font-mono text-white/80 font-bold bg-white/5 border border-white/10 shadow-sm ${
+                          isEmbeddedDesktop ? 'text-xs px-3 py-1 rounded-xl' : 'text-xs sm:text-base md:text-lg lg:text-xl px-4 sm:px-6 py-1.5 sm:py-2.5 rounded-2xl'
+                        }`}>
                           {cat.memberCount}
                         </span>
                       </div>
 
                       {/* Center Hero Information */}
-                      <div className="flex flex-col items-center justify-center text-center my-auto py-3 gap-3 sm:gap-5 md:gap-6">
+                      <div className={`flex flex-col items-center justify-center text-center my-auto ${isEmbeddedDesktop ? 'py-1 gap-2.5' : 'py-3 gap-3 sm:gap-5 md:gap-6'}`}>
                         <motion.div 
                           animate={isCenter ? { scale: [1, 1.06, 1], rotate: [0, -2, 2, 0] } : {}}
                           transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                          className="w-20 h-20 sm:w-28 sm:h-28 md:w-36 md:h-36 lg:w-44 lg:h-44 xl:w-52 xl:h-52 rounded-3xl sm:rounded-[36px] md:rounded-[44px] flex items-center justify-center text-5xl sm:text-7xl md:text-8xl lg:text-9xl xl:text-[10rem] shadow-inner"
+                          className={`flex items-center justify-center shadow-inner ${
+                            isEmbeddedDesktop
+                              ? 'w-20 h-20 rounded-2xl text-5xl'
+                              : 'w-20 h-20 sm:w-28 sm:h-28 md:w-36 md:h-36 lg:w-44 lg:h-44 xl:w-52 xl:h-52 rounded-3xl sm:rounded-[36px] md:rounded-[44px] text-5xl sm:text-7xl md:text-8xl lg:text-9xl xl:text-[10rem]'
+                          }`}
                           style={{ backgroundColor: `${cat.color}20`, border: `2.5px solid ${cat.color}60` }}
                         >
                           {cat.icon}
@@ -1004,17 +1034,21 @@ const CharacterSelect: React.FC<{
 
                         <div className="flex flex-col items-center gap-1 sm:gap-2">
                           <h3 
-                            className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-black tracking-widest text-white leading-tight"
+                            className={`font-black tracking-widest text-white leading-tight ${
+                              isEmbeddedDesktop ? 'text-3xl' : 'text-3xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl'
+                            }`}
                             style={{ textShadow: `0 0 35px ${cat.color}70` }}
                           >
                             {cat.name}
                           </h3>
-                          <span className="text-xs sm:text-base md:text-lg lg:text-xl font-mono text-white/50 tracking-[0.35em] uppercase">
+                          <span className={`font-mono text-white/50 uppercase ${isEmbeddedDesktop ? 'text-xs tracking-[0.25em]' : 'text-xs sm:text-base md:text-lg lg:text-xl tracking-[0.35em]'}`}>
                             {cat.enName}
                           </span>
                         </div>
 
-                        <p className="text-sm sm:text-lg md:text-xl lg:text-2xl text-white/80 font-mono max-w-xl sm:max-w-2xl md:max-w-3xl lg:max-w-4xl line-clamp-2 leading-relaxed">
+                        <p className={`text-white/80 font-mono line-clamp-2 leading-relaxed ${
+                          isEmbeddedDesktop ? 'text-sm max-w-md' : 'text-sm sm:text-lg md:text-xl lg:text-2xl max-w-xl sm:max-w-2xl md:max-w-3xl lg:max-w-4xl'
+                        }`}>
                           {cat.desc}
                         </p>
                       </div>
@@ -1023,7 +1057,11 @@ const CharacterSelect: React.FC<{
                       <div className="w-full flex items-center justify-center pt-2">
                         {isCenter ? (
                           <div 
-                            className="w-full py-3.5 sm:py-5 md:py-6 lg:py-7 px-8 sm:px-14 rounded-2xl sm:rounded-3xl flex items-center justify-center gap-3 sm:gap-4 font-pixel text-sm sm:text-lg md:text-xl lg:text-2xl font-bold tracking-widest transition-all shadow-xl group-hover:scale-[1.01]"
+                            className={`w-full flex items-center justify-center font-pixel font-bold tracking-widest transition-all shadow-xl group-hover:scale-[1.01] ${
+                              isEmbeddedDesktop
+                                ? 'py-2.5 px-6 rounded-xl gap-2 text-sm'
+                                : 'py-3.5 sm:py-5 md:py-6 lg:py-7 px-8 sm:px-14 rounded-2xl sm:rounded-3xl gap-3 sm:gap-4 text-sm sm:text-lg md:text-xl lg:text-2xl'
+                            }`}
                             style={{ 
                               backgroundColor: `${cat.color}35`, 
                               color: '#FFFFFF',
@@ -1032,10 +1070,10 @@ const CharacterSelect: React.FC<{
                             }}
                           >
                             <span>點擊進入專屬名單 // ENTER CATEGORY</span>
-                            <span className="text-lg sm:text-2xl md:text-3xl">→</span>
+                            <span className={isEmbeddedDesktop ? 'text-base' : 'text-lg sm:text-2xl md:text-3xl'}>→</span>
                           </div>
                         ) : (
-                          <span className="text-xs sm:text-sm md:text-base font-mono text-white/50 tracking-widest uppercase">
+                          <span className={`font-mono text-white/50 tracking-widest uppercase ${isEmbeddedDesktop ? 'text-xs' : 'text-xs sm:text-sm md:text-base'}`}>
                             點擊置中切換 // CLICK TO CENTER
                           </span>
                         )}
@@ -1047,18 +1085,20 @@ const CharacterSelect: React.FC<{
             </div>
 
             {/* Bottom Fade Overlay */}
-            <div className="absolute bottom-0 left-0 right-0 h-20 sm:h-28 bg-gradient-to-t from-[#2D033B] to-transparent z-40 pointer-events-none" />
+            <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-[#2D033B] to-transparent z-40 pointer-events-none ${isEmbeddedDesktop ? 'h-12' : 'h-20 sm:h-28'}`} />
           </div>
 
           {/* Category Quick Select Pills & Mouse Wheel Cue */}
-          <div className="flex flex-col items-center gap-4 sm:gap-5 z-10 pt-2">
+          <div className={`flex flex-col items-center z-10 ${isEmbeddedDesktop ? 'gap-2.5 pt-1' : 'gap-4 sm:gap-5 pt-2'}`}>
             {/* Quick Pills */}
-            <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4">
+            <div className={`flex flex-wrap items-center justify-center ${isEmbeddedDesktop ? 'gap-2.5' : 'gap-3 sm:gap-4'}`}>
               {MEMBER_CATEGORIES.map((c, i) => (
                 <button
                   key={c.id}
                   onClick={() => setActiveCategoryIndex(i)}
-                  className={`px-4 sm:px-6 py-2 sm:py-3 rounded-2xl text-xs sm:text-sm md:text-base font-mono transition-all cursor-pointer flex items-center gap-2 sm:gap-3 ${
+                  className={`font-mono transition-all cursor-pointer flex items-center ${
+                    isEmbeddedDesktop ? 'px-3.5 py-1.5 rounded-xl text-xs gap-2' : 'px-4 sm:px-6 py-2 sm:py-3 rounded-2xl text-xs sm:text-sm md:text-base gap-2 sm:gap-3'
+                  } ${
                     i === activeCategoryIndex 
                       ? 'bg-white/20 border-2 text-white font-bold scale-105 shadow-xl' 
                       : 'bg-white/5 border border-white/10 text-white/50 hover:text-white/90 hover:bg-white/10'
@@ -1067,31 +1107,33 @@ const CharacterSelect: React.FC<{
                     borderColor: i === activeCategoryIndex ? c.color : undefined,
                   }}
                 >
-                  <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full" style={{ backgroundColor: c.color }} />
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: c.color }} />
                   <span>{c.name}</span>
                 </button>
               ))}
             </div>
 
             {/* Wheel Scroll Prompt */}
-            <div className="flex items-center justify-center gap-3 text-white/50 font-mono text-xs sm:text-sm md:text-base select-none">
-              <svg className="w-5 h-5 sm:w-6 sm:h-6 text-white/60 animate-bounce" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <div className={`flex items-center justify-center gap-3 text-white/50 font-mono select-none ${isEmbeddedDesktop ? 'text-xs' : 'text-xs sm:text-sm md:text-base'}`}>
+              <svg className={`text-white/60 animate-bounce ${isEmbeddedDesktop ? 'w-4 h-4' : 'w-5 h-5 sm:w-6 sm:h-6'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <rect x="6" y="3" width="12" height="18" rx="6" />
                 <line x1="12" y1="7" x2="12" y2="11" />
               </svg>
-              <span className="font-pixel text-[10px] sm:text-xs md:text-sm tracking-[0.28em] uppercase text-white/70">
+              <span className={`font-pixel uppercase text-white/70 ${isEmbeddedDesktop ? 'text-[10px] tracking-[0.2em]' : 'text-[10px] sm:text-xs md:text-sm tracking-[0.28em]'}`}>
                 滾輪滑動切換 • 點擊中央進入 // SCROLL WHEEL TO SELECT • CLICK TO ENTER
               </span>
             </div>
           </div>
 
           {/* Return Home Button */}
-          <div className="pt-2 z-10">
+          <div className="pt-1 z-10">
             <button
               onClick={onHome}
-              className="px-8 sm:px-12 py-3.5 sm:py-4 md:py-5 rounded-2xl bg-white/5 hover:bg-white/15 border border-white/15 hover:border-white/35 text-xs sm:text-sm md:text-base font-mono font-bold text-white/70 hover:text-white tracking-widest uppercase transition-all active:scale-95 cursor-pointer flex items-center gap-3 shadow-lg"
+              className={`bg-white/5 hover:bg-white/15 border border-white/15 hover:border-white/35 font-mono font-bold text-white/70 hover:text-white tracking-widest uppercase transition-all active:scale-95 cursor-pointer flex items-center gap-2.5 shadow-lg ${
+                isEmbeddedDesktop ? 'px-6 py-2.5 rounded-xl text-xs' : 'px-8 sm:px-12 py-3.5 sm:py-4 md:py-5 rounded-2xl text-xs sm:text-sm md:text-base gap-3'
+              }`}
             >
-              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+              <ArrowLeft className={isEmbeddedDesktop ? 'w-4 h-4' : 'w-4 h-4 sm:w-5 sm:h-5'} />
               <span>返回主頁 // RETURN HOME</span>
             </button>
           </div>
@@ -1105,17 +1147,23 @@ const CharacterSelect: React.FC<{
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -20 }}
           transition={{ duration: 0.35, ease: "easeOut" }}
-          className="w-full max-w-none bg-slate-900/40 backdrop-blur-xs p-6 sm:p-10 md:p-14 xl:p-16 z-10 rounded-[36px] space-y-10"
+          className={`w-full max-w-none bg-slate-900/40 backdrop-blur-xs z-10 ${
+            isEmbeddedDesktop
+              ? 'p-6 rounded-3xl space-y-6'
+              : 'p-6 sm:p-10 md:p-14 xl:p-16 rounded-[36px] space-y-10'
+          }`}
         >
           {/* Top Return and Category Switcher Bar */}
-          <div className="w-full flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-white/10">
+          <div className={`w-full flex flex-wrap items-center justify-between border-b border-white/10 ${isEmbeddedDesktop ? 'gap-3 pb-4' : 'gap-4 pb-6'}`}>
             <button
               onClick={() => {
                 setSelectedCategory(null);
                 setIsDanmakuActive(false);
                 setShowButtons(true);
               }}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/25 text-xs sm:text-sm font-mono font-bold text-white tracking-widest uppercase cursor-pointer transition-all active:scale-95 hover:border-white/40 shadow-lg"
+              className={`flex items-center gap-2 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/25 font-mono font-bold text-white tracking-widest uppercase cursor-pointer transition-all active:scale-95 hover:border-white/40 shadow-lg ${
+                isEmbeddedDesktop ? 'px-4 py-2 text-xs' : 'px-5 py-2.5 text-xs sm:text-sm'
+              }`}
             >
               <ArrowLeft className="w-4 h-4 text-[#7CFC00]" />
               <span>← 返回成員分類 // BACK TO CATEGORIES</span>
@@ -1146,11 +1194,11 @@ const CharacterSelect: React.FC<{
           {/* 1. 「製作人與營運」 */}
           {selectedCategory === 'producer' && (
             <div>
-              <div className="text-[10px] sm:text-xs text-[#87CEEB] font-pixel tracking-[0.25em] mb-5 uppercase flex items-center gap-3 px-2">
+              <div className="text-[10px] sm:text-xs text-[#87CEEB] font-pixel tracking-[0.25em] mb-4 uppercase flex items-center gap-3 px-2">
                 <span>PRODUCER & HONORARY MEMBER / 製作人與營運</span>
                 <span className="h-[1px] bg-[#87CEEB]/30 flex-1" />
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 md:gap-8 lg:gap-10">
+              <div className={`grid ${isEmbeddedDesktop ? 'grid-cols-4 gap-5' : 'grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 md:gap-8 lg:gap-10'}`}>
                 {/* Producer Card */}
                 <motion.div
                   key={PRODUCER_FIGHTER.id}
@@ -1169,11 +1217,15 @@ const CharacterSelect: React.FC<{
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                   </div>
                   
-                  <div className="absolute top-3 left-3 bg-[#4C5E6E] text-white text-[9px] sm:text-xs md:text-sm font-black px-2 py-1 rounded-lg uppercase font-pixel tracking-widest shadow-md">
+                  <div className={`absolute bg-[#4C5E6E] text-white font-black px-2 py-0.5 rounded-lg uppercase font-pixel tracking-widest shadow-md ${
+                    isEmbeddedDesktop ? 'top-2.5 left-2.5 text-[10px]' : 'top-3 left-3 text-[9px] sm:text-xs md:text-sm py-1'
+                  }`}>
                     製作人
                   </div>
                   
-                  <div className="absolute bottom-3 left-3 sm:bottom-6 sm:left-6 text-sm sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl font-black italic text-white tracking-widest drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+                  <div className={`absolute font-black italic text-white tracking-widest drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] ${
+                    isEmbeddedDesktop ? 'bottom-3 left-3.5 text-lg' : 'bottom-3 left-3 sm:bottom-6 sm:left-6 text-sm sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl'
+                  }`}>
                     涼海 璃(璃帽)
                   </div>
                 </motion.div>
@@ -1187,17 +1239,23 @@ const CharacterSelect: React.FC<{
                   className="relative aspect-[16/9] rounded-3xl overflow-hidden cursor-pointer bg-black/80 hover:bg-black/90 border-2 border-white/15 hover:border-white/40 shadow-[0_12px_36px_rgba(0,0,0,0.6)] hover:shadow-[0_0_45px_rgba(255,255,255,0.2)] transition-all text-left"
                 >
                   <div 
-                    className="absolute inset-0 flex items-center justify-center text-5xl sm:text-7xl md:text-8xl lg:text-9xl xl:text-[11rem] opacity-90 font-black drop-shadow-[0_8px_16px_rgba(0,0,0,0.5)]"
+                    className={`absolute inset-0 flex items-center justify-center opacity-90 font-black drop-shadow-[0_8px_16px_rgba(0,0,0,0.5)] ${
+                      isEmbeddedDesktop ? 'text-6xl' : 'text-5xl sm:text-7xl md:text-8xl lg:text-9xl xl:text-[11rem]'
+                    }`}
                     style={{ color: HONORARY_FIGHTER.color }}
                   >
                     {HONORARY_FIGHTER.icon}
                   </div>
                   
-                  <div className="absolute top-3 left-3 bg-white text-black text-[9px] sm:text-xs md:text-sm font-black px-2 py-1 rounded-lg uppercase font-pixel tracking-widest shadow-md">
+                  <div className={`absolute bg-white text-black font-black px-2 py-0.5 rounded-lg uppercase font-pixel tracking-widest shadow-md ${
+                    isEmbeddedDesktop ? 'top-2.5 left-2.5 text-[10px]' : 'top-3 left-3 text-[9px] sm:text-xs md:text-sm py-1'
+                  }`}>
                     榮譽團員
                   </div>
 
-                  <div className="absolute bottom-3 left-3 sm:bottom-6 sm:left-6 text-sm sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl font-black italic text-white tracking-widest drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+                  <div className={`absolute font-black italic text-white tracking-widest drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] ${
+                    isEmbeddedDesktop ? 'bottom-3 left-3.5 text-lg' : 'bottom-3 left-3 sm:bottom-6 sm:left-6 text-sm sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl'
+                  }`}>
                     遜砲小藍
                   </div>
                 </motion.div>
@@ -1208,11 +1266,11 @@ const CharacterSelect: React.FC<{
           {/* 2. 「紡塊像素」 */}
           {selectedCategory === 'cubepixel' && (
             <div>
-              <div className="text-[10px] sm:text-xs text-white/40 font-pixel tracking-[0.25em] mb-5 uppercase flex items-center gap-3 px-2">
+              <div className="text-[10px] sm:text-xs text-white/40 font-pixel tracking-[0.25em] mb-4 uppercase flex items-center gap-3 px-2">
                 <span>紡塊像素CubePixel_一期生 / 1ST GENERATION</span>
                 <span className="h-[1px] bg-white/10 flex-1" />
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 md:gap-8 lg:gap-10">
+              <div className={`grid ${isEmbeddedDesktop ? 'grid-cols-4 gap-5' : 'grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 md:gap-8 lg:gap-10'}`}>
                 {INITIAL_MEMBERS.map((f) => (
                   <motion.div
                     key={f.id}
@@ -1222,7 +1280,9 @@ const CharacterSelect: React.FC<{
                     className="relative aspect-[16/9] rounded-3xl overflow-hidden cursor-pointer bg-black/80 hover:bg-black/90 border-2 border-white/15 hover:border-white/40 shadow-[0_12px_36px_rgba(0,0,0,0.6)] hover:shadow-[0_0_45px_rgba(255,255,255,0.2)] transition-all text-left"
                   >
                     <div 
-                      className="absolute inset-0 flex items-center justify-center text-5xl sm:text-7xl md:text-8xl lg:text-9xl xl:text-[11rem] opacity-95 font-black font-pixel drop-shadow-[0_8px_16px_rgba(0,0,0,0.5)]"
+                      className={`absolute inset-0 flex items-center justify-center opacity-95 font-black font-pixel drop-shadow-[0_8px_16px_rgba(0,0,0,0.5)] ${
+                        isEmbeddedDesktop ? 'text-6xl' : 'text-5xl sm:text-7xl md:text-8xl lg:text-9xl xl:text-[11rem]'
+                      }`}
                       style={{ color: f.color }}
                     >
                       {f.icon}
@@ -1230,14 +1290,18 @@ const CharacterSelect: React.FC<{
 
                     {getRoleTag(f.id) && (
                       <div 
-                        className="absolute top-3 left-3 text-black text-[9px] sm:text-xs md:text-sm font-black px-2 py-1 rounded-lg uppercase font-pixel tracking-widest shadow-md"
+                        className={`absolute text-black font-black px-2 py-0.5 rounded-lg uppercase font-pixel tracking-widest shadow-md ${
+                          isEmbeddedDesktop ? 'top-2.5 left-2.5 text-[10px]' : 'top-3 left-3 text-[9px] sm:text-xs md:text-sm py-1'
+                        }`}
                         style={{ backgroundColor: f.color }}
                       >
                         {getRoleTag(f.id)}
                       </div>
                     )}
 
-                    <div className="absolute bottom-3 left-3 sm:bottom-6 sm:left-6 text-sm sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl font-black italic text-white tracking-widest drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+                    <div className={`absolute font-black italic text-white tracking-widest drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] ${
+                      isEmbeddedDesktop ? 'bottom-3 left-3.5 text-lg' : 'bottom-3 left-3 sm:bottom-6 sm:left-6 text-sm sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl'
+                    }`}>
                       {f.name}
                     </div>
                   </motion.div>
@@ -1249,11 +1313,11 @@ const CharacterSelect: React.FC<{
           {/* 3. 「蕷蒔泡沫」 */}
           {selectedCategory === 'yojiuta' && (
             <div>
-              <div className="text-[10px] sm:text-xs text-white/40 font-pixel tracking-[0.25em] mb-5 uppercase flex items-center gap-3 px-2">
+              <div className="text-[10px] sm:text-xs text-white/40 font-pixel tracking-[0.25em] mb-4 uppercase flex items-center gap-3 px-2">
                 <span>蕷蒔泡沫YOJIUTA_二期生預定</span>
                 <span className="h-[1px] bg-white/10 flex-1" />
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 md:gap-8 lg:gap-10">
+              <div className={`grid ${isEmbeddedDesktop ? 'grid-cols-4 gap-5' : 'grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 md:gap-8 lg:gap-10'}`}>
                 {SECOND_GEN_MEMBERS.map((slot) => (
                   <motion.div
                     key={slot.id}
@@ -1263,7 +1327,9 @@ const CharacterSelect: React.FC<{
                     className="relative aspect-[16/9] rounded-3xl overflow-hidden cursor-pointer bg-black/80 hover:bg-black/90 border-2 border-white/15 hover:border-white/40 shadow-[0_12px_36px_rgba(0,0,0,0.6)] hover:shadow-[0_0_45px_rgba(255,255,255,0.2)] transition-all text-left"
                   >
                     <div 
-                      className="absolute inset-0 flex items-center justify-center text-5xl sm:text-7xl md:text-8xl lg:text-9xl xl:text-[11rem] opacity-95 font-black font-pixel drop-shadow-[0_8px_16px_rgba(0,0,0,0.5)]"
+                      className={`absolute inset-0 flex items-center justify-center opacity-95 font-black font-pixel drop-shadow-[0_8px_16px_rgba(0,0,0,0.5)] ${
+                        isEmbeddedDesktop ? 'text-6xl' : 'text-5xl sm:text-7xl md:text-8xl lg:text-9xl xl:text-[11rem]'
+                      }`}
                       style={{ color: slot.color }}
                     >
                       {slot.icon}
@@ -1271,14 +1337,18 @@ const CharacterSelect: React.FC<{
 
                     {getRoleTag(slot.id) && (
                       <div 
-                        className="absolute top-3 left-3 text-black text-[9px] sm:text-xs md:text-sm font-black px-2 py-1 rounded-lg uppercase font-pixel tracking-widest shadow-md"
+                        className={`absolute text-black font-black px-2 py-0.5 rounded-lg uppercase font-pixel tracking-widest shadow-md ${
+                          isEmbeddedDesktop ? 'top-2.5 left-2.5 text-[10px]' : 'top-3 left-3 text-[9px] sm:text-xs md:text-sm py-1'
+                        }`}
                         style={{ backgroundColor: slot.color }}
                       >
                         {getRoleTag(slot.id)}
                       </div>
                     )}
 
-                    <div className="absolute bottom-3 left-3 sm:bottom-6 sm:left-6 text-sm sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl font-black italic text-white tracking-widest drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+                    <div className={`absolute font-black italic text-white tracking-widest drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] ${
+                      isEmbeddedDesktop ? 'bottom-3 left-3.5 text-lg' : 'bottom-3 left-3 sm:bottom-6 sm:left-6 text-sm sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl'
+                    }`}>
                       {slot.name}
                     </div>
                   </motion.div>
@@ -1289,13 +1359,13 @@ const CharacterSelect: React.FC<{
 
           {/* 4. 「其他獨立藝人」 */}
           {selectedCategory === 'independent' && (
-            <div className="space-y-12">
+            <div className={isEmbeddedDesktop ? 'space-y-8 pb-6' : 'space-y-12'}>
               <div>
-                <div className="text-[10px] sm:text-xs text-[#A855F7] font-pixel tracking-[0.25em] mb-5 uppercase flex items-center gap-3 px-2">
+                <div className="text-[10px] sm:text-xs text-[#A855F7] font-pixel tracking-[0.25em] mb-4 uppercase flex items-center gap-3 px-2">
                   <span>獨立活動藝人 | VTUBER企劃</span>
                   <span className="h-[1px] bg-[#A855F7]/30 flex-1" />
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 md:gap-8 lg:gap-10">
+                <div className={`grid ${isEmbeddedDesktop ? 'grid-cols-4 gap-5' : 'grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 md:gap-8 lg:gap-10'}`}>
                   {INDEPENDENT_MEMBERS.map((slot) => (
                     <motion.div
                       key={slot.id}
@@ -1305,7 +1375,9 @@ const CharacterSelect: React.FC<{
                       className="relative aspect-[16/9] rounded-3xl overflow-hidden cursor-pointer bg-black/80 hover:bg-black/90 border-2 border-white/15 hover:border-[#A855F7]/50 shadow-[0_12px_36px_rgba(0,0,0,0.6)] hover:shadow-[0_0_45px_rgba(168,85,247,0.3)] transition-all text-left"
                     >
                       <div 
-                        className="absolute inset-0 flex items-center justify-center text-5xl sm:text-7xl md:text-8xl lg:text-9xl xl:text-[11rem] opacity-95 font-black font-pixel drop-shadow-[0_8px_16px_rgba(0,0,0,0.5)]"
+                        className={`absolute inset-0 flex items-center justify-center opacity-95 font-black font-pixel drop-shadow-[0_8px_16px_rgba(0,0,0,0.5)] ${
+                          isEmbeddedDesktop ? 'text-6xl' : 'text-5xl sm:text-7xl md:text-8xl lg:text-9xl xl:text-[11rem]'
+                        }`}
                         style={{ color: slot.color }}
                       >
                         {slot.icon}
@@ -1313,14 +1385,18 @@ const CharacterSelect: React.FC<{
 
                       {getRoleTag(slot.id) && (
                         <div 
-                          className="absolute top-3 left-3 text-black text-[9px] sm:text-xs md:text-sm font-black px-2 py-1 rounded-lg uppercase font-pixel tracking-widest shadow-md"
+                          className={`absolute text-black font-black px-2 py-0.5 rounded-lg uppercase font-pixel tracking-widest shadow-md ${
+                            isEmbeddedDesktop ? 'top-2.5 left-2.5 text-[10px]' : 'top-3 left-3 text-[9px] sm:text-xs md:text-sm py-1'
+                          }`}
                           style={{ backgroundColor: slot.color }}
                         >
                           {getRoleTag(slot.id)}
                         </div>
                       )}
 
-                      <div className="absolute bottom-3 left-3 sm:bottom-6 sm:left-6 text-sm sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl font-black italic text-white tracking-widest drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+                      <div className={`absolute font-black italic text-white tracking-widest drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] ${
+                        isEmbeddedDesktop ? 'bottom-3 left-3.5 text-lg' : 'bottom-3 left-3 sm:bottom-6 sm:left-6 text-sm sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl'
+                      }`}>
                         {slot.name}
                       </div>
                     </motion.div>
@@ -1330,18 +1406,18 @@ const CharacterSelect: React.FC<{
 
               {/* Candidates (候選名單_待招募) */}
               <div>
-                <div className="text-[10px] sm:text-xs text-white/40 font-pixel tracking-[0.25em] mb-5 uppercase flex items-center gap-3 px-2">
+                <div className="text-[10px] sm:text-xs text-white/40 font-pixel tracking-[0.25em] mb-4 uppercase flex items-center gap-3 px-2">
                   <span>候選名單_待招募 / CANDIDATES</span>
                   <span className="h-[1px] bg-white/10 flex-1" />
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 md:gap-8 lg:gap-10">
+                <div className={`grid ${isEmbeddedDesktop ? 'grid-cols-4 gap-5' : 'grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 md:gap-8 lg:gap-10'}`}>
                   {DISABLED_SLOTS.map((slot) => (
                     <div
                       key={slot.id}
                       className="relative aspect-[16/9] bg-black/90 w-full rounded-3xl overflow-hidden flex flex-col items-center justify-center select-none border-2 border-white/10 shadow-[0_8px_24px_rgba(0,0,0,0.7)]"
                     >
-                      <div className="text-3xl sm:text-5xl md:text-7xl lg:text-8xl xl:text-9xl text-white/5 font-black font-pixel">?</div>
-                      <div className="absolute bottom-3 text-safety text-[8px] sm:text-xs md:text-sm text-white/5 font-pixel uppercase tracking-[0.3em]">
+                      <div className={`text-white/5 font-black font-pixel ${isEmbeddedDesktop ? 'text-5xl' : 'text-3xl sm:text-5xl md:text-7xl lg:text-8xl xl:text-9xl'}`}>?</div>
+                      <div className={`absolute text-safety text-white/5 font-pixel uppercase tracking-[0.3em] ${isEmbeddedDesktop ? 'bottom-2.5 text-[10px]' : 'bottom-3 text-[8px] sm:text-xs md:text-sm'}`}>
                         LOCKED
                       </div>
                     </div>
@@ -1356,7 +1432,7 @@ const CharacterSelect: React.FC<{
   );
 };
 
-const PixelHeart: React.FC<{ color: string, onClick: () => void, label: string, isActive: boolean, size?: 'xs' | 'sm' | 'md', disabled?: boolean }> = ({ color, onClick, label, isActive, size = 'md', disabled = false }) => {
+const PixelHeart: React.FC<{ color: string, onClick: () => void, label: string, isActive: boolean, size?: 'xxs' | 'xs' | 'sm' | 'md', disabled?: boolean }> = ({ color, onClick, label, isActive, size = 'md', disabled = false }) => {
   const heartPattern = [
     [0, 1, 1, 0, 1, 1, 0],
     [1, 2, 2, 1, 2, 2, 1],
@@ -1367,7 +1443,14 @@ const PixelHeart: React.FC<{ color: string, onClick: () => void, label: string, 
     [0, 0, 0, 1, 0, 0, 0],
   ];
 
-  const pixelSize = size === 'xs' ? 'w-1.5 h-1.5' : size === 'sm' ? 'w-2 h-2' : 'w-4 h-4 md:w-5 md:h-5';
+  const pixelSize =
+    size === 'xxs'
+      ? 'w-1 h-1'
+      : size === 'xs'
+      ? 'w-1.5 h-1.5'
+      : size === 'sm'
+      ? 'w-2 h-2'
+      : 'w-4 h-4 md:w-5 md:h-5';
 
   return (
     <div className="flex flex-col items-center translate-y-[1px]">
@@ -1375,7 +1458,9 @@ const PixelHeart: React.FC<{ color: string, onClick: () => void, label: string, 
         onClick={disabled ? undefined : onClick}
         whileHover={disabled ? {} : { scale: 1.15 }}
         whileTap={disabled ? {} : { scale: 0.9 }}
-        className={`${disabled ? 'opacity-40' : 'opacity-70 hover:opacity-90'} ${size === 'xs' ? 'p-1' : 'p-1.5'} grid grid-cols-7 gap-0.5 transition-all duration-300 ${isActive ? 'scale-125 drop-shadow-[0_0_20px_rgba(255,255,255,0.6)] opacity-100' : ''}`}
+        className={`${disabled ? 'opacity-40' : 'opacity-70 hover:opacity-90'} ${
+          size === 'xxs' ? 'p-0.5 gap-[1.5px]' : size === 'xs' ? 'p-1 gap-0.5' : 'p-1.5 gap-0.5'
+        } grid grid-cols-7 transition-all duration-300 ${isActive ? 'scale-125 drop-shadow-[0_0_20px_rgba(255,255,255,0.6)] opacity-100' : ''}`}
       >
         {heartPattern.flat().map((pixel, i) => (
           <div 
@@ -1426,7 +1511,7 @@ const PixelRadio: React.FC<{ onClick: () => void, size?: 'sm' | 'md', isActive: 
   );
 };
 
-const Typewriter: React.FC<{ text: string; speed?: number; onComplete?: () => void }> = ({ text, speed = 50, onComplete }) => {
+const Typewriter: React.FC<{ text: string; speed?: number; onComplete?: () => void; className?: string }> = ({ text, speed = 50, onComplete, className = 'whitespace-pre-wrap leading-relaxed' }) => {
   const [displayedText, setDisplayedText] = useState('');
   const [index, setIndex] = useState(0);
 
@@ -1448,7 +1533,7 @@ const Typewriter: React.FC<{ text: string; speed?: number; onComplete?: () => vo
     }
   }, [index, text, speed]);
 
-  return <div className="whitespace-pre-wrap leading-relaxed">{displayedText}</div>;
+  return <div className={className}>{displayedText}</div>;
 };
 
 const FallingBlocksOverlay: React.FC = () => {
@@ -1511,7 +1596,7 @@ const FallingBlocksOverlay: React.FC = () => {
   );
 };
 
-const SpecialThanksPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
+const SpecialThanksPage: React.FC<{ onBack: () => void; isEmbeddedDesktop?: boolean }> = ({ onBack, isEmbeddedDesktop = false }) => {
   const credits = `經紀公司:海璃海狸工作室
 幕後贊助:酸欠像素偶像居酒屋
 (沒錯 還是阿璃一手撐起這個偶像團的)
@@ -1552,7 +1637,9 @@ const SpecialThanksPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         whileHover={{ scale: 1.1, x: 5 }}
         whileTap={{ scale: 0.9 }}
         onClick={onBack}
-        className="absolute top-8 left-8 z-[1010] flex items-center gap-4 text-white/50 hover:text-white group"
+        className={`absolute z-[1010] flex items-center gap-4 text-white/50 hover:text-white group cursor-pointer ${
+          isEmbeddedDesktop ? 'top-5 left-5' : 'top-8 left-8'
+        }`}
       >
         <div className="w-10 h-10 rounded-full border border-white/30 flex items-center justify-center group-hover:bg-white group-hover:text-[#000814] transition-all">
           <span className="text-xl">←</span>
@@ -1561,14 +1648,30 @@ const SpecialThanksPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       </motion.button>
 
       {/* Credits Content */}
-      <div className="flex-1 flex flex-col items-center justify-center relative z-10 px-6 py-24 overflow-y-auto max-h-[85vh] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-        <div className="w-full max-w-none text-white/90 text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-wider text-center leading-relaxed sm:leading-loose px-4 sm:px-12 md:px-20">
-          <Typewriter text={credits} speed={80} />
+      <div
+        className={`flex-1 flex flex-col items-center justify-center relative z-10 ${
+          isEmbeddedDesktop
+            ? 'px-8 py-6 overflow-hidden'
+            : 'px-6 py-24 overflow-y-auto max-h-[85vh] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]'
+        }`}
+      >
+        <div
+          className={`w-full max-w-none text-white/90 font-bold tracking-wider text-center ${
+            isEmbeddedDesktop
+              ? 'text-[23px] px-12'
+              : 'text-xl sm:text-2xl md:text-3xl lg:text-4xl leading-relaxed sm:leading-loose px-4 sm:px-12 md:px-20'
+          }`}
+        >
+          <Typewriter
+            text={credits}
+            speed={80}
+            className={isEmbeddedDesktop ? 'whitespace-pre-wrap leading-[1.42]' : 'whitespace-pre-wrap leading-relaxed'}
+          />
         </div>
       </div>
 
       {/* Bottom Label */}
-      <div className="absolute bottom-12 left-12 text-white/10 font-black tracking-[0.5em] text-[10px] uppercase">
+      <div className={`absolute text-white/10 font-black tracking-[0.5em] text-[10px] uppercase ${isEmbeddedDesktop ? 'bottom-6 left-8' : 'bottom-12 left-12'}`}>
         UMIRI_CREDITS_SEQUENCE // SYSTEM_OVERRIDE
       </div>
     </motion.div>
@@ -2096,7 +2199,7 @@ const AncientWaterAndCalligraphyEffect: React.FC<{ fighterId: number; color?: st
   );
 };
 
-const UmiriSpecialPage: React.FC<{ fighterId: number; onBack: () => void; onSecretUnlock?: () => void }> = ({ fighterId, onBack, onSecretUnlock }) => {
+const UmiriSpecialPage: React.FC<{ fighterId: number; onBack: () => void; onSecretUnlock?: () => void; isEmbeddedDesktop?: boolean }> = ({ fighterId, onBack, onSecretUnlock, isEmbeddedDesktop = false }) => {
   const activeFighter = FIGHTERS.find(f => f.id === fighterId) || FIGHTERS[0];
   const code = getFighterCode(fighterId);
   const isSecondGen = fighterId >= 11 && fighterId <= 14;
@@ -2216,7 +2319,7 @@ const UmiriSpecialPage: React.FC<{ fighterId: number; onBack: () => void; onSecr
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className={`fixed inset-0 z-[1000] flex flex-col font-mono overflow-y-auto scroll-smooth custom-scrollbar ${
+      className={`fixed inset-0 z-[1000] flex flex-col font-mono overflow-y-auto custom-scrollbar ${isEmbeddedDesktop ? '' : 'scroll-smooth'} ${
         isSecondGen ? 'bg-[#141518]' : fighterId === 1 ? 'bg-[#092b36]' : 'bg-[#4C5E6E]'
       }`}
     >
@@ -2601,85 +2704,109 @@ const UmiriSpecialPage: React.FC<{ fighterId: number; onBack: () => void; onSecr
         </div>
 
         {/* SECTION 3: ADDITIONAL INFO */}
-        <div className="min-h-screen w-full bg-[#0891b2] relative flex flex-col items-start pt-32 pb-32 px-20 overflow-hidden">
+        <div className={`min-h-screen w-full bg-[#0891b2] relative flex flex-col items-start overflow-hidden ${
+          isEmbeddedDesktop ? 'justify-center py-8 px-14' : 'pt-32 pb-32 px-20'
+        }`}>
           <motion.div
             initial={{ opacity: 0, y: 50 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             className="relative z-10 flex flex-col items-start text-left w-full max-w-none"
           >
-            <div className="flex flex-col items-start mb-20">
-              <h2 className="text-9xl font-black text-white tracking-[-0.02em] italic drop-shadow-[0_0_40px_rgba(255,255,255,0.4)] leading-none">
+            <div className={`flex flex-col items-start ${isEmbeddedDesktop ? 'mb-5' : 'mb-20'}`}>
+              <h2 className={`font-black text-white tracking-[-0.02em] italic drop-shadow-[0_0_40px_rgba(255,255,255,0.4)] leading-none ${
+                isEmbeddedDesktop ? 'text-6xl' : 'text-9xl'
+              }`}>
                 涼海璃 UMIRI
               </h2>
-              <div className="mt-8 flex items-center gap-6">
+              <div className={`flex items-center ${isEmbeddedDesktop ? 'mt-3 gap-4' : 'mt-8 gap-6'}`}>
                 <span className="text-white/30 font-pixel text-sm tracking-tighter">━━━━━━</span>
                 <span className="text-xs text-white/60 font-pixel tracking-[0.5em] uppercase whitespace-nowrap">SUZUUMI RII</span>
               </div>
             </div>
 
             {/* Profile Content Box */}
-            <div className="w-full min-h-[600px] border-2 border-dashed border-white/10 rounded-3xl flex flex-col items-start justify-start p-16 bg-white/5 backdrop-blur-sm relative overflow-hidden group border-white/20 hover:border-white/35 transition-all">
+            <div className={`w-full border-2 border-dashed border-white/10 rounded-3xl flex flex-col items-start justify-start bg-white/5 backdrop-blur-sm relative overflow-hidden group border-white/20 hover:border-white/35 transition-all ${
+              isEmbeddedDesktop ? 'p-8' : 'min-h-[600px] p-16'
+            }`}>
               {/* Decorative Background Text */}
-              <div className="absolute top-10 right-10 text-[120px] font-black text-white/5 italic select-none pointer-events-none tracking-tighter">
+              <div className={`absolute font-black text-white/5 italic select-none pointer-events-none tracking-tighter ${
+                isEmbeddedDesktop ? 'top-4 right-8 text-[80px]' : 'top-10 right-10 text-[120px]'
+              }`}>
                 UMIRI
               </div>
 
               <motion.div 
                 initial={{ opacity: 0, x: -20 }}
                 whileInView={{ opacity: 1, x: 0 }}
-                className="relative z-10 flex flex-col gap-12 w-full"
+                viewport={{ once: true }}
+                className={`relative z-10 flex flex-col w-full ${isEmbeddedDesktop ? 'gap-5' : 'gap-12'}`}
               >
-                <div className="flex flex-col gap-4">
-                  <h3 className="text-6xl font-black text-white italic tracking-wider">個人檔案 SECRET</h3>
+                <div className={`flex flex-col ${isEmbeddedDesktop ? 'gap-1.5' : 'gap-4'}`}>
+                  <h3 className={`font-black text-white italic tracking-wider ${isEmbeddedDesktop ? 'text-4xl' : 'text-6xl'}`}>個人檔案 SECRET</h3>
                   <div className="flex items-center gap-4">
                     <span className="text-white/30 font-pixel text-xs">━━━━</span>
                     <span className="text-white/60 font-pixel text-sm tracking-[0.2em]">PROFILE DATA // 001</span>
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-8">
-                  <div className="flex flex-col md:flex-row md:items-baseline gap-4 md:gap-12">
-                    <span className="text-white/40 font-pixel text-xs uppercase tracking-[0.2em] w-28 shrink-0">Birthday</span>
-                    <span className="text-4xl font-bold text-white tracking-widest">20050822</span>
-                  </div>
-                  <div className="flex flex-col md:flex-row md:items-baseline gap-4 md:gap-12">
-                    <span className="text-white/40 font-pixel text-xs uppercase tracking-[0.2em] w-28 shrink-0">Hobby</span>
-                    <span className="text-4xl font-bold text-white tracking-widest">非常愛吃卡茲爆米花</span>
-                  </div>
+                <div className={`flex flex-col ${isEmbeddedDesktop ? 'gap-4' : 'gap-8'}`}>
+                  {isEmbeddedDesktop ? (
+                    <div className="grid grid-cols-2 gap-8 items-baseline">
+                      <div className="flex items-baseline gap-6">
+                        <span className="text-white/40 font-pixel text-xs uppercase tracking-[0.2em] w-28 shrink-0">Birthday</span>
+                        <span className="text-3xl font-bold text-white tracking-widest">20050822</span>
+                      </div>
+                      <div className="flex items-baseline gap-6">
+                        <span className="text-white/40 font-pixel text-xs uppercase tracking-[0.2em] w-24 shrink-0">Hobby</span>
+                        <span className="text-3xl font-bold text-white tracking-widest whitespace-nowrap">非常愛吃卡茲爆米花</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex flex-col md:flex-row md:items-baseline gap-4 md:gap-12">
+                        <span className="text-white/40 font-pixel text-xs uppercase tracking-[0.2em] w-28 shrink-0">Birthday</span>
+                        <span className="text-4xl font-bold text-white tracking-widest">20050822</span>
+                      </div>
+                      <div className="flex flex-col md:flex-row md:items-baseline gap-4 md:gap-12">
+                        <span className="text-white/40 font-pixel text-xs uppercase tracking-[0.2em] w-28 shrink-0">Hobby</span>
+                        <span className="text-4xl font-bold text-white tracking-widest">非常愛吃卡茲爆米花</span>
+                      </div>
+                    </>
+                  )}
                   
-                  <div className="h-[1px] w-full bg-white/10 my-2" />
+                  <div className={`h-[1px] w-full bg-white/10 ${isEmbeddedDesktop ? 'my-0.5' : 'my-2'}`} />
                   
-                  <div className="flex flex-col md:flex-row gap-4 md:gap-12">
-                    <span className="text-white/40 font-pixel text-xs uppercase tracking-[0.2em] w-28 shrink-0 pt-2">Features</span>
-                    <div className="flex flex-col gap-6">
+                  <div className={`flex flex-col md:flex-row ${isEmbeddedDesktop ? 'gap-6' : 'gap-4 md:gap-12'}`}>
+                    <span className={`text-white/40 font-pixel text-xs uppercase tracking-[0.2em] w-28 shrink-0 ${isEmbeddedDesktop ? 'pt-1' : 'pt-2'}`}>Features</span>
+                    <div className={`flex flex-col ${isEmbeddedDesktop ? 'gap-2.5' : 'gap-6'}`}>
                       <div className="flex items-start gap-4">
-                        <span className="text-xl text-[#FFFF00] mt-1">✦</span>
-                        <span className="text-2xl md:text-3xl font-extrabold text-white tracking-wide leading-relaxed">
+                        <span className={`text-[#FFFF00] ${isEmbeddedDesktop ? 'text-base mt-0.5' : 'text-xl mt-1'}`}>✦</span>
+                        <span className={`font-extrabold text-white tracking-wide ${isEmbeddedDesktop ? 'text-xl leading-snug' : 'text-2xl md:text-3xl leading-relaxed'}`}>
                           高音低音隨便切換 (心情越賭爛的時候會越低)
                         </span>
                       </div>
                       <div className="flex items-start gap-4">
-                        <span className="text-xl text-[#FFFF00] mt-1">✦</span>
-                        <span className="text-2xl md:text-3xl font-extrabold text-white tracking-wide leading-relaxed">
+                        <span className={`text-[#FFFF00] ${isEmbeddedDesktop ? 'text-base mt-0.5' : 'text-xl mt-1'}`}>✦</span>
+                        <span className={`font-extrabold text-white tracking-wide ${isEmbeddedDesktop ? 'text-xl leading-snug' : 'text-2xl md:text-3xl leading-relaxed'}`}>
                           絕對冷淡表情 特技是面不改色的唱《Bad Apple!!!》
                         </span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="h-[1px] w-full bg-white/10 my-2" />
+                  <div className={`h-[1px] w-full bg-white/10 ${isEmbeddedDesktop ? 'my-0.5' : 'my-2'}`} />
                   
-                  <div className="flex flex-col md:flex-row gap-4 md:gap-12">
-                    <span className="text-white/40 font-pixel text-xs uppercase tracking-[0.2em] w-28 shrink-0 pt-2">Notes</span>
-                    <div className="flex flex-col gap-6">
+                  <div className={`flex flex-col md:flex-row ${isEmbeddedDesktop ? 'gap-6' : 'gap-4 md:gap-12'}`}>
+                    <span className={`text-white/40 font-pixel text-xs uppercase tracking-[0.2em] w-28 shrink-0 ${isEmbeddedDesktop ? 'pt-1' : 'pt-2'}`}>Notes</span>
+                    <div className={`flex flex-col ${isEmbeddedDesktop ? 'gap-2.5' : 'gap-6'}`}>
                       <div className="flex items-start gap-4">
-                        <span className="text-xl text-[#FF4500] mt-1 animate-pulse">⚠️</span>
-                        <div className="flex flex-col gap-2">
-                          <p className="text-2xl md:text-3xl font-extrabold text-white tracking-wide leading-relaxed">
+                        <span className={`text-[#FF4500] animate-pulse ${isEmbeddedDesktop ? 'text-base mt-0.5' : 'text-xl mt-1'}`}>⚠️</span>
+                        <div className={`flex flex-col ${isEmbeddedDesktop ? 'gap-1.5' : 'gap-2'}`}>
+                          <p className={`font-extrabold text-white tracking-wide ${isEmbeddedDesktop ? 'text-xl leading-snug' : 'text-2xl md:text-3xl leading-relaxed'}`}>
                             如果你發現今天的阿璃聲音低到嚇死 而且頭上戴著紫色惡魔角的髮箍
                           </p>
-                          <p className="text-2xl md:text-3xl font-black text-[#FF4500] drop-shadow-[0_0_15px_rgba(255,69,0,0.5)] tracking-wide leading-relaxed animate-pulse">
+                          <p className={`font-black text-[#FF4500] drop-shadow-[0_0_15px_rgba(255,69,0,0.5)] tracking-wide animate-pulse ${isEmbeddedDesktop ? 'text-xl leading-snug' : 'text-2xl md:text-3xl leading-relaxed'}`}>
                             「快跑 阿璃氣到要殺人了」
                           </p>
                         </div>
@@ -2691,15 +2818,17 @@ const UmiriSpecialPage: React.FC<{ fighterId: number; onBack: () => void; onSecr
             </div>
 
             {/* SECTION 3 BOTTOM: 新按鈕 - 某璃的獨白 */}
-            <div className="mt-10 flex flex-col sm:flex-row items-center justify-start w-full gap-6">
+            <div className={`flex flex-col sm:flex-row items-center justify-start w-full gap-6 ${isEmbeddedDesktop ? 'mt-5' : 'mt-10'}`}>
               <motion.button
                 whileHover={{ scale: 1.03, boxShadow: '0 0 35px rgba(185, 28, 28, 0.6)' }}
                 whileTap={{ scale: 0.97 }}
                 onClick={() => setShowEscalatorMonologue(true)}
-                className="w-full sm:w-auto px-8 py-4 bg-[#1a0206] border-2 border-red-600/80 hover:border-red-500 rounded-2xl text-red-400 hover:text-white font-mono font-bold text-base md:text-lg tracking-[0.2em] shadow-[0_0_25px_rgba(185,28,28,0.35)] transition-all duration-300 flex items-center justify-center gap-3 cursor-pointer relative group overflow-hidden"
+                className={`w-full sm:w-auto bg-[#1a0206] border-2 border-red-600/80 hover:border-red-500 rounded-2xl text-red-400 hover:text-white font-mono font-bold tracking-[0.2em] shadow-[0_0_25px_rgba(185,28,28,0.35)] transition-all duration-300 flex items-center justify-center gap-3 cursor-pointer relative group overflow-hidden ${
+                  isEmbeddedDesktop ? 'px-6 py-3 text-base' : 'px-8 py-4 text-base md:text-lg'
+                }`}
               >
                 <div className="absolute inset-0 bg-red-600/10 group-hover:bg-red-600/20 transition-all duration-300" />
-                <span className="text-red-500 text-xl group-hover:scale-110 transition-transform">🪜</span>
+                <span className={`text-red-500 group-hover:scale-110 transition-transform ${isEmbeddedDesktop ? 'text-lg' : 'text-xl'}`}>🪜</span>
                 <span className="relative z-10 drop-shadow-[0_0_10px_rgba(239,68,68,0.8)] font-mono">
                   某璃的獨白
                 </span>
@@ -3276,12 +3405,11 @@ export default function App() {
         const amount = typeof data.deltaY === 'number' ? data.deltaY : 0;
         if (amount === 0) return;
         const smooth = Boolean(data.smooth);
-        const scrollBehavior: ScrollBehavior = smooth ? 'smooth' : 'instant';
 
         const candidates: HTMLElement[] = [];
         const allEls = document.querySelectorAll<HTMLElement>('*');
         allEls.forEach((el) => {
-          if (el.scrollHeight > el.clientHeight + 2) {
+          if (el.scrollHeight > el.clientHeight + 4) {
             const style = window.getComputedStyle(el);
             if (
               (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
@@ -3295,21 +3423,30 @@ export default function App() {
 
         candidates.reverse();
 
+        const scrollTarget = (el: HTMLElement) => {
+          if (smooth) {
+            el.scrollBy({ top: amount, behavior: 'smooth' });
+          } else {
+            const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight);
+            el.scrollTop = Math.max(0, Math.min(maxScroll, el.scrollTop + amount));
+          }
+        };
+
         let scrolled = false;
         for (const el of candidates) {
           const canScrollDir =
             amount > 0
-              ? el.scrollTop + el.clientHeight < el.scrollHeight - 1
-              : el.scrollTop > 1;
+              ? el.scrollTop + el.clientHeight < el.scrollHeight - 0.5
+              : el.scrollTop > 0.5;
           if (canScrollDir) {
-            el.scrollBy({ top: amount, behavior: scrollBehavior });
+            scrollTarget(el);
             scrolled = true;
             break;
           }
         }
 
         if (!scrolled && scrollContainerRef.current) {
-          scrollContainerRef.current.scrollBy({ top: amount, behavior: scrollBehavior });
+          scrollTarget(scrollContainerRef.current);
         }
       }
     };
@@ -3725,6 +3862,7 @@ export default function App() {
             key={`umiri_special-${selectedFighterId}`} 
             fighterId={selectedFighterId} 
             onBack={handleBackToMemberSelection} 
+            isEmbeddedDesktop={isEmbeddedDesktop}
             onSecretUnlock={() => {
               setGameState('next_page');
               setActiveSubPage('disabled');
@@ -3735,7 +3873,11 @@ export default function App() {
             <BannedListPage key="banned_list" onBack={() => setGameState('next_page')} />
           </React.Suspense>
         ) : gameState === 'special_thanks' ? (
-          <SpecialThanksPage key="special_thanks" onBack={() => setGameState('next_page')} />
+          <SpecialThanksPage
+            key="special_thanks"
+            onBack={() => setGameState('next_page')}
+            isEmbeddedDesktop={isEmbeddedDesktop}
+          />
         ) : gameState === 'idol_studio' ? (
           <BroadcastStudioPage 
             key="idol_studio" 
@@ -3753,7 +3895,7 @@ export default function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className={`absolute inset-0 bg-[#001B3D] overflow-x-hidden overflow-y-auto scroll-smooth custom-scrollbar`}
+            className={`absolute inset-0 bg-[#001B3D] overflow-x-hidden overflow-y-auto custom-scrollbar ${isEmbeddedDesktop ? '' : 'scroll-smooth'}`}
           >
             {/* SECTION 1: CUTE DEEP PURPLE HUB */}
             <div className="min-h-screen w-full relative flex flex-col bg-[#2D033B] overflow-hidden border-b border-white/5">
@@ -3814,7 +3956,7 @@ export default function App() {
                   setSelectedMemberCategory(null);
                   setSkipDanmakuOnReturn(false);
                 }}
-                className="absolute top-0 left-0 w-80 h-80 z-[100] cursor-pointer group pointer-events-auto"
+                className={`absolute top-0 left-0 z-[100] cursor-pointer group pointer-events-auto ${isEmbeddedDesktop ? 'w-40 h-44' : 'w-80 h-80'}`}
                 title="返回主頁"
               >
                 {/* Subtle visual hint for the trigger area */}
@@ -3822,8 +3964,8 @@ export default function App() {
               </div>
 
               {/* Top-Left Navigation Overlay - Bound to Banner */}
-              <div className={`absolute z-50 flex flex-col gap-6 pointer-events-auto ${isEmbeddedDesktop ? 'top-3.5 left-72' : 'top-4 left-80'}`}>
-                <div className={`flex ${isEmbeddedDesktop ? 'gap-4' : 'gap-6'}`}>
+              <div className={`absolute z-50 flex flex-col gap-6 pointer-events-auto ${isEmbeddedDesktop ? 'top-3 left-44' : 'top-4 left-80'}`}>
+                <div className={`flex ${isEmbeddedDesktop ? 'gap-2.5' : 'gap-6'}`}>
                   {HEARTS.map((heart) => {
                     const isSecretHeartPublished = false; // 預設隱藏發布，灰色心不可點擊
                     const isDisabled = heart.id === 'disabled' ? !isSecretHeartPublished : (heart as any).disabled;
@@ -3832,7 +3974,7 @@ export default function App() {
                         key={heart.id}
                         color={heart.color}
                         label={heart.label}
-                        size={isEmbeddedDesktop ? 'xs' : 'sm'}
+                        size={isEmbeddedDesktop ? 'xxs' : 'sm'}
                         isActive={activeSubPage === heart.id}
                         disabled={isDisabled}
                         onClick={() => {
@@ -3918,7 +4060,7 @@ export default function App() {
           </motion.div>
           
           {/* Content Area for Next Page */}
-          <div className="flex-1 flex flex-col items-center justify-center p-8 relative">
+          <div className={`flex-1 flex flex-col items-center justify-center relative ${isEmbeddedDesktop && activeSubPage === 'members' ? 'p-4' : 'p-8'}`}>
             {/* Screen Transition Effect */}
             <AnimatePresence mode="wait">
               {activeSubPage && (
@@ -3948,7 +4090,9 @@ export default function App() {
                       damping: 25,
                       opacity: { duration: 0.3 }
                     }}
-                    className="text-white font-mono p-8 rounded-2xl transition-all duration-500 relative min-h-[calc(100vh-120px)]"
+                    className={`text-white font-mono rounded-2xl transition-all duration-500 relative ${
+                      isEmbeddedDesktop && activeSubPage === 'members' ? 'p-4' : 'p-8 min-h-[calc(100vh-120px)]'
+                    }`}
                     style={{ 
                       transform: displayScale !== 1 ? `scale(${displayScale})` : undefined, 
                       transformOrigin: 'top center',
@@ -3991,6 +4135,7 @@ export default function App() {
                         selectedCategory={selectedMemberCategory}
                         setSelectedCategory={setSelectedMemberCategory}
                         skipDanmaku={skipDanmakuOnReturn}
+                        isEmbeddedDesktop={isEmbeddedDesktop}
                         onSpecialPage={(id) => {
                           setSelectedFighterId(id);
                           setSelectedMemberCategory(selectedMemberCategory || getCategoryForFighter(id));
@@ -4526,9 +4671,17 @@ export default function App() {
                         </div>
                       </div>
                     ) : activeSubPage === 'collab' ? (
-                      <div className="w-full max-w-none flex flex-col items-center justify-center px-4 sm:px-8 md:px-12 xl:px-16 pt-32 pb-20 z-40">
-                        <div className="w-full max-w-none bg-slate-900/40 backdrop-blur-xs p-6 sm:p-10 md:p-14 xl:p-16 rounded-[36px] border border-white/10 shadow-2xl">
-                          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 sm:gap-8 w-full min-h-[calc(100vh-320px)]">
+                      <div className={`w-full max-w-none flex flex-col items-center justify-center z-40 ${
+                        isEmbeddedDesktop ? 'px-6 pt-24 pb-16' : 'px-4 sm:px-8 md:px-12 xl:px-16 pt-32 pb-20'
+                      }`}>
+                        <div className={`w-full max-w-none bg-slate-900/40 backdrop-blur-xs border border-white/10 shadow-2xl ${
+                          isEmbeddedDesktop ? 'p-6 rounded-[28px]' : 'p-6 sm:p-10 md:p-14 xl:p-16 rounded-[36px]'
+                        }`}>
+                          <div className={`grid w-full ${
+                            isEmbeddedDesktop
+                              ? 'grid-cols-3 gap-4 min-h-[480px]'
+                              : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 sm:gap-8 min-h-[calc(100vh-320px)]'
+                          }`}>
                           {[
                             { title: 'BRAND', id: '01' },
                             { title: 'EVENT', id: '02' },
@@ -4542,19 +4695,23 @@ export default function App() {
                               initial={{ opacity: 0, scale: 0.98 }}
                               animate={{ opacity: 1, scale: 1 }}
                               transition={{ delay: i * 0.05 }}
-                              className="bg-white/5 backdrop-blur-xl border border-white/10 hover:bg-white/10 transition-all duration-300 cursor-pointer flex flex-col items-center justify-center group relative overflow-hidden shadow-2xl rounded-3xl min-h-[220px]"
+                              className={`bg-white/5 backdrop-blur-xl border border-white/10 hover:bg-white/10 transition-all duration-300 cursor-pointer flex flex-col items-center justify-center group relative overflow-hidden shadow-2xl rounded-3xl ${
+                                isEmbeddedDesktop ? 'min-h-[210px]' : 'min-h-[220px]'
+                              }`}
                             >
                               {/* Decorative Corner Accents */}
                               <div className="absolute top-0 left-0 w-16 h-16 border-t-2 border-l-2 border-white/20 group-hover:border-white/40 transition-all duration-500" />
                               <div className="absolute bottom-0 right-0 w-16 h-16 border-b-2 border-r-2 border-white/20 group-hover:border-white/40 transition-all duration-500" />
                               
                               {/* Content */}
-                              <div className="relative z-10 flex flex-col items-center justify-center p-8 text-center w-full h-full">
+                              <div className={`relative z-10 flex flex-col items-center justify-center text-center w-full h-full ${isEmbeddedDesktop ? 'p-4' : 'p-8'}`}>
                                 {i === 0 && (
                                   <motion.div
                                     initial={{ opacity: 0, y: 20 }}
                                     animate={{ opacity: 1, y: 0 }}
-                                    className="text-white font-black text-4xl sm:text-6xl md:text-7xl xl:text-8xl tracking-[0.2em] drop-shadow-[0_0_30px_rgba(255,255,255,0.5)]"
+                                    className={`text-white font-black drop-shadow-[0_0_30px_rgba(255,255,255,0.5)] ${
+                                      isEmbeddedDesktop ? 'text-3xl tracking-[0.12em] whitespace-nowrap' : 'text-4xl sm:text-6xl md:text-7xl xl:text-8xl tracking-[0.2em]'
+                                    }`}
                                   >
                                     團員招募中
                                   </motion.div>
@@ -4563,10 +4720,10 @@ export default function App() {
                                   <motion.div
                                     initial={{ opacity: 0, y: 20 }}
                                     animate={{ opacity: 1, y: 0 }}
-                                    className="text-white font-bold flex flex-col gap-4 text-center items-center"
+                                    className={`text-white font-bold flex flex-col text-center items-center ${isEmbeddedDesktop ? 'gap-2.5' : 'gap-4'}`}
                                   >
-                                    <div className="text-2xl sm:text-3xl md:text-4xl tracking-widest opacity-60">官方通訊管道</div>
-                                    <div className="text-xl sm:text-2xl md:text-3xl opacity-80 font-mono tracking-widest">
+                                    <div className={`opacity-60 ${isEmbeddedDesktop ? 'text-xl tracking-wider whitespace-nowrap' : 'text-2xl sm:text-3xl md:text-4xl tracking-widest'}`}>官方通訊管道</div>
+                                    <div className={`opacity-80 font-mono ${isEmbeddedDesktop ? 'text-lg tracking-wider whitespace-nowrap' : 'text-xl sm:text-2xl md:text-3xl tracking-widest'}`}>
                                       電話: 02-8925-2329
                                     </div>
                                   </motion.div>
@@ -4575,17 +4732,17 @@ export default function App() {
                                   <motion.div
                                     initial={{ opacity: 0, y: 20 }}
                                     animate={{ opacity: 1, y: 0 }}
-                                    className="text-white font-bold flex flex-col gap-4"
+                                    className={`text-white font-bold flex flex-col ${isEmbeddedDesktop ? 'gap-2' : 'gap-4'}`}
                                   >
-                                    <div className="text-2xl sm:text-3xl md:text-4xl tracking-widest opacity-60">其他合作邀約請聯繫</div>
-                                    <div className="text-xl sm:text-2xl text-[#4C5E6E] break-all">海璃海狸工作室電子郵件<br/>haillibaobao0822@gmail.com</div>
-                                    <div className="text-base sm:text-lg md:text-xl opacity-80 leading-relaxed">
+                                    <div className={`opacity-60 ${isEmbeddedDesktop ? 'text-lg tracking-wider whitespace-nowrap' : 'text-2xl sm:text-3xl md:text-4xl tracking-widest'}`}>其他合作邀約請聯繫</div>
+                                    <div className={`text-[#4C5E6E] ${isEmbeddedDesktop ? 'text-sm whitespace-nowrap leading-snug' : 'text-xl sm:text-2xl break-all'}`}>海璃海狸工作室電子郵件<br/>haillibaobao0822@gmail.com</div>
+                                    <div className={`opacity-80 leading-relaxed ${isEmbeddedDesktop ? 'text-xs whitespace-nowrap' : 'text-base sm:text-lg md:text-xl'}`}>
                                       或於平日早上9:00至晚上8:00<br/>
                                       至海璃海狸工作室進行商談
                                     </div>
                                   </motion.div>
                                 )}
-                                <div className="absolute bottom-8 h-2 w-0 bg-white/70 group-hover:w-64 transition-all duration-500" />
+                                <div className={`absolute bg-white/70 transition-all duration-500 ${isEmbeddedDesktop ? 'bottom-5 h-1.5 w-0 group-hover:w-36' : 'bottom-8 h-2 w-0 group-hover:w-64'}`} />
                               </div>
                               
                               {/* Hover Glow & Scanline */}

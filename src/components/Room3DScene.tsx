@@ -1,28 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { 
-  RotateCcw, 
-  Volume2, 
-  VolumeX, 
-  DoorClosed, 
-  Layers,
-  X
-} from 'lucide-react';
 
 interface Room3DSceneProps {
-  onExitRoom: () => void;
-  onOpenMenu: () => void;
-  soundEnabled: boolean;
-  onToggleSound: () => void;
+  onExitRoom?: () => void;
+  onOpenMenu?: () => void;
+  soundEnabled?: boolean;
+  onToggleSound?: () => void;
   playFootstep?: () => void;
 }
 
-export const Room3DScene: React.FC<Room3DSceneProps> = ({
-  onExitRoom,
-  onOpenMenu,
-  soundEnabled,
-  onToggleSound,
-}) => {
+export const Room3DScene: React.FC<Room3DSceneProps> = () => {
   const containerRef = useRef<HTMLDivElement>(null);
 
   // User Request: "刪除抬頭 降低左右視角轉動 將視角轉動方式從360度改為T字(左右 下視角)"
@@ -1305,7 +1292,7 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
             if (performance.now() - dpadPressStartTimeRef.current >= 140) {
               dpadHasScrolledRef.current = true;
               desktopIframeRef.current?.contentWindow?.postMessage(
-                { type: 'console_scroll', deltaY: dir * (delta * 760), smooth: false },
+                { type: 'console_scroll', deltaY: dir * (delta * 900), smooth: false },
                 window.location.origin
               );
             }
@@ -1709,11 +1696,6 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
     activeConsoleMouseRoleRef.current = null;
   };
 
-  const handleResetCameraView = () => {
-    targetYawRef.current = CENTER_YAW;
-    targetPitchRef.current = 0;
-  };
-
   return (
     <div 
       className={`absolute inset-0 w-full h-full select-none overflow-hidden bg-[#0c0907] ${
@@ -1773,79 +1755,12 @@ export const Room3DScene: React.FC<Room3DSceneProps> = ({
         </div>
       )}
 
-      {/* Put-Down Console Button when holding handheld */}
-      {isConsoleHeld && (
-        <div
-          className="absolute top-4 left-4 z-30 pointer-events-auto"
-          onTouchStart={(e) => e.stopPropagation()}
-          onTouchEnd={(e) => e.stopPropagation()}
-          onMouseDown={(e) => e.stopPropagation()}
-          onMouseUp={(e) => e.stopPropagation()}
-        >
-          <button
-            onClick={() => handleToggleConsole(false)}
-            className="px-3.5 py-2 rounded-full bg-black/65 hover:bg-black/85 backdrop-blur-md border border-indigo-400/40 text-white font-mono text-xs font-bold flex items-center gap-1.5 active:scale-95 transition-all shadow-lg cursor-pointer"
-            title="放回茶几"
-          >
-            <X className="w-3.5 h-3.5 text-indigo-300" />
-            <span>放回茶几</span>
-          </button>
-        </div>
-      )}
-
       {/* Center Subtle Focus Ring */}
       {!isConsoleHeld && (
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-25">
           <div className="w-2.5 h-2.5 rounded-full border border-amber-300/70 bg-white/15 shadow-sm" />
         </div>
       )}
-
-      {/* Top Right Clean Floating Actions (No status bar or cluttering text) */}
-      <div
-        className="absolute top-4 right-4 flex items-center gap-2 pointer-events-auto z-30"
-        onTouchStart={(e) => e.stopPropagation()}
-        onTouchEnd={(e) => e.stopPropagation()}
-        onMouseDown={(e) => e.stopPropagation()}
-        onMouseUp={(e) => e.stopPropagation()}
-      >
-        {/* Sound Toggle */}
-        <button
-          onClick={onToggleSound}
-          className="p-2.5 rounded-full bg-black/50 hover:bg-black/70 backdrop-blur-md border border-white/15 text-white active:scale-95 transition-all shadow-md cursor-pointer"
-          title="音效開關"
-        >
-          {soundEnabled ? <Volume2 className="w-4 h-4 text-amber-300" /> : <VolumeX className="w-4 h-4 text-white/40" />}
-        </button>
-
-        {/* Reset View Button */}
-        {!isConsoleHeld && (
-          <button
-            onClick={handleResetCameraView}
-            className="p-2.5 rounded-full bg-black/50 hover:bg-black/70 backdrop-blur-md border border-white/15 text-white/80 active:scale-95 transition-all shadow-md cursor-pointer"
-            title="視角回正"
-          >
-            <RotateCcw className="w-4 h-4 text-amber-300" />
-          </button>
-        )}
-
-        {/* Menu Button */}
-        <button
-          onClick={onOpenMenu}
-          className="px-3.5 py-2 rounded-full bg-gradient-to-r from-amber-600 to-amber-700 hover:brightness-110 text-white font-mono font-bold text-xs tracking-wider flex items-center gap-1.5 border border-amber-400/40 shadow-[0_0_15px_rgba(217,119,6,0.35)] active:scale-95 transition-all cursor-pointer"
-        >
-          <Layers className="w-3.5 h-3.5 text-amber-200" />
-          <span>選單</span>
-        </button>
-
-        {/* Exit Room Button */}
-        <button
-          onClick={onExitRoom}
-          className="p-2.5 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white/90 active:scale-95 transition-all shadow-md cursor-pointer"
-          title="退出"
-        >
-          <DoorClosed className="w-4 h-4 text-amber-300" />
-        </button>
-      </div>
     </div>
   );
 };
