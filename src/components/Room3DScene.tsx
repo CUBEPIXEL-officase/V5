@@ -63,6 +63,8 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
   const lampLightRef = useRef<THREE.PointLight | null>(null);
   const lampBulbMatRef = useRef<THREE.MeshBasicMaterial | null>(null);
   const lampShadeMatRef = useRef<THREE.MeshStandardMaterial | null>(null);
+  const pouchFrontMatRef = useRef<THREE.MeshPhysicalMaterial | null>(null);
+  const pouchSideMatRef = useRef<THREE.MeshPhysicalMaterial | null>(null);
 
   // Blue-Violet Handheld Console 3D Refs & Hold Animation Tracker
   const consoleGroupRef = useRef<THREE.Group | null>(null);
@@ -518,151 +520,814 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
       tableGroup.add(leg);
     });
 
-    // --- BONSAI POTTED PLANT ON WALL TABLE (牆邊木桌上的精緻盆栽) ---
-    const bonsaiGroup = new THREE.Group();
-    bonsaiGroup.position.set(0, TABLE_HEIGHT, 0);
+    const textureLoader = new THREE.TextureLoader();
 
-    // 1. Ceramic Pot (深色陶藝盆)
-    const potMat = new THREE.MeshStandardMaterial({
-      color: 0x1d1b19,
-      roughness: 0.38,
-      metalness: 0.15,
+    // --- 4A-1. BLACK VINYL RECORD & BLONDE WOOD EASEL ON WALL TABLE CENTER (牆邊木桌正中間黑膠唱片與底座) ---
+    const vinylCenterTexture = textureLoader.load('/assets/vinyl_center_tex.png');
+    vinylCenterTexture.colorSpace = THREE.SRGBColorSpace;
+    vinylCenterTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+    const createVinylDiscFaceTexture = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1024;
+      canvas.height = 1024;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return new THREE.Texture();
+
+      // Deep satin-black vinyl base
+      ctx.fillStyle = '#121317';
+      ctx.fillRect(0, 0, 1024, 1024);
+
+      // Anisotropic radial sheen reflection across vinyl tracks
+      const sheen = ctx.createConicGradient(0.45, 512, 512);
+      sheen.addColorStop(0.0, 'rgba(255,255,255,0.04)');
+      sheen.addColorStop(0.18, 'rgba(255,255,255,0.0)');
+      sheen.addColorStop(0.42, 'rgba(255,255,255,0.065)');
+      sheen.addColorStop(0.58, 'rgba(255,255,255,0.0)');
+      sheen.addColorStop(0.85, 'rgba(255,255,255,0.05)');
+      sheen.addColorStop(1.0, 'rgba(255,255,255,0.04)');
+      ctx.fillStyle = sheen;
+      ctx.fillRect(0, 0, 1024, 1024);
+
+      // Subtle concentric LP micro-grooves from outer rim inward to label margin
+      for (let r = 268; r <= 504; r += 3) {
+        ctx.beginPath();
+        ctx.arc(512, 512, r, 0, Math.PI * 2);
+        const trackBand = r % 63 < 4 ? 0.08 : (r % 9 === 0 ? 0.045 : 0.018);
+        ctx.strokeStyle = `rgba(255, 255, 255, ${trackBand})`;
+        ctx.lineWidth = r % 63 < 4 ? 1.8 : 1.0;
+        ctx.stroke();
+      }
+
+      // Expressive cyan metallic marker autograph "み UMIR 2026." on lower-right vinyl ring
+      ctx.save();
+      ctx.strokeStyle = '#18beff';
+      ctx.fillStyle = '#18beff';
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      // Cursive "み" loop + star finial matching reference photo
+      ctx.lineWidth = 11;
+      ctx.beginPath();
+      ctx.moveTo(765, 592);
+      ctx.quadraticCurveTo(815, 586, 835, 586);
+      ctx.bezierCurveTo(800, 635, 762, 682, 742, 690);
+      ctx.bezierCurveTo(722, 698, 725, 658, 765, 646);
+      ctx.bezierCurveTo(822, 630, 895, 648, 902, 706);
+      ctx.bezierCurveTo(906, 738, 875, 756, 845, 748);
+      ctx.stroke();
+
+      // Diagonal downward crossing stroke of "み"
+      ctx.lineWidth = 10;
+      ctx.beginPath();
+      ctx.moveTo(862, 580);
+      ctx.quadraticCurveTo(846, 672, 795, 732);
+      ctx.stroke();
+
+      // Tiny 5-point star accent at end of cursive tail
+      const sx = 843;
+      const sy = 747;
+      ctx.beginPath();
+      for (let p = 0; p < 10; p++) {
+        const ang = (p * Math.PI) / 5 - Math.PI / 2;
+        const rad = p % 2 === 0 ? 11 : 5;
+        const px = sx + Math.cos(ang) * rad;
+        const py = sy + Math.sin(ang) * rad;
+        if (p === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+
+      // Hand-lettered "UMIR" & "2026." on right margin next to "み"
+      ctx.translate(932, 608);
+      ctx.rotate(0.08);
+      ctx.font = 'bold 34px "Comic Sans MS", "Trebuchet MS", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('UMIR', 0, 0);
+      ctx.font = 'bold 26px "Comic Sans MS", "Trebuchet MS", sans-serif';
+      ctx.fillText('2026.', 4, 34);
+      ctx.restore();
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      return tex;
+    };
+
+    const vinylDiscFaceTexture = createVinylDiscFaceTexture();
+
+    const vinylEaselGroup = new THREE.Group();
+    vinylEaselGroup.position.set(0, TABLE_HEIGHT, 0.02);
+
+    const easelWoodMat = new THREE.MeshStandardMaterial({
+      color: 0xe2cca6,
+      roughness: 0.58,
+      metalness: 0.03,
     });
-    const potGeo = new THREE.CylinderGeometry(0.20, 0.14, 0.14, 24);
-    const pot = new THREE.Mesh(potGeo, potMat);
-    pot.position.y = 0.07;
-    pot.castShadow = true;
-    pot.receiveShadow = true;
-    bonsaiGroup.add(pot);
-
-    // Pot Rim
-    const rimGeo = new THREE.TorusGeometry(0.20, 0.016, 12, 24);
-    const rim = new THREE.Mesh(rimGeo, potMat);
-    rim.position.y = 0.14;
-    rim.rotation.x = Math.PI / 2;
-    bonsaiGroup.add(rim);
-
-    // Pot Soil (深色濕潤盆土)
-    const soilMat = new THREE.MeshStandardMaterial({
-      color: 0x120c08,
-      roughness: 0.95,
-    });
-    const soilGeo = new THREE.CylinderGeometry(0.19, 0.19, 0.02, 24);
-    const soil = new THREE.Mesh(soilGeo, soilMat);
-    soil.position.y = 0.135;
-    bonsaiGroup.add(soil);
-
-    // Moss Clumps on Soil Surface
-    const mossMat = new THREE.MeshStandardMaterial({
-      color: 0x2e4a21,
-      roughness: 0.9,
-    });
-    [
-      [-0.08, 0.142, 0.05, 0.045],
-      [0.09, 0.142, -0.04, 0.05],
-      [0.02, 0.142, 0.10, 0.04],
-      [-0.05, 0.142, -0.09, 0.042],
-    ].forEach(([mx, my, mz, mr]) => {
-      const moss = new THREE.Mesh(new THREE.SphereGeometry(mr, 10, 8), mossMat);
-      moss.position.set(mx, my, mz);
-      moss.scale.set(1.4, 0.45, 1.2);
-      bonsaiGroup.add(moss);
+    const easelPinMat = new THREE.MeshStandardMaterial({
+      color: 0x9c825a,
+      roughness: 0.45,
+      metalness: 0.25,
     });
 
-    // 2. Bonsai Curved Trunk & Branches (曲幹老松主幹)
-    const barkMat = new THREE.MeshStandardMaterial({
-      color: 0x2c1b12,
-      roughness: 0.85,
-      metalness: 0.05,
+    // 1. Mini Blonde Wood A-Frame Easel Stand (grounded at y = 0 on tabletop)
+    const EASEL_LEAN = -0.19; // ~11 deg backward lean
+    const easelFrontFrame = new THREE.Group();
+    easelFrontFrame.position.set(0, 0, 0.035);
+    easelFrontFrame.rotation.x = EASEL_LEAN;
+
+    // Left & Right splayed A-frame legs
+    const frontLegGeo = new THREE.BoxGeometry(0.015, 0.225, 0.015);
+    [-1, 1].forEach((side) => {
+      const fLeg = new THREE.Mesh(frontLegGeo, easelWoodMat);
+      fLeg.position.set(side * 0.068, 0.112, 0);
+      fLeg.rotation.z = side * 0.18;
+      fLeg.castShadow = true;
+      fLeg.receiveShadow = true;
+      easelFrontFrame.add(fLeg);
     });
 
-    // Trunk Segment 1 (Base)
-    const trunk1 = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.05, 0.16, 12), barkMat);
-    trunk1.position.set(0.01, 0.20, 0.01);
-    trunk1.rotation.set(0.12, 0.2, -0.22);
-    trunk1.castShadow = true;
-    bonsaiGroup.add(trunk1);
+    // Top crossbeam tying A-frame shoulders
+    const easelTopBar = new THREE.Mesh(
+      new THREE.BoxGeometry(0.115, 0.014, 0.014),
+      easelWoodMat
+    );
+    easelTopBar.position.set(0, 0.205, 0);
+    easelTopBar.castShadow = true;
+    easelFrontFrame.add(easelTopBar);
 
-    // Trunk Segment 2 (Mid Curve)
-    const trunk2 = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.036, 0.16, 12), barkMat);
-    trunk2.position.set(-0.035, 0.32, 0.03);
-    trunk2.rotation.set(-0.15, -0.1, 0.35);
-    trunk2.castShadow = true;
-    bonsaiGroup.add(trunk2);
+    // Front horizontal shelf ledge cradling the vinyl disc bottom rim
+    const easelLedge = new THREE.Mesh(
+      new THREE.BoxGeometry(0.205, 0.014, 0.030),
+      easelWoodMat
+    );
+    easelLedge.position.set(0, 0.056, 0.012);
+    easelLedge.castShadow = true;
+    easelLedge.receiveShadow = true;
+    easelFrontFrame.add(easelLedge);
 
-    // Trunk Segment 3 (Crown Lead)
-    const trunk3 = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.026, 0.14, 12), barkMat);
-    trunk3.position.set(0.02, 0.43, 0.01);
-    trunk3.rotation.set(0.1, 0.3, -0.18);
-    trunk3.castShadow = true;
-    bonsaiGroup.add(trunk3);
+    // Subtle front lip stopper on the ledge so the record sits securely
+    const easelLedgeLip = new THREE.Mesh(
+      new THREE.BoxGeometry(0.205, 0.008, 0.005),
+      easelWoodMat
+    );
+    easelLedgeLip.position.set(0, 0.065, 0.0245);
+    easelFrontFrame.add(easelLedgeLip);
 
-    // Left lateral branch
-    const branchL = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.020, 0.18, 10), barkMat);
-    branchL.position.set(-0.10, 0.35, 0.04);
-    branchL.rotation.set(-0.2, -0.4, 1.15);
-    branchL.castShadow = true;
-    bonsaiGroup.add(branchL);
+    // 2. Grooved Black 12" Vinyl Disc + Center Illustration Sticker resting on the easel ledge
+    const DISC_R = 0.182;
+    const discAssembly = new THREE.Group();
+    discAssembly.position.set(0, 0.063 + DISC_R, 0.0115);
 
-    // Right lateral branch
-    const branchR = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.020, 0.19, 10), barkMat);
-    branchR.position.set(0.11, 0.40, -0.02);
-    branchR.rotation.set(0.2, 0.3, -1.05);
-    branchR.castShadow = true;
-    bonsaiGroup.add(branchR);
-
-    // 3. Foliage Clouds (翠綠松團層次)
-    const leafMatDeep = new THREE.MeshStandardMaterial({
-      color: 0x1e421c,
-      roughness: 0.65,
+    const vinylBodyMat = new THREE.MeshStandardMaterial({
+      color: 0x101115,
+      roughness: 0.34,
+      metalness: 0.18,
     });
-    const leafMatMid = new THREE.MeshStandardMaterial({
-      color: 0x2d5c29,
-      roughness: 0.6,
+    const vinylRimCylinder = new THREE.Mesh(
+      new THREE.CylinderGeometry(DISC_R, DISC_R, 0.0046, 64),
+      vinylBodyMat
+    );
+    vinylRimCylinder.rotation.x = Math.PI / 2;
+    vinylRimCylinder.castShadow = true;
+    vinylRimCylinder.receiveShadow = true;
+    discAssembly.add(vinylRimCylinder);
+
+    // Front circular grooved vinyl surface + cyan "み UMIR 2026." autograph
+    const vinylFrontFace = new THREE.Mesh(
+      new THREE.CircleGeometry(DISC_R - 0.001, 64),
+      new THREE.MeshStandardMaterial({
+        map: vinylDiscFaceTexture,
+        color: 0xffffff,
+        roughness: 0.30,
+        metalness: 0.14,
+      })
+    );
+    vinylFrontFace.position.z = 0.0026;
+    vinylFrontFace.receiveShadow = true;
+    discAssembly.add(vinylFrontFace);
+
+    // Center "保持可愛漫研社" illustrated round vinyl sticker
+    const vinylCenterLabel = new THREE.Mesh(
+      new THREE.CircleGeometry(DISC_R * 0.505, 64),
+      new THREE.MeshStandardMaterial({
+        map: vinylCenterTexture,
+        color: 0xffffff,
+        roughness: 0.44,
+        metalness: 0.03,
+        transparent: true,
+        alphaTest: 0.12,
+      })
+    );
+    vinylCenterLabel.position.z = 0.0033;
+    vinylCenterLabel.receiveShadow = true;
+    discAssembly.add(vinylCenterLabel);
+
+    easelFrontFrame.add(discAssembly);
+    vinylEaselGroup.add(easelFrontFrame);
+
+    // Rear A-frame hinged support leg brace touching tabletop at y = 0
+    const rearLegGroup = new THREE.Group();
+    rearLegGroup.position.set(0, 0.195, -0.004);
+    rearLegGroup.rotation.x = 0.44;
+    [-1, 1].forEach((side) => {
+      const rLeg = new THREE.Mesh(
+        new THREE.BoxGeometry(0.013, 0.215, 0.013),
+        easelWoodMat
+      );
+      rLeg.position.set(side * 0.045, -0.105, 0);
+      rLeg.rotation.z = side * 0.12;
+      rLeg.castShadow = true;
+      rearLegGroup.add(rLeg);
     });
-    const leafMatBright = new THREE.MeshStandardMaterial({
-      color: 0x3d7037,
-      roughness: 0.55,
+    const rearBrace = new THREE.Mesh(
+      new THREE.BoxGeometry(0.11, 0.012, 0.012),
+      easelWoodMat
+    );
+    rearBrace.position.set(0, -0.12, 0);
+    rearLegGroup.add(rearBrace);
+    vinylEaselGroup.add(rearLegGroup);
+
+    // Tiny metal hinge pins joining front & rear easel struts
+    [-1, 1].forEach((side) => {
+      const pin = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.0035, 0.0035, 0.022, 10),
+        easelPinMat
+      );
+      pin.rotation.z = Math.PI / 2;
+      pin.position.set(side * 0.048, 0.198, -0.002);
+      vinylEaselGroup.add(pin);
     });
 
-    const foliageClusters = [
-      // Apex / Crown
-      { x: 0.01, y: 0.52, z: 0.00, sx: 0.16, sy: 0.08, sz: 0.14, mat: leafMatBright },
-      { x: 0.04, y: 0.49, z: -0.03, sx: 0.14, sy: 0.07, sz: 0.13, mat: leafMatMid },
-      // Left branch foliage
-      { x: -0.18, y: 0.38, z: 0.06, sx: 0.17, sy: 0.07, sz: 0.14, mat: leafMatMid },
-      { x: -0.15, y: 0.35, z: 0.02, sx: 0.13, sy: 0.06, sz: 0.12, mat: leafMatDeep },
-      // Right branch foliage
-      { x: 0.20, y: 0.43, z: -0.03, sx: 0.18, sy: 0.075, sz: 0.15, mat: leafMatBright },
-      { x: 0.16, y: 0.40, z: 0.02, sx: 0.14, sy: 0.065, sz: 0.12, mat: leafMatMid },
-      // Mid shelf foliage
-      { x: -0.04, y: 0.44, z: -0.06, sx: 0.12, sy: 0.06, sz: 0.11, mat: leafMatDeep },
-      { x: 0.08, y: 0.37, z: 0.05, sx: 0.13, sy: 0.06, sz: 0.11, mat: leafMatMid },
+    // Soft warm spotlight illuminating the centered vinyl record & wooden easel
+    const vinylSpot = new THREE.PointLight(0xffeed6, 1.5, 3.6, 1.2);
+    vinylSpot.position.set(0, 0.68, 0.42);
+    vinylSpot.castShadow = true;
+    vinylEaselGroup.add(vinylSpot);
+
+    tableGroup.add(vinylEaselGroup);
+
+    // --- 4A-1b. STACKED TRIPLE-CAT TRASH BIN AT FAR-LEFT OF WALL TABLE (牆邊桌面最左側貓貓垃圾桶) ---
+    const createCatFaceTexture = (variant: 'apricot' | 'white' | 'red') => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 256;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return new THREE.Texture();
+
+      ctx.clearRect(0, 0, 512, 256);
+      const cx = 256;
+      const cy = 128;
+
+      // Whiskers & cheeks common setup
+      const whiskerColor =
+        variant === 'red' ? '#f7f7f7' : variant === 'white' ? '#ebb24c' : '#181818';
+      ctx.strokeStyle = whiskerColor;
+      ctx.lineWidth = 7;
+      ctx.lineCap = 'round';
+      [-1, 1].forEach((side) => {
+        ctx.beginPath();
+        ctx.moveTo(cx + side * 112, cy + 4);
+        ctx.lineTo(cx + side * 158, cy - 6);
+        ctx.moveTo(cx + side * 112, cy + 24);
+        ctx.lineTo(cx + side * 160, cy + 28);
+        ctx.stroke();
+      });
+
+      // Rosy pink oval blush cheeks + tiny highlight dashes
+      [-1, 1].forEach((side) => {
+        const bx = cx + side * 78;
+        const by = cy + 28;
+        ctx.fillStyle = '#eb7c98';
+        ctx.beginPath();
+        ctx.ellipse(bx, by, 22, 13, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#ffd0dc';
+        ctx.lineWidth = 2.6;
+        ctx.beginPath();
+        ctx.moveTo(bx - 5, by - 4);
+        ctx.lineTo(bx - 5, by + 4);
+        ctx.moveTo(bx + 5, by - 4);
+        ctx.lineTo(bx + 5, by + 4);
+        ctx.stroke();
+      });
+
+      if (variant === 'red') {
+        // Large cartoon white-sclera eyes with forward black pupils
+        [-1, 1].forEach((side) => {
+          const ex = cx + side * 52;
+          const ey = cy - 10;
+          ctx.fillStyle = '#ffffff';
+          ctx.strokeStyle = '#181818';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.ellipse(ex, ey, 22, 26, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.fillStyle = '#141414';
+          ctx.beginPath();
+          ctx.ellipse(ex - side * 4, ey + 2, 12, 16, 0, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        // Outlined pink Y-nose & smile
+        ctx.strokeStyle = '#f8f8f8';
+        ctx.fillStyle = '#e56f89';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(cx - 8, cy + 16);
+        ctx.lineTo(cx + 8, cy + 16);
+        ctx.lineTo(cx, cy + 26);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx, cy + 26);
+        ctx.lineTo(cx, cy + 38);
+        ctx.stroke();
+      } else if (variant === 'white') {
+        // Shiny dark eyes with crescent specular highlights
+        [-1, 1].forEach((side) => {
+          const ex = cx + side * 52;
+          const ey = cy - 8;
+          ctx.fillStyle = '#161618';
+          ctx.beginPath();
+          ctx.ellipse(ex, ey, 21, 23, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(ex + 6, ey - 5, 7.5, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        // Tiny oval black nose
+        ctx.fillStyle = '#161618';
+        ctx.beginPath();
+        ctx.ellipse(cx, cy + 16, 8, 5, 0, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        // Happy ^ ^ squinting eyes + cheerful pink open mouth
+        ctx.strokeStyle = '#181818';
+        ctx.lineWidth = 6.5;
+        ctx.lineCap = 'round';
+        [-1, 1].forEach((side) => {
+          const ex = cx + side * 52;
+          ctx.beginPath();
+          ctx.arc(ex, cy - 2, 19, Math.PI * 1.15, Math.PI * 1.85);
+          ctx.stroke();
+        });
+        // Cute open mouth with pink tongue
+        ctx.fillStyle = '#d96b86';
+        ctx.strokeStyle = '#181818';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(cx - 20, cy + 16);
+        ctx.quadraticCurveTo(cx, cy + 22, cx + 20, cy + 16);
+        ctx.quadraticCurveTo(cx + 16, cy + 52, cx, cy + 52);
+        ctx.quadraticCurveTo(cx - 16, cy + 52, cx - 20, cy + 16);
+        ctx.fill();
+        ctx.stroke();
+        // Little nose dot
+        ctx.fillStyle = '#181818';
+        ctx.beginPath();
+        ctx.arc(cx, cy + 10, 6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      return tex;
+    };
+
+    const catFaceApricotTex = createCatFaceTexture('apricot');
+    const catFaceWhiteTex = createCatFaceTexture('white');
+    const catFaceRedTex = createCatFaceTexture('red');
+
+    const catBinGroup = new THREE.Group();
+    const CAT_R = 0.115;
+    const CAT_H = 0.084;
+
+    // 1. Matte black stepped circular foot ring
+    const catBaseRing = new THREE.Mesh(
+      new THREE.CylinderGeometry(CAT_R * 0.92, CAT_R * 0.97, 0.018, 36),
+      new THREE.MeshStandardMaterial({ color: 0x16171a, roughness: 0.55, metalness: 0.06 })
+    );
+    catBaseRing.position.y = 0.009;
+    catBaseRing.castShadow = true;
+    catBaseRing.receiveShadow = true;
+    catBinGroup.add(catBaseRing);
+
+    // Cushion drum Lathe profile (vertical bulge matching stacked plush-plastic bin tiers)
+    const makeCatHeadProfile = (rMax: number, h: number, rOff = 0) => [
+      new THREE.Vector2(rMax * 0.72 + rOff, 0.0),
+      new THREE.Vector2(rMax * 0.91 + rOff, h * 0.12),
+      new THREE.Vector2(rMax + rOff, h * 0.48),
+      new THREE.Vector2(rMax * 0.92 + rOff, h * 0.86),
+      new THREE.Vector2(rMax * 0.74 + rOff, h),
     ];
 
-    foliageClusters.forEach((c) => {
-      const fGeo = new THREE.SphereGeometry(1, 12, 10);
-      const foliage = new THREE.Mesh(fGeo, c.mat);
-      foliage.position.set(c.x, c.y, c.z);
-      foliage.scale.set(c.sx, c.sy, c.sz);
-      foliage.castShadow = true;
-      foliage.receiveShadow = true;
-      bonsaiGroup.add(foliage);
+    const catHeadGeo = new THREE.LatheGeometry(makeCatHeadProfile(CAT_R, CAT_H), 40);
+    catHeadGeo.computeVertexNormals();
+    const catFacePatchGeo = new THREE.LatheGeometry(
+      makeCatHeadProfile(CAT_R, CAT_H, 0.0014),
+      28,
+      -0.60,
+      1.20
+    );
+    const catEarGeo = new THREE.ConeGeometry(0.022, 0.032, 16);
+
+    const catTiers: Array<{
+      y: number;
+      color: number;
+      faceTex: THREE.Texture;
+    }> = [
+      { y: 0.016, color: 0xeeb56e, faceTex: catFaceApricotTex },
+      { y: 0.016 + CAT_H * 0.94, color: 0xeef2ee, faceTex: catFaceWhiteTex },
+      { y: 0.016 + CAT_H * 1.88, color: 0xb71d23, faceTex: catFaceRedTex },
+    ];
+
+    catTiers.forEach((tier) => {
+      const tierGroup = new THREE.Group();
+      tierGroup.position.y = tier.y;
+
+      const shellMat = new THREE.MeshPhysicalMaterial({
+        color: tier.color,
+        roughness: 0.16,
+        metalness: 0.04,
+        clearcoat: 0.92,
+        clearcoatRoughness: 0.12,
+      });
+
+      const body = new THREE.Mesh(catHeadGeo, shellMat);
+      body.castShadow = true;
+      body.receiveShadow = true;
+      tierGroup.add(body);
+
+      // Curved front face graphic patch hugging the chubby cheek curvature
+      const faceMesh = new THREE.Mesh(
+        catFacePatchGeo,
+        new THREE.MeshStandardMaterial({
+          map: tier.faceTex,
+          color: 0xffffff,
+          roughness: 0.22,
+          transparent: true,
+          depthWrite: false,
+          polygonOffset: true,
+          polygonOffsetFactor: -1,
+        })
+      );
+      tierGroup.add(faceMesh);
+
+      // Two sculpted front-facing triangular cat ears
+      [-1, 1].forEach((side) => {
+        const ear = new THREE.Mesh(catEarGeo, shellMat);
+        ear.scale.set(1.0, 1.0, 0.72);
+        ear.position.set(side * 0.056, CAT_H * 0.96, 0.068);
+        ear.rotation.set(0.18, 0, -side * 0.16);
+        ear.castShadow = true;
+        tierGroup.add(ear);
+      });
+
+      catBinGroup.add(tierGroup);
     });
 
-    // Soft subtle spotlight highlighting the bonsai
-    const bonsaiSpot = new THREE.PointLight(0xffeed6, 1.4, 3.5, 1.2);
-    bonsaiSpot.position.set(0, 0.75, 0.25);
-    bonsaiSpot.castShadow = true;
-    bonsaiGroup.add(bonsaiSpot);
+    // Dark recessed inner bin rim at the top of the red cat head
+    const binTopRim = new THREE.Mesh(
+      new THREE.CylinderGeometry(CAT_R * 0.72, CAT_R * 0.72, 0.008, 32),
+      new THREE.MeshStandardMaterial({ color: 0x161619, roughness: 0.65 })
+    );
+    binTopRim.position.y = 0.016 + CAT_H * 2.86;
+    catBinGroup.add(binTopRim);
 
-    tableGroup.add(bonsaiGroup);
+    catBinGroup.position.set(-1.12, TABLE_HEIGHT, 0.05);
+    catBinGroup.rotation.y = 0.12; // Subtle welcoming angle toward viewer
+    tableGroup.add(catBinGroup);
+
+    // --- 4A-1c. NINTENDO SWITCH 2 + IINE CHARGING DOCK RIGHT OF CAT BIN (貓貓垃圾桶右側 Switch 2 主機底座) ---
+    const createSwitchDockLogoTex = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 320;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return new THREE.Texture();
+
+      ctx.fillStyle = '#24262b';
+      ctx.fillRect(0, 0, 512, 320);
+
+      // Embossed black/glossy "Switch 2" icon + "2" + NINTENDO SWITCH wordmark
+      ctx.fillStyle = '#0c0d10';
+      ctx.strokeStyle = '#0c0d10';
+      // Left Joy-Con silhouette icon
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.roundRect(172, 62, 36, 76, [14, 2, 2, 14]);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(190, 86, 6, 0, Math.PI * 2);
+      ctx.fill();
+      // Right Joy-Con silhouette icon
+      ctx.beginPath();
+      ctx.roundRect(216, 62, 36, 76, [2, 14, 14, 2]);
+      ctx.fill();
+      ctx.fillStyle = '#24262b';
+      ctx.beginPath();
+      ctx.arc(234, 108, 7, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Big "2" beside Joy-Con emblem
+      ctx.fillStyle = '#0c0d10';
+      ctx.font = '900 84px "Arial Black", "Helvetica Neue", sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('2', 268, 138);
+
+      // NINTENDO / SWITCH wordmark centered beneath
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 20px "Helvetica Neue", sans-serif';
+      ctx.fillText('N I N T E N D O', 256, 174);
+      ctx.font = '900 32px "Arial Black", "Helvetica Neue", sans-serif';
+      ctx.fillText('SWITCH', 256, 208);
+
+      // Subtle lower dock horizontal groove seam + tiny TV icon on left
+      ctx.strokeStyle = '#181a1e';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(0, 246);
+      ctx.lineTo(512, 246);
+      ctx.stroke();
+
+      ctx.strokeStyle = '#6b707a';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(24, 266, 16, 11);
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      return tex;
+    };
+
+    const createIineBaseLogoTex = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 96;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return new THREE.Texture();
+
+      ctx.fillStyle = '#1d1f24';
+      ctx.fillRect(0, 0, 256, 96);
+      ctx.fillStyle = '#d4d8e0';
+      ctx.font = 'italic 900 28px "Arial Black", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('IINE', 128, 48);
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      return tex;
+    };
+
+    const switchDockLogoTex = createSwitchDockLogoTex();
+    const iineBaseLogoTex = createIineBaseLogoTex();
+
+    const switch2Group = new THREE.Group();
+    const swDarkMat = new THREE.MeshStandardMaterial({
+      color: 0x1d1f24,
+      roughness: 0.48,
+      metalness: 0.10,
+    });
+    const swShieldMat = new THREE.MeshStandardMaterial({
+      color: 0x24262b,
+      roughness: 0.52,
+      metalness: 0.08,
+    });
+    const swScreenMat = new THREE.MeshPhysicalMaterial({
+      color: 0x090b0f,
+      roughness: 0.08,
+      metalness: 0.15,
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.05,
+    });
+    const swGreyTrimMat = new THREE.MeshStandardMaterial({
+      color: 0x898e96,
+      roughness: 0.38,
+      metalness: 0.25,
+    });
+    const swCyanMat = new THREE.MeshStandardMaterial({
+      color: 0x42b8e8,
+      roughness: 0.32,
+      metalness: 0.08,
+    });
+    const swOrangeMat = new THREE.MeshStandardMaterial({
+      color: 0xe85a32,
+      roughness: 0.32,
+      metalness: 0.08,
+    });
+
+    // 1. Wide IINE Charging Base Platform (grounded at y = 0)
+    const DOCK_BASE_W = 0.232;
+    const DOCK_BASE_H = 0.032;
+    const DOCK_BASE_D = 0.084;
+    const baseFoot = new THREE.Mesh(
+      new THREE.BoxGeometry(DOCK_BASE_W, 0.005, DOCK_BASE_D),
+      swDarkMat
+    );
+    baseFoot.position.set(0, 0.0025, 0);
+    switch2Group.add(baseFoot);
+
+    // Light grey bottom perimeter accent band
+    const baseGreyLine = new THREE.Mesh(
+      new THREE.BoxGeometry(DOCK_BASE_W + 0.001, 0.0035, DOCK_BASE_D + 0.001),
+      swGreyTrimMat
+    );
+    baseGreyLine.position.set(0, 0.0065, 0);
+    switch2Group.add(baseGreyLine);
+
+    const baseUpperBody = new THREE.Mesh(
+      new THREE.BoxGeometry(DOCK_BASE_W, DOCK_BASE_H - 0.008, DOCK_BASE_D),
+      swDarkMat
+    );
+    baseUpperBody.position.set(0, 0.008 + (DOCK_BASE_H - 0.008) / 2, 0);
+    baseUpperBody.castShadow = true;
+    baseUpperBody.receiveShadow = true;
+    switch2Group.add(baseUpperBody);
+
+    // Raised curved front center IINE arch hump + logo face
+    const iineHump = new THREE.Mesh(
+      new THREE.BoxGeometry(0.072, 0.011, DOCK_BASE_D * 0.45),
+      swDarkMat
+    );
+    iineHump.position.set(0, DOCK_BASE_H + 0.0045, DOCK_BASE_D * 0.27);
+    switch2Group.add(iineHump);
+
+    const iineLogoFace = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.056, 0.022),
+      new THREE.MeshStandardMaterial({ map: iineBaseLogoTex, roughness: 0.45 })
+    );
+    iineLogoFace.position.set(0, 0.022, DOCK_BASE_D / 2 + 0.0008);
+    switch2Group.add(iineLogoFace);
+
+    // Front-right USB-A & USB-C recessed dark ports
+    const usbPortMat = new THREE.MeshStandardMaterial({ color: 0x090a0c, roughness: 0.4, metalness: 0.4 });
+    const usbAPort = new THREE.Mesh(new THREE.BoxGeometry(0.013, 0.007, 0.002), usbPortMat);
+    usbAPort.position.set(0.068, 0.018, DOCK_BASE_D / 2 + 0.0008);
+    switch2Group.add(usbAPort);
+    const usbCPort = new THREE.Mesh(new THREE.BoxGeometry(0.009, 0.004, 0.002), usbPortMat);
+    usbCPort.position.set(0.088, 0.018, DOCK_BASE_D / 2 + 0.0008);
+    switch2Group.add(usbCPort);
+
+    // 2. Upright Rounded Nintendo Switch 2 Front Dock Shield (with embossed 2 / NINTENDO SWITCH logo)
+    const SHIELD_W = 0.184;
+    const SHIELD_H = 0.106;
+    const shieldShape = new THREE.Shape();
+    const shw = SHIELD_W / 2;
+    const sr = 0.016;
+    shieldShape.moveTo(-shw, 0);
+    shieldShape.lineTo(shw, 0);
+    shieldShape.lineTo(shw, SHIELD_H - sr);
+    shieldShape.quadraticCurveTo(shw, SHIELD_H, shw - sr, SHIELD_H);
+    shieldShape.lineTo(-shw + sr, SHIELD_H);
+    shieldShape.quadraticCurveTo(-shw, SHIELD_H, -shw, SHIELD_H - sr);
+    shieldShape.closePath();
+
+    const dockShieldGeo = new THREE.ExtrudeGeometry(shieldShape, {
+      depth: 0.016,
+      bevelEnabled: true,
+      bevelThickness: 0.002,
+      bevelSize: 0.002,
+      bevelSegments: 2,
+    });
+    const dockShieldMesh = new THREE.Mesh(dockShieldGeo, swShieldMat);
+    dockShieldMesh.position.set(0, DOCK_BASE_H - 0.002, 0.008);
+    dockShieldMesh.castShadow = true;
+    dockShieldMesh.receiveShadow = true;
+    switch2Group.add(dockShieldMesh);
+
+    const dockShieldFrontLogo = new THREE.Mesh(
+      new THREE.PlaneGeometry(SHIELD_W - 0.012, SHIELD_H - 0.010),
+      new THREE.MeshStandardMaterial({ map: switchDockLogoTex, roughness: 0.52 })
+    );
+    dockShieldFrontLogo.position.set(0, DOCK_BASE_H + SHIELD_H / 2 - 0.002, 0.0265);
+    switch2Group.add(dockShieldFrontLogo);
+
+    // 3. Docked Nintendo Switch 2 Console Body (peeking cleanly above the front shield!)
+    const CONSOLE2_W = 0.194;
+    const CONSOLE2_H = 0.120;
+    const console2Body = new THREE.Mesh(
+      new THREE.BoxGeometry(CONSOLE2_W, CONSOLE2_H, 0.012),
+      swScreenMat
+    );
+    console2Body.position.set(0, DOCK_BASE_H + 0.010 + CONSOLE2_H / 2, -0.006);
+    console2Body.castShadow = true;
+    switch2Group.add(console2Body);
+
+    // 4. Left & Right Joy-Con 2 Controllers with Signature Cyan & Orange Stick Collars
+    const JC_W = 0.036;
+    const JC_H = 0.120;
+    const makeJoyConGeo = (isLeft: boolean) => {
+      const shape = new THREE.Shape();
+      const hw = JC_W / 2;
+      const hh = JC_H / 2;
+      const r = 0.017;
+      if (isLeft) {
+        shape.moveTo(hw, -hh);
+        shape.lineTo(-hw + r, -hh);
+        shape.quadraticCurveTo(-hw, -hh, -hw, -hh + r);
+        shape.lineTo(-hw, hh - r);
+        shape.quadraticCurveTo(-hw, hh, -hw + r, hh);
+        shape.lineTo(hw, hh);
+      } else {
+        shape.moveTo(-hw, -hh);
+        shape.lineTo(hw - r, -hh);
+        shape.quadraticCurveTo(hw, -hh, hw, -hh + r);
+        shape.lineTo(hw, hh - r);
+        shape.quadraticCurveTo(hw, hh, hw - r, hh);
+        shape.lineTo(-hw, hh);
+      }
+      shape.closePath();
+      return new THREE.ExtrudeGeometry(shape, {
+        depth: 0.013,
+        bevelEnabled: true,
+        bevelThickness: 0.002,
+        bevelSize: 0.002,
+        bevelSegments: 2,
+      });
+    };
+
+    const btnMat = new THREE.MeshStandardMaterial({ color: 0x2b2e35, roughness: 0.42 });
+    const stickCapMat = new THREE.MeshStandardMaterial({ color: 0x16181c, roughness: 0.35 });
+
+    // Left Joy-Con 2
+    const leftJCGroup = new THREE.Group();
+    leftJCGroup.position.set(-CONSOLE2_W / 2 - JC_W / 2 + 0.002, DOCK_BASE_H + 0.010 + JC_H / 2, -0.011);
+    const leftJCMesh = new THREE.Mesh(makeJoyConGeo(true), swDarkMat);
+    leftJCMesh.castShadow = true;
+    leftJCGroup.add(leftJCMesh);
+
+    // Cyan-ring Left Thumbstick
+    const lRing = new THREE.Mesh(new THREE.CylinderGeometry(0.0095, 0.0095, 0.004, 20), swCyanMat);
+    lRing.rotation.x = Math.PI / 2;
+    lRing.position.set(-0.001, 0.028, 0.0155);
+    leftJCGroup.add(lRing);
+    const lStick = new THREE.Mesh(new THREE.CylinderGeometry(0.0075, 0.0075, 0.006, 20), stickCapMat);
+    lStick.rotation.x = Math.PI / 2;
+    lStick.position.set(-0.001, 0.028, 0.018);
+    leftJCGroup.add(lStick);
+
+    // Left 4 D-pad buttons
+    [
+      [0, 0.008],
+      [0, -0.008],
+      [-0.008, 0],
+      [0.008, 0],
+    ].forEach(([bx, by]) => {
+      const b = new THREE.Mesh(new THREE.CylinderGeometry(0.0032, 0.0032, 0.003, 12), btnMat);
+      b.rotation.x = Math.PI / 2;
+      b.position.set(bx - 0.001, by - 0.002, 0.0155);
+      leftJCGroup.add(b);
+    });
+    switch2Group.add(leftJCGroup);
+
+    // Right Joy-Con 2
+    const rightJCGroup = new THREE.Group();
+    rightJCGroup.position.set(CONSOLE2_W / 2 + JC_W / 2 - 0.002, DOCK_BASE_H + 0.010 + JC_H / 2, -0.011);
+    const rightJCMesh = new THREE.Mesh(makeJoyConGeo(false), swDarkMat);
+    rightJCMesh.castShadow = true;
+    rightJCGroup.add(rightJCMesh);
+
+    // Right X/Y/A/B diamond buttons
+    [
+      [0, 0.009],
+      [0, -0.009],
+      [-0.009, 0],
+      [0.009, 0],
+    ].forEach(([bx, by]) => {
+      const b = new THREE.Mesh(new THREE.CylinderGeometry(0.0034, 0.0034, 0.003, 12), btnMat);
+      b.rotation.x = Math.PI / 2;
+      b.position.set(bx + 0.001, by + 0.026, 0.0155);
+      rightJCGroup.add(b);
+    });
+
+    // Coral-orange-ring Right Thumbstick
+    const rRing = new THREE.Mesh(new THREE.CylinderGeometry(0.0095, 0.0095, 0.004, 20), swOrangeMat);
+    rRing.rotation.x = Math.PI / 2;
+    rRing.position.set(0.001, -0.004, 0.0155);
+    rightJCGroup.add(rRing);
+    const rStick = new THREE.Mesh(new THREE.CylinderGeometry(0.0075, 0.0075, 0.006, 20), stickCapMat);
+    rStick.rotation.x = Math.PI / 2;
+    rStick.position.set(0.001, -0.004, 0.018);
+    rightJCGroup.add(rStick);
+    switch2Group.add(rightJCGroup);
+
+    switch2Group.position.set(-0.77, TABLE_HEIGHT, 0.05);
+    switch2Group.rotation.y = 0.08;
+    tableGroup.add(switch2Group);
 
     tableGroup.position.set(0, 0, -ROOM_DEPTH / 2 + TABLE_DEPTH / 2);
     roomGroup.add(tableGroup);
 
     // --- 4A-2. LASER-ENGRAVED WOODEN STUDIO PLAQUE ON FRONT WALL (正前方橫桌偏左牆面木牌) ---
-    const textureLoader = new THREE.TextureLoader();
     const plaqueTexture = textureLoader.load('/assets/studio_plaque_tex.png');
     plaqueTexture.colorSpace = THREE.SRGBColorSpace;
     plaqueTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
@@ -753,6 +1418,114 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
     const plaqueSpot = new THREE.PointLight(0xffeed6, 1.05, 2.8, 1.3);
     plaqueSpot.position.set(-0.82, 1.85, -ROOM_DEPTH / 2 + 0.65);
     roomGroup.add(plaqueSpot);
+
+    // --- 4A-3. SUZUMI SU HANGING SCROLL TAPESTRY ON FRONT WALL RIGHT END OF TABLE (正前方桌子偏右側尾端牆面掛軸) ---
+    const suzumiScrollTexture = textureLoader.load('/assets/suzumi_scroll_tex.png');
+    suzumiScrollTexture.colorSpace = THREE.SRGBColorSpace;
+    suzumiScrollTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+    const suzumiScrollGroup = new THREE.Group();
+    const SCROLL2_W = 0.45;
+    const SCROLL2_H = 1.20; // Exact 600 : 1600 ratio matching tapestry artwork
+
+    // 1. Subdivided gently draping tapestry cloth mesh
+    const scroll2ClothGeo = new THREE.PlaneGeometry(SCROLL2_W, SCROLL2_H, 12, 24);
+    const s2Pos = scroll2ClothGeo.attributes.position;
+    for (let i = 0; i < s2Pos.count; i++) {
+      const sx = s2Pos.getX(i);
+      const sy = s2Pos.getY(i);
+      const ny = (sy + SCROLL2_H / 2) / SCROLL2_H; // 0 bottom .. 1 top
+      const nx = sx / (SCROLL2_W / 2); // -1 .. +1
+      // Very gentle vertical cloth drape wave so it doesn't look flat
+      const drapeZ =
+        Math.sin(ny * Math.PI) * 0.0045 +
+        Math.cos(nx * Math.PI) * 0.0025 * Math.sin(ny * Math.PI);
+      s2Pos.setY(i, sy - SCROLL2_H / 2); // Pivot at top rod y = 0
+      s2Pos.setZ(i, 0.010 + drapeZ);
+    }
+    scroll2ClothGeo.computeVertexNormals();
+
+    const suzumiFrontMesh = new THREE.Mesh(
+      scroll2ClothGeo,
+      new THREE.MeshStandardMaterial({
+        map: suzumiScrollTexture,
+        color: 0xffffff,
+        roughness: 0.78,
+        metalness: 0.03,
+      })
+    );
+    suzumiFrontMesh.castShadow = true;
+    suzumiFrontMesh.receiveShadow = true;
+    suzumiScrollGroup.add(suzumiFrontMesh);
+
+    // 2. Dark burgundy back cloth lining for realistic edge thickness
+    const suzumiBackMesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(SCROLL2_W, SCROLL2_H),
+      new THREE.MeshStandardMaterial({
+        color: 0x1b0e14,
+        roughness: 0.9,
+        side: THREE.FrontSide,
+      })
+    );
+    suzumiBackMesh.position.set(0, -SCROLL2_H / 2, 0.0085);
+    suzumiBackMesh.rotation.y = Math.PI;
+    suzumiScrollGroup.add(suzumiBackMesh);
+
+    // 3. Top & Bottom matte black horizontal scroll rods with end caps
+    const scroll2RodMat = new THREE.MeshStandardMaterial({
+      color: 0x141418,
+      roughness: 0.42,
+      metalness: 0.14,
+    });
+    const scroll2RodGeo = new THREE.CylinderGeometry(0.0085, 0.0085, SCROLL2_W + 0.024, 16);
+    scroll2RodGeo.rotateZ(Math.PI / 2);
+
+    const topRod2 = new THREE.Mesh(scroll2RodGeo, scroll2RodMat);
+    topRod2.position.set(0, 0.004, 0.011);
+    topRod2.castShadow = true;
+    suzumiScrollGroup.add(topRod2);
+
+    const botRod2 = new THREE.Mesh(scroll2RodGeo, scroll2RodMat);
+    botRod2.position.set(0, -SCROLL2_H - 0.004, 0.011);
+    botRod2.castShadow = true;
+    suzumiScrollGroup.add(botRod2);
+
+    // 4. Crisp white hanging cord triangle rising from top dowel ends to wall pin
+    const cordCurve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(-SCROLL2_W / 2 + 0.016, 0.008, 0.011),
+      new THREE.Vector3(-SCROLL2_W / 4 + 0.008, 0.078, 0.007),
+      new THREE.Vector3(0, 0.146, 0.004),
+      new THREE.Vector3(SCROLL2_W / 4 - 0.008, 0.078, 0.007),
+      new THREE.Vector3(SCROLL2_W / 2 - 0.016, 0.008, 0.011),
+    ]);
+    const cordMesh = new THREE.Mesh(
+      new THREE.TubeGeometry(cordCurve, 24, 0.0024, 8, false),
+      new THREE.MeshStandardMaterial({
+        color: 0xedeff2,
+        roughness: 0.72,
+        metalness: 0.02,
+      })
+    );
+    cordMesh.castShadow = true;
+    suzumiScrollGroup.add(cordMesh);
+
+    // 5. Small silver wall pin/nail at hanging apex
+    const scroll2Pin = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.0032, 0.0032, 0.016, 10),
+      new THREE.MeshStandardMaterial({ color: 0xbac0c8, roughness: 0.3, metalness: 0.8 })
+    );
+    scroll2Pin.rotation.x = Math.PI / 2;
+    scroll2Pin.position.set(0, 0.148, 0.005);
+    suzumiScrollGroup.add(scroll2Pin);
+
+    // Mount flush on the front wall near the right end of the wall-side table (table spans X ∈ [-1.30, +1.30])
+    suzumiScrollGroup.position.set(1.06, 2.40, -ROOM_DEPTH / 2);
+    roomGroup.add(suzumiScrollGroup);
+
+    // Gentle warm spotlight illuminating the hanging scroll on the right side of the front wall table
+    const suzumiScrollSpot = new THREE.PointLight(0xffeed6, 1.15, 3.2, 1.25);
+    suzumiScrollSpot.position.set(1.06, 2.15, -ROOM_DEPTH / 2 + 0.72);
+    roomGroup.add(suzumiScrollSpot);
 
     // --- 4B. ENLARGED CIRCULAR WOODEN TEA TABLE & TABLE LAMP (放大並改為圓形木茶几，附設雅緻檯燈) ---
     const centerTeaGroup = new THREE.Group();
@@ -873,7 +1646,7 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
     lampGroup.add(tableLampLight);
 
     // Dedicated invisible interaction hitbox around the lamp for responsive tap/click
-    const lampHitboxGeo = new THREE.CylinderGeometry(0.24, 0.24, 0.52, 16);
+    const lampHitboxGeo = new THREE.CylinderGeometry(0.172, 0.172, 0.52, 16);
     const lampHitboxMat = new THREE.MeshBasicMaterial({ visible: false });
     const lampHitbox = new THREE.Mesh(lampHitboxGeo, lampHitboxMat);
     lampHitbox.position.y = 0.24;
@@ -1452,10 +2225,905 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
 
     const cabinetGroupLeft = createSixTierCabinet();
     cabinetGroupLeft.position.set(CAB2_X, 0, CAB_Z);
+
+    // --- 4E-2. ACRYLIC DESK SIGN HOLDER ON 2ND TIER FROM TOP (左邊櫃子從上數下來第二層最左側壓克力立牌) ---
+    const signCardTexture = textureLoader.load('/assets/umiri_desk_sign_tex.png');
+    signCardTexture.colorSpace = THREE.SRGBColorSpace;
+    signCardTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+    const acrylicSignGroup = new THREE.Group();
+    const CARD_W = 0.288;
+    const CARD_H = 0.204; // Exact 1600 : 1131 ratio matching source card artwork
+    const ACRYLIC_W = CARD_W + 0.016; // Clear acrylic border around card
+    const ACRYLIC_H = CARD_H + 0.016;
+    const TILT_RAD = -0.19; // ~11 deg backward lean like L-shaped tabletop holder
+
+    const acrylicClearMat = new THREE.MeshPhysicalMaterial({
+      color: 0xeaf2ff,
+      roughness: 0.08,
+      metalness: 0.05,
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.08,
+      transparent: true,
+      opacity: 0.24,
+      depthWrite: false,
+    });
+    const acrylicRimMat = new THREE.MeshStandardMaterial({
+      color: 0xdce6f5,
+      roughness: 0.14,
+      metalness: 0.12,
+      transparent: true,
+      opacity: 0.55,
+    });
+
+    // 1. Flat clear acrylic L-foot base plate resting flush on shelf surface Y = 0
+    const footDepth = 0.082;
+    const signBasePlate = new THREE.Mesh(
+      new THREE.BoxGeometry(ACRYLIC_W, 0.005, footDepth),
+      acrylicClearMat
+    );
+    signBasePlate.position.set(0, 0.0025, -footDepth * 0.34);
+    acrylicSignGroup.add(signBasePlate);
+
+    // Subtle crisp acrylic front foot rim bar
+    const baseFrontEdge = new THREE.Mesh(
+      new THREE.BoxGeometry(ACRYLIC_W, 0.005, 0.004),
+      acrylicRimMat
+    );
+    baseFrontEdge.position.set(0, 0.0025, footDepth * 0.16);
+    acrylicSignGroup.add(baseFrontEdge);
+
+    // 2. Tilted acrylic sleeve + sandwiched cardstock backing + crisp printed front artwork
+    const signTiltPivot = new THREE.Group();
+    signTiltPivot.position.set(0, 0.005, 0.008);
+    signTiltPivot.rotation.x = TILT_RAD;
+
+    const signCenterY = ACRYLIC_H / 2;
+
+    // Rear clear acrylic plate
+    const acrylicBackSheet = new THREE.Mesh(
+      new THREE.BoxGeometry(ACRYLIC_W, ACRYLIC_H, 0.003),
+      acrylicClearMat
+    );
+    acrylicBackSheet.position.set(0, signCenterY, -0.003);
+    signTiltPivot.add(acrylicBackSheet);
+
+    // Opaque cardstock backing behind printed face
+    const cardBacking = new THREE.Mesh(
+      new THREE.PlaneGeometry(CARD_W, CARD_H),
+      new THREE.MeshStandardMaterial({ color: 0xf4f1fa, roughness: 0.85, side: THREE.DoubleSide })
+    );
+    cardBacking.position.set(0, signCenterY, -0.0005);
+    cardBacking.rotation.y = Math.PI;
+    signTiltPivot.add(cardBacking);
+
+    // Printed front card graphic
+    const cardFront = new THREE.Mesh(
+      new THREE.PlaneGeometry(CARD_W, CARD_H),
+      new THREE.MeshStandardMaterial({
+        map: signCardTexture,
+        color: 0xffffff,
+        roughness: 0.36,
+        metalness: 0.02,
+      })
+    );
+    cardFront.position.set(0, signCenterY, 0.0002);
+    cardFront.castShadow = true;
+    cardFront.receiveShadow = true;
+    signTiltPivot.add(cardFront);
+
+    // Front protective clear acrylic cover plate
+    const acrylicFrontSheet = new THREE.Mesh(
+      new THREE.BoxGeometry(ACRYLIC_W, ACRYLIC_H, 0.0025),
+      acrylicClearMat
+    );
+    acrylicFrontSheet.position.set(0, signCenterY, 0.0028);
+    signTiltPivot.add(acrylicFrontSheet);
+
+    // Crisp outer beveled acrylic rim highlights (top, left, right) matching photo sleeve edges
+    const topRimStrip = new THREE.Mesh(
+      new THREE.BoxGeometry(ACRYLIC_W, 0.003, 0.008),
+      acrylicRimMat
+    );
+    topRimStrip.position.set(0, ACRYLIC_H - 0.0015, 0);
+    signTiltPivot.add(topRimStrip);
+
+    const sideRimGeo = new THREE.BoxGeometry(0.003, ACRYLIC_H, 0.008);
+    [-1, 1].forEach((side) => {
+      const sideRim = new THREE.Mesh(sideRimGeo, acrylicRimMat);
+      sideRim.position.set(side * (ACRYLIC_W / 2 - 0.0015), signCenterY, 0);
+      signTiltPivot.add(sideRim);
+    });
+
+    acrylicSignGroup.add(signTiltPivot);
+
+    // Position at far-left of 2nd shelf bay from the top (shelf index i = 4 top surface)
+    const cabBodyH = CAB_H - PLINTH_H - CROWN_H;
+    const cabTierPitch = (cabBodyH - SHELF_THICK) / 6;
+    const secondFromTopFloorY = PLINTH_H + SHELF_THICK + 4 * cabTierPitch;
+    const cabInnerLeftX = -(CAB_W - SIDE_THICK * 2) / 2;
+
+    acrylicSignGroup.position.set(
+      cabInnerLeftX + 0.022 + ACRYLIC_W / 2,
+      secondFromTopFloorY,
+      0.06
+    );
+    acrylicSignGroup.rotation.y = 0.05;
+    cabinetGroupLeft.add(acrylicSignGroup);
+
+    // --- 4E-2b. MAKAI RIRIMU PLUSHIE POUCH ON TEA TABLE BESIDE LAMP (茶几上檯燈旁邊正面朝上平放的魔界莉莉姆娃包 - 純形狀與實拍去背材質渲染) ---
+    const ririmuFrontTex = textureLoader.load('/assets/ririmu_bag_front.png');
+    ririmuFrontTex.colorSpace = THREE.SRGBColorSpace;
+    ririmuFrontTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+    const ririmuBackTex = textureLoader.load('/assets/ririmu_bag_back.png');
+    ririmuBackTex.colorSpace = THREE.SRGBColorSpace;
+    ririmuBackTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+    const ririmuSideTex = textureLoader.load('/assets/ririmu_bag_side.png');
+    ririmuSideTex.colorSpace = THREE.SRGBColorSpace;
+    ririmuSideTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    ririmuSideTex.wrapS = THREE.RepeatWrapping;
+    ririmuSideTex.wrapT = THREE.ClampToEdgeWrapping;
+
+    const ririmuBagGroup = new THREE.Group();
+    const POUCH_W = 0.122; // 12.2 cm wide
+    const POUCH_H = 0.170; // 17.0 cm tall
+    const POUCH_D = 0.064; // 6.4 cm thick
+    const P_EXP = 2.38;
+    const FRONT_PUFF = 0.0085;
+    const BACK_PUFF = 0.0040;
+    const N_SEG = 96;
+
+    const evalSuperellipse = (theta: number, rScale: number): [number, number] => {
+      const cx = -Math.sin(theta);
+      const cy = Math.cos(theta);
+      const denom = Math.pow(
+        Math.pow(Math.abs(cx), P_EXP) + Math.pow(Math.abs(cy), P_EXP),
+        1 / P_EXP
+      ) || 1;
+      const x = (cx / denom) * (POUCH_W / 2) * rScale;
+      const y = (cy / denom) * (POUCH_H / 2) * rScale;
+      return [x, y];
+    };
+
+    const positions: number[] = [];
+    const uvs: number[] = [];
+    const indices: number[] = [];
+    const pushVert = (x: number, y: number, z: number, u: number, v: number): number => {
+      const idx = positions.length / 3;
+      positions.push(x, y, z);
+      uvs.push(u, v);
+      return idx;
+    };
+
+    const pouchGeo = new THREE.BufferGeometry();
+
+    // 1. Group 0: Front Dome Cap (+Z -> Front Photo Texture)
+    const frontStartIdx = indices.length;
+    const frontCenterV = pushVert(0, 0, POUCH_D / 2 + FRONT_PUFF, 0.5, 0.5);
+    const FRONT_RINGS = 10;
+    const frontRings: number[][] = [];
+    for (let rIdx = 1; rIdx <= FRONT_RINGS; rIdx++) {
+      const r = rIdx / FRONT_RINGS;
+      const bead = r > 0.92 ? 0.0022 * Math.sin((Math.PI * (r - 0.92)) / 0.08) : 0;
+      const z = POUCH_D / 2 + FRONT_PUFF * (1 - r * r) + bead;
+      const ring: number[] = [];
+      for (let i = 0; i <= N_SEG; i++) {
+        const theta = (i / N_SEG) * Math.PI * 2;
+        const [x, y] = evalSuperellipse(theta, r);
+        ring.push(pushVert(x, y, z, 0.5 + x / POUCH_W, 0.5 + y / POUCH_H));
+      }
+      frontRings.push(ring);
+    }
+    for (let i = 0; i < N_SEG; i++) {
+      indices.push(frontCenterV, frontRings[0][i], frontRings[0][i + 1]);
+    }
+    for (let rIdx = 0; rIdx < FRONT_RINGS - 1; rIdx++) {
+      for (let i = 0; i < N_SEG; i++) {
+        const a = frontRings[rIdx][i];
+        const b = frontRings[rIdx + 1][i];
+        const c = frontRings[rIdx + 1][i + 1];
+        const d = frontRings[rIdx][i + 1];
+        indices.push(a, b, c, a, c, d);
+      }
+    }
+    pouchGeo.addGroup(frontStartIdx, indices.length - frontStartIdx, 0);
+
+    // 2. Group 1: Back Cushioned Cap (-Z -> Back Pom-Poms Photo Texture)
+    const backStartIdx = indices.length;
+    const backCenterV = pushVert(0, 0, -POUCH_D / 2 - BACK_PUFF, 0.5, 0.5);
+    const BACK_RINGS = 8;
+    const backRings: number[][] = [];
+    for (let rIdx = 1; rIdx <= BACK_RINGS; rIdx++) {
+      const r = rIdx / BACK_RINGS;
+      const bead = r > 0.92 ? 0.0018 * Math.sin((Math.PI * (r - 0.92)) / 0.08) : 0;
+      const z = -POUCH_D / 2 - BACK_PUFF * (1 - r * r) - bead;
+      const ring: number[] = [];
+      for (let i = 0; i <= N_SEG; i++) {
+        const theta = (i / N_SEG) * Math.PI * 2;
+        const [x, y] = evalSuperellipse(theta, r);
+        ring.push(pushVert(x, y, z, 0.5 - x / POUCH_W, 0.5 + y / POUCH_H));
+      }
+      backRings.push(ring);
+    }
+    for (let i = 0; i < N_SEG; i++) {
+      indices.push(backCenterV, backRings[0][i + 1], backRings[0][i]);
+    }
+    for (let rIdx = 0; rIdx < BACK_RINGS - 1; rIdx++) {
+      for (let i = 0; i < N_SEG; i++) {
+        const a = backRings[rIdx][i];
+        const b = backRings[rIdx + 1][i];
+        const c = backRings[rIdx + 1][i + 1];
+        const d = backRings[rIdx][i + 1];
+        indices.push(a, c, b, a, d, c);
+      }
+    }
+    pouchGeo.addGroup(backStartIdx, indices.length - backStartIdx, 1);
+
+    // 3. Group 2: Continuous 360° Curved Side Gusset Wall (Panoramic Zipper/Pom-Poms Photo Texture)
+    const sideStartIdx = indices.length;
+    const DEPTH_RINGS = 10;
+    const sideRings: number[][] = [];
+    for (let dIdx = 0; dIdx <= DEPTH_RINGS; dIdx++) {
+      const s = dIdx / DEPTH_RINGS; // 0 = Back Rim, 1 = Front Rim
+      const z = -POUCH_D / 2 + s * POUCH_D;
+      const pillow = Math.sin(Math.PI * s) * 0.036;
+      const bead =
+        s < 0.12
+          ? Math.sin((s / 0.12) * Math.PI) * 0.018
+          : s > 0.88
+            ? Math.sin(((s - 0.88) / 0.12) * Math.PI) * 0.018
+            : 0;
+      const rScale = 1.0 + pillow + bead;
+      const ring: number[] = [];
+      for (let i = 0; i <= N_SEG; i++) {
+        const u = i / N_SEG;
+        const theta = u * Math.PI * 2;
+        const [x, y] = evalSuperellipse(theta, rScale);
+        ring.push(pushVert(x, y, z, u, s));
+      }
+      sideRings.push(ring);
+    }
+    for (let dIdx = 0; dIdx < DEPTH_RINGS; dIdx++) {
+      for (let i = 0; i < N_SEG; i++) {
+        const a = sideRings[dIdx][i];
+        const b = sideRings[dIdx][i + 1];
+        const c = sideRings[dIdx + 1][i + 1];
+        const d = sideRings[dIdx + 1][i];
+        indices.push(a, b, c, a, c, d);
+      }
+    }
+    pouchGeo.addGroup(sideStartIdx, indices.length - sideStartIdx, 2);
+
+    pouchGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    pouchGeo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    pouchGeo.setIndex(indices);
+    pouchGeo.computeVertexNormals();
+
+    const pouchFrontMat = new THREE.MeshPhysicalMaterial({
+      map: ririmuFrontTex,
+      roughness: isLampOn ? 0.22 : 0.36,
+      metalness: 0.02,
+      clearcoat: isLampOn ? 0.96 : 0.32,
+      clearcoatRoughness: isLampOn ? 0.08 : 0.24,
+      specularIntensity: isLampOn ? 1.0 : 0.42,
+    });
+    const pouchBackMat = new THREE.MeshPhysicalMaterial({
+      map: ririmuBackTex,
+      roughness: 0.28,
+      metalness: 0.02,
+      clearcoat: 0.65,
+      clearcoatRoughness: 0.16,
+    });
+    const pouchSideMat = new THREE.MeshPhysicalMaterial({
+      map: ririmuSideTex,
+      roughness: isLampOn ? 0.24 : 0.36,
+      metalness: 0.03,
+      clearcoat: isLampOn ? 0.85 : 0.32,
+      clearcoatRoughness: isLampOn ? 0.10 : 0.24,
+      specularIntensity: isLampOn ? 0.95 : 0.42,
+    });
+    pouchFrontMatRef.current = pouchFrontMat;
+    pouchSideMatRef.current = pouchSideMat;
+
+    // Prop up slightly & lean diagonally beside the table lamp (稍微立起來、斜靠在檯燈旁邊)
+    const pouchLeanEuler = new THREE.Euler(-0.92, 0, 0.14, 'XYZ');
+    const pouchLeanQuat = new THREE.Quaternion().setFromEuler(pouchLeanEuler);
+    const tmpVert = new THREE.Vector3();
+    let pouchMinY = Infinity;
+    for (let vi = 0; vi < positions.length; vi += 3) {
+      tmpVert.set(positions[vi], positions[vi + 1], positions[vi + 2]).applyQuaternion(pouchLeanQuat);
+      if (tmpVert.y < pouchMinY) pouchMinY = tmpVert.y;
+    }
+
+    const pouchFlatPivot = new THREE.Group();
+    pouchFlatPivot.quaternion.copy(pouchLeanQuat);
+    pouchFlatPivot.position.y = -pouchMinY;
+    ririmuBagGroup.add(pouchFlatPivot);
+
+    const pouchMesh = new THREE.Mesh(pouchGeo, [pouchFrontMat, pouchBackMat, pouchSideMat]);
+    pouchMesh.castShadow = true;
+    pouchMesh.receiveShadow = true;
+    pouchFlatPivot.add(pouchMesh);
+
+    // Subtle physical metal D-ring + white spring ring resting naturally at the top edge
+    const dRingMesh = new THREE.Mesh(
+      new THREE.TorusGeometry(0.007, 0.0015, 8, 18),
+      new THREE.MeshStandardMaterial({ color: 0xd0d4dc, roughness: 0.24, metalness: 0.85 })
+    );
+    dRingMesh.position.set(0, POUCH_H / 2 + 0.004, -POUCH_D * 0.22);
+    dRingMesh.rotation.x = 0.2;
+    pouchFlatPivot.add(dRingMesh);
+
+    const claspRingMesh = new THREE.Mesh(
+      new THREE.TorusGeometry(0.009, 0.0020, 8, 20),
+      new THREE.MeshStandardMaterial({ color: 0xf6f5f8, roughness: 0.40, metalness: 0.04 })
+    );
+    claspRingMesh.position.set(-0.008, POUCH_H / 2 + 0.013, -POUCH_D * 0.36);
+    claspRingMesh.rotation.set(0.18, 0.12, 0.25);
+    pouchFlatPivot.add(claspRingMesh);
+
+    // Grounded flush on tea table right beside the lamp base, angled toward the seated viewer
+    ririmuBagGroup.position.set(-0.195, TEA_TABLE_HEIGHT, -0.080);
+    ririmuBagGroup.rotation.y = 0.30;
+    centerTeaGroup.add(ririmuBagGroup);
+
+    // --- 4E-2B. 最愛チアモ (もあちあも) PHOTO-TEXTURED 3D VOLUMETRIC RECONSTRUCTION IN FRONT OF FAN ---
+    const loadChiamoTex = (url: string) => {
+      const t = textureLoader.load(url);
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      return t;
+    };
+
+    const chiamoBaseTex = loadChiamoTex('/assets/chiamo_base.png');
+    const chiamoFrontAlphaTex = loadChiamoTex('/assets/chiamo_front.png');
+    const chiamoBackAlphaTex = loadChiamoTex('/assets/chiamo_back.png');
+    const chiamoFrontRgbTex = loadChiamoTex('/assets/chiamo_front_rgb.jpg');
+    const chiamoBackRgbTex = loadChiamoTex('/assets/chiamo_back_rgb.jpg');
+    const chiamoLeftRgbTex = loadChiamoTex('/assets/chiamo_left_rgb.jpg');
+    const chiamoRightRgbTex = loadChiamoTex('/assets/chiamo_right_rgb.jpg');
+
+    const chiamoNewGroup = new THREE.Group();
+    const CHIAMO_BASE_R = 0.068;
+
+    // Helper: create 4-view directional photo-projection MeshPhysicalMaterial in unified figure coordinates
+    const makeChiamoProjMaterial = (isHead: boolean) => {
+      const mat = new THREE.MeshPhysicalMaterial({
+        color: 0xffffff,
+        roughness: isHead ? 0.38 : 0.32,
+        metalness: 0.02,
+        clearcoat: isHead ? 0.18 : 0.34,
+        clearcoatRoughness: isHead ? 0.42 : 0.24,
+      });
+      mat.customProgramCacheKey = () => (isHead ? 'chiamo_4view_head_v1' : 'chiamo_4view_body_v1');
+      mat.onBeforeCompile = (shader) => {
+        shader.uniforms.uTexFront = { value: chiamoFrontRgbTex };
+        shader.uniforms.uTexBack = { value: chiamoBackRgbTex };
+        shader.uniforms.uTexLeft = { value: chiamoLeftRgbTex };
+        shader.uniforms.uTexRight = { value: chiamoRightRgbTex };
+        shader.uniforms.uIsHead = { value: isHead ? 1.0 : 0.0 };
+
+        shader.vertexShader = shader.vertexShader
+          .replace(
+            '#include <common>',
+            `#include <common>
+            varying vec3 vFigPos;
+            varying vec3 vFigNorm;`
+          )
+          .replace(
+            '#include <begin_vertex>',
+            `#include <begin_vertex>
+            vFigPos = position;
+            vFigNorm = normalize(normal);`
+          );
+
+        shader.fragmentShader = shader.fragmentShader
+          .replace(
+            '#include <common>',
+            `#include <common>
+            uniform sampler2D uTexFront;
+            uniform sampler2D uTexBack;
+            uniform sampler2D uTexLeft;
+            uniform sampler2D uTexRight;
+            uniform float uIsHead;
+            varying vec3 vFigPos;
+            varying vec3 vFigNorm;`
+          )
+          .replace(
+            '#include <map_fragment>',
+            `#include <map_fragment>
+            vec3 fn = normalize(vFigNorm);
+            float wF = pow(max(fn.z, 0.0), 2.8);
+            float wB = pow(max(-fn.z, 0.0), 2.8);
+            float wL = pow(max(fn.x, 0.0), 2.8);
+            float wR = pow(max(-fn.x, 0.0), 2.8);
+            float fy = clamp((vFigPos.y - (-0.010)) / 0.280, 0.002, 0.998);
+            vec2 uvF = vec2(clamp(0.5 + vFigPos.x / 0.210, 0.002, 0.998), fy);
+            vec2 uvB = vec2(clamp(0.5 - vFigPos.x / 0.210, 0.002, 0.998), fy);
+            vec2 uvL = vec2(clamp(0.5 - vFigPos.z / 0.210, 0.002, 0.998), fy);
+            vec2 uvR = vec2(clamp(0.5 + vFigPos.z / 0.210, 0.002, 0.998), fy);
+            vec3 colF = texture2D(uTexFront, uvF).rgb;
+            vec3 colB = texture2D(uTexBack, uvB).rgb;
+            vec3 colL = texture2D(uTexLeft, uvL).rgb;
+            vec3 colR = texture2D(uTexRight, uvR).rgb;
+            if (uIsHead > 0.5) {
+              // Suppress projected front finger-claw purple tint on outer cheek side edges
+              float dxH = abs(vFigPos.x - 0.0055);
+              if (dxH > 0.0185 && vFigPos.y < 0.228 && colF.r > colF.g * 1.18 && colF.b > colF.g * 1.08) {
+                colF = vec3(0.91, 0.69, 0.62);
+              }
+            }
+            float wSum = max(wF + wB + wL + wR, 0.0001);
+            diffuseColor.rgb = (colF * wF + colB * wB + colL * wL + colR * wR) / wSum;`
+          );
+      };
+      return mat;
+    };
+
+    const chiamoBodyProjMat = makeChiamoProjMaterial(false);
+    const chiamoHeadProjMat = makeChiamoProjMaterial(true);
+
+    // Helper: bake transform directly into BufferGeometry so shader vFigPos/vFigNorm stay in exact figure coordinates
+    const addBakedProjMesh = (geo: THREE.BufferGeometry, mat: THREE.Material, m?: THREE.Matrix4) => {
+      if (m) geo.applyMatrix4(m);
+      geo.computeVertexNormals();
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      chiamoNewGroup.add(mesh);
+      return mesh;
+    };
+
+    const makeBakedCapsule = (
+      p1: [number, number, number],
+      p2: [number, number, number],
+      rTop: number,
+      rBot: number,
+      sx = 1.0,
+      sz = 1.0
+    ) => {
+      const v1 = new THREE.Vector3(...p1);
+      const v2 = new THREE.Vector3(...p2);
+      const dir = new THREE.Vector3().subVectors(v2, v1);
+      const len = dir.length();
+      const geo = new THREE.CylinderGeometry(rTop, rBot, len, 22, 4);
+      geo.scale(sx, 1, sz);
+      const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+      const center = new THREE.Vector3().addVectors(v1, v2).multiplyScalar(0.5);
+      const mat4 = new THREE.Matrix4().compose(center, quat, new THREE.Vector3(1, 1, 1));
+      return addBakedProjMesh(geo, chiamoBodyProjMat, mat4);
+    };
+
+    const makeBakedEllipsoid = (
+      cx: number,
+      cy: number,
+      cz: number,
+      rx: number,
+      ry: number,
+      rz: number,
+      rotEuler: [number, number, number] = [0, 0, 0],
+      mat: THREE.Material = chiamoBodyProjMat
+    ) => {
+      const geo = new THREE.SphereGeometry(1, 28, 22);
+      const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(...rotEuler));
+      const mat4 = new THREE.Matrix4().compose(
+        new THREE.Vector3(cx, cy, cz),
+        quat,
+        new THREE.Vector3(rx, ry, rz)
+      );
+      return addBakedProjMesh(geo, mat, mat4);
+    };
+
+    // 1. Glossy Hot-Magenta Acrylic Circular Base with Real 「もあちあも」 Photo Texture
+    const chiamoBaseEdgeMat = new THREE.MeshPhysicalMaterial({
+      color: 0xa40b4b,
+      roughness: 0.12,
+      metalness: 0.02,
+      clearcoat: 0.95,
+      clearcoatRoughness: 0.06,
+      transparent: true,
+      opacity: 0.90,
+    });
+    const chiamoBaseTopMat = new THREE.MeshPhysicalMaterial({
+      map: chiamoBaseTex,
+      roughness: 0.14,
+      metalness: 0.02,
+      clearcoat: 0.94,
+      clearcoatRoughness: 0.08,
+      transparent: true,
+      alphaTest: 0.25,
+    });
+    const chiamoBaseCylinder = new THREE.Mesh(
+      new THREE.CylinderGeometry(CHIAMO_BASE_R, CHIAMO_BASE_R + 0.001, 0.008, 64),
+      chiamoBaseEdgeMat
+    );
+    chiamoBaseCylinder.position.y = 0.004;
+    chiamoBaseCylinder.castShadow = true;
+    chiamoBaseCylinder.receiveShadow = true;
+    chiamoNewGroup.add(chiamoBaseCylinder);
+
+    const chiamoBaseTop = new THREE.Mesh(new THREE.CircleGeometry(CHIAMO_BASE_R - 0.0003, 64), chiamoBaseTopMat);
+    chiamoBaseTop.rotation.x = -Math.PI / 2;
+    chiamoBaseTop.position.y = 0.0082;
+    chiamoBaseTop.receiveShadow = true;
+    chiamoNewGroup.add(chiamoBaseTop);
+
+    // 2. Clear Acrylic Rear Heel Support Pillar & Translucent Heart Tail
+    const chiamoAcrylicClearMat = new THREE.MeshPhysicalMaterial({
+      color: 0xf0f4ff,
+      roughness: 0.10,
+      metalness: 0.02,
+      clearcoat: 0.94,
+      transparent: true,
+      opacity: 0.62,
+    });
+    const clearPeg = new THREE.Mesh(new THREE.BoxGeometry(0.011, 0.028, 0.013), chiamoAcrylicClearMat);
+    clearPeg.position.set(0.002, 0.022, -0.025);
+    clearPeg.rotation.x = -0.06;
+    chiamoNewGroup.add(clearPeg);
+
+    const tailCurve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(0.004, 0.114, -0.015),
+      new THREE.Vector3(0.014, 0.106, -0.026),
+      new THREE.Vector3(0.022, 0.098, -0.032),
+      new THREE.Vector3(0.018, 0.091, -0.028),
+    ]);
+    const tailStem = new THREE.Mesh(new THREE.TubeGeometry(tailCurve, 18, 0.0015, 8, false), chiamoAcrylicClearMat);
+    chiamoNewGroup.add(tailStem);
+    const tailHeart = new THREE.Mesh(new THREE.SphereGeometry(0.0038, 10, 10), chiamoAcrylicClearMat);
+    tailHeart.scale.set(1.2, 1.0, 0.65);
+    tailHeart.position.set(0.018, 0.090, -0.028);
+    chiamoNewGroup.add(tailHeart);
+
+    // 3. Signature Large Tilted Glossy Hot-Pink Hoop Ring (looping open-air behind thighs -> front ankles)
+    const chiamoHoopPinkMat = new THREE.MeshPhysicalMaterial({
+      color: 0xdc377e,
+      roughness: 0.22,
+      metalness: 0.04,
+      clearcoat: 0.80,
+    });
+    const hoopRing = new THREE.Mesh(new THREE.TorusGeometry(0.053, 0.0019, 14, 64), chiamoHoopPinkMat);
+    hoopRing.position.set(-0.005, 0.072, -0.002);
+    hoopRing.rotation.set(-0.68, 0.05, -0.06);
+    hoopRing.castShadow = true;
+    chiamoNewGroup.add(hoopRing);
+
+    // 4. Calibrated Sculpted 3D Legs + Sneakers (exact pixel-scanned positions, open air gap preserved)
+    // Standing Right Leg (-X viewer's left)
+    makeBakedEllipsoid(-0.001, 0.016, 0.006, 0.0105, 0.0085, 0.0175, [0, 0.14, 0]); // front sneaker
+    makeBakedCapsule([-0.007, 0.021, 0.004], [-0.010, 0.058, 0.003], 0.0110, 0.0135); // leg warmer
+    makeBakedCapsule([-0.010, 0.056, 0.003], [-0.011, 0.076, 0.008], 0.0102, 0.0094); // knee calf
+    makeBakedEllipsoid(-0.011, 0.076, 0.008, 0.0102, 0.0102, 0.0102); // knee cap
+    makeBakedCapsule([-0.011, 0.076, 0.008], [-0.010, 0.114, 0.001], 0.0138, 0.0105); // thigh
+
+    // Raised Bent Left Leg (+X viewer's right)
+    makeBakedCapsule([0.016, 0.114, 0.002], [0.024, 0.076, 0.014], 0.0138, 0.0105); // thigh
+    makeBakedEllipsoid(0.024, 0.076, 0.014, 0.0106, 0.0106, 0.0106); // bent knee
+    makeBakedCapsule([0.024, 0.076, 0.014], [0.005, 0.044, -0.016], 0.0102, 0.0128); // lower leg & warmer
+    makeBakedEllipsoid(0.002, 0.036, -0.022, 0.0100, 0.0085, 0.0165, [0.82, -0.14, 0]); // raised sneaker
+
+    // 5. Continuous Contoured 3D Torso, Skirt, Waist, Bust & Sailor Collar Loft (mapped to photo silhouettes)
+    const torsoSlices: Array<{ y: number; cx: number; cz: number; rx: number; rz: number }> = [
+      { y: 0.110, cx: 0.004, cz: 0.002, rx: 0.0265, rz: 0.0210 }, // skirt frill hem
+      { y: 0.123, cx: 0.005, cz: 0.002, rx: 0.0255, rz: 0.0215 }, // belt & jacket bottom
+      { y: 0.136, cx: 0.005, cz: 0.002, rx: 0.0230, rz: 0.0205 }, // waist
+      { y: 0.150, cx: 0.005, cz: 0.004, rx: 0.0235, rz: 0.0215 }, // mid torso
+      { y: 0.165, cx: 0.005, cz: 0.009, rx: 0.0250, rz: 0.0225 }, // bust fullness
+      { y: 0.180, cx: 0.005, cz: 0.003, rx: 0.0265, rz: 0.0200 }, // sailor collar
+      { y: 0.190, cx: 0.005, cz: 0.002, rx: 0.0185, rz: 0.0155 }, // shoulders top
+      { y: 0.197, cx: 0.005, cz: 0.002, rx: 0.0085, rz: 0.0085 }, // neck
+    ];
+    const T_SEG = 32;
+    const tPos: number[] = [];
+    const tIdx: number[] = [];
+    const tRings: number[][] = [];
+    torsoSlices.forEach((sl) => {
+      const ring: number[] = [];
+      for (let i = 0; i <= T_SEG; i++) {
+        const a = (i / T_SEG) * Math.PI * 2;
+        const idx = tPos.length / 3;
+        tPos.push(sl.cx + Math.cos(a) * sl.rx, sl.y, sl.cz + Math.sin(a) * sl.rz);
+        ring.push(idx);
+      }
+      tRings.push(ring);
+    });
+    for (let r = 0; r < tRings.length - 1; r++) {
+      for (let i = 0; i < T_SEG; i++) {
+        const a = tRings[r][i], b = tRings[r][i + 1];
+        const c = tRings[r + 1][i + 1], d = tRings[r + 1][i];
+        tIdx.push(a, c, b, a, d, c);
+      }
+    }
+    const botCapIdx = tPos.length / 3;
+    tPos.push(0.004, 0.110, 0.002);
+    for (let i = 0; i < T_SEG; i++) tIdx.push(botCapIdx, tRings[0][i], tRings[0][i + 1]);
+
+    const torsoLoftGeo = new THREE.BufferGeometry();
+    torsoLoftGeo.setAttribute('position', new THREE.Float32BufferAttribute(tPos, 3));
+    torsoLoftGeo.setIndex(tIdx);
+    addBakedProjMesh(torsoLoftGeo, chiamoBodyProjMat);
+
+    // Subtle sculpted 3D bust domes so sailor bow & chest silhouette catch authentic light
+    makeBakedEllipsoid(-0.004, 0.165, 0.021, 0.0125, 0.0120, 0.0120);
+    makeBakedEllipsoid(0.014, 0.165, 0.021, 0.0125, 0.0120, 0.0120);
+
+    // 6. Symmetrical Raised Puffy Hoodie Sleeves (calibrated CatmullRomCurve3 tubes)
+    const rightSleeveCurve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(-0.018, 0.181, 0.0),
+      new THREE.Vector3(-0.044, 0.184, 0.002),
+      new THREE.Vector3(-0.049, 0.205, 0.009),
+      new THREE.Vector3(-0.036, 0.214, 0.017),
+    ]);
+    addBakedProjMesh(new THREE.TubeGeometry(rightSleeveCurve, 22, 0.0145, 16, false), chiamoBodyProjMat);
+    makeBakedEllipsoid(-0.047, 0.194, 0.004, 0.0155, 0.0165, 0.0155);
+
+    const leftSleeveCurve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(0.028, 0.182, 0.0),
+      new THREE.Vector3(0.055, 0.187, 0.002),
+      new THREE.Vector3(0.059, 0.207, 0.009),
+      new THREE.Vector3(0.045, 0.215, 0.017),
+    ]);
+    addBakedProjMesh(new THREE.TubeGeometry(leftSleeveCurve, 22, 0.0145, 16, false), chiamoBodyProjMat);
+    makeBakedEllipsoid(0.057, 0.196, 0.004, 0.0155, 0.0165, 0.0155);
+
+    // Left-shoulder butterfly badge + yellow pom-pom subtle 3D projection anchor
+    makeBakedEllipsoid(0.040, 0.173, 0.014, 0.0085, 0.0085, 0.0065, [0, 0.65, 0]);
+
+    // 7. Contoured Head Sphere & Twin High Looped Hair Buns (mapped with 4-view real photos)
+    makeBakedEllipsoid(0.0055, 0.214, 0.003, 0.0255, 0.0245, 0.0245, [0.06, 0, -0.05], chiamoHeadProjMat);
+    makeBakedEllipsoid(-0.032, 0.236, -0.005, 0.0165, 0.0145, 0.0135, [0, 0.15, 0.35], chiamoBodyProjMat);
+    makeBakedEllipsoid(0.038, 0.242, -0.006, 0.0165, 0.0145, 0.0135, [0, -0.15, -0.35], chiamoBodyProjMat);
+
+    // 8. Sculpted Back-Hair Curtain + Flared Spiral Curls (solid back core + thick 3D cutout curl wings)
+    makeBakedEllipsoid(0.005, 0.172, -0.025, 0.0195, 0.042, 0.0105, [0.10, 0, 0], chiamoBodyProjMat);
+
+    // Helper: create curved multi-layer 3D photo-cutout relief with exact unified world UV mapping
+    const chiamoCutoutFrontMat = new THREE.MeshPhysicalMaterial({
+      map: chiamoFrontAlphaTex,
+      roughness: 0.32,
+      metalness: 0.04,
+      clearcoat: 0.36,
+      alphaTest: 0.38,
+      side: THREE.DoubleSide,
+    });
+    const chiamoCutoutBackMat = new THREE.MeshPhysicalMaterial({
+      map: chiamoBackAlphaTex,
+      roughness: 0.32,
+      metalness: 0.04,
+      clearcoat: 0.36,
+      alphaTest: 0.38,
+      side: THREE.DoubleSide,
+    });
+
+    const addCurvedCutoutRelief = (
+      xMin: number,
+      xMax: number,
+      yMin: number,
+      yMax: number,
+      zCenter: number,
+      curveZ: number,
+      thickness: number,
+      yaw: number,
+      useFrontAlpha: boolean
+    ) => {
+      const segX = 12;
+      const segY = 12;
+      const geo = new THREE.PlaneGeometry(xMax - xMin, yMax - yMin, segX, segY);
+      const posAttr = geo.attributes.position as THREE.BufferAttribute;
+      const uvAttr = geo.attributes.uv as THREE.BufferAttribute;
+      const cx = (xMin + xMax) / 2;
+      const cy = (yMin + yMax) / 2;
+      for (let i = 0; i < posAttr.count; i++) {
+        const lx = posAttr.getX(i);
+        const ly = posAttr.getY(i);
+        const nx = lx / ((xMax - xMin) / 2);
+        const wx = cx + lx;
+        const wy = cy + ly;
+        const dz = (1 - nx * nx) * curveZ;
+        posAttr.setXYZ(i, lx, ly, dz);
+        const fy = (wy - -0.010) / 0.280;
+        const u = useFrontAlpha ? 0.5 + wx / 0.210 : 0.5 - wx / 0.210;
+        uvAttr.setXY(i, u, fy);
+      }
+      geo.computeVertexNormals();
+
+      const grp = new THREE.Group();
+      grp.position.set(cx, cy, zCenter);
+      grp.rotation.y = yaw;
+      [-thickness / 2, 0, thickness / 2].forEach((oz, li) => {
+        const mat = li === 0 && !useFrontAlpha ? chiamoCutoutBackMat : useFrontAlpha ? chiamoCutoutFrontMat : chiamoCutoutBackMat;
+        const layer = new THREE.Mesh(geo, mat);
+        layer.position.z = oz;
+        layer.castShadow = li === 1;
+        grp.add(layer);
+      });
+      chiamoNewGroup.add(grp);
+    };
+
+    // Twin Splayed Purple-Claw Hands & Pink Wrist Ribbons framing cheeks (exact hand regions)
+    addCurvedCutoutRelief(-0.044, -0.012, 0.186, 0.234, 0.025, 0.004, 0.0028, 0.22, true);
+    addCurvedCutoutRelief(0.019, 0.050, 0.186, 0.234, 0.025, 0.004, 0.0028, -0.22, true);
+
+    // Dual Dark-Navy Double-Wing Butterfly Hair Clips on Crown
+    addCurvedCutoutRelief(-0.028, -0.006, 0.224, 0.266, 0.002, 0.003, 0.0032, 0.35, true);
+    addCurvedCutoutRelief(0.008, 0.036, 0.224, 0.266, 0.001, 0.003, 0.0032, -0.35, true);
+
+    // Flared Outward-Curled Back Hair Spirals (left & right hip wings from real back hair photo!)
+    addCurvedCutoutRelief(-0.056, -0.014, 0.122, 0.185, -0.026, -0.005, 0.0055, -0.24, false);
+    addCurvedCutoutRelief(0.018, 0.060, 0.122, 0.185, -0.026, -0.005, 0.0055, 0.24, false);
+
+    // Placed on the far-left of the 2nd tier from the top of the right-side cabinet (右邊櫃子第二層最左邊)
+    chiamoNewGroup.position.set(
+      cabInnerLeftX + 0.025 + CHIAMO_BASE_R,
+      secondFromTopFloorY,
+      0.065
+    );
+    chiamoNewGroup.rotation.y = -0.06;
+    cabinetGroup.add(chiamoNewGroup);
+
     roomGroup.add(cabinetGroupLeft);
 
+    // --- 4E-3. WHITE ILLUSTRATED CARDBOARD BOX ON RIGHT CABINET BOTTOM-RIGHT (右邊櫃子最下面的最右邊白色紙箱) ---
+    const whiteBoxFrontTexture = textureLoader.load('/assets/white_box_front.png');
+    whiteBoxFrontTexture.colorSpace = THREE.SRGBColorSpace;
+    whiteBoxFrontTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+    const createWhiteBoxTopTexture = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return new THREE.Texture();
+
+      // Matte off-white corrugated cardboard top
+      ctx.fillStyle = '#e7e6e1';
+      ctx.fillRect(0, 0, 512, 512);
+
+      // Subtle corrugated paper flute grain
+      for (let y = 0; y < 512; y += 6) {
+        ctx.fillStyle = y % 12 === 0 ? 'rgba(0,0,0,0.018)' : 'rgba(255,255,255,0.18)';
+        ctx.fillRect(0, y, 512, 2);
+      }
+
+      // Faint cardboard top lid flap center crease & side edge seams
+      ctx.strokeStyle = 'rgba(70, 66, 60, 0.24)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(10, 256);
+      ctx.lineTo(502, 256);
+      ctx.stroke();
+
+      ctx.strokeStyle = 'rgba(70, 66, 60, 0.16)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(8, 8, 496, 496);
+
+      // Helper to stamp a black cat paw print motif on top lid (back-left area matching reference photo)
+      const drawPawStamp = (cx: number, cy: number, scale: number, angle: number) => {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(angle);
+        ctx.scale(scale, scale);
+        ctx.fillStyle = '#181818';
+
+        // Main heart/trilobe pad
+        ctx.beginPath();
+        ctx.ellipse(0, 12, 22, 16, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Four toe beans
+        const toes: Array<[number, number, number, number, number]> = [
+          [-26, -12, 9, 12, -0.35],
+          [-9, -24, 9, 13, -0.1],
+          [10, -24, 9, 13, 0.1],
+          [26, -12, 9, 12, 0.35],
+        ];
+        toes.forEach(([tx, ty, rx, ry, rot]) => {
+          ctx.beginPath();
+          ctx.ellipse(tx, ty, rx, ry, rot, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        ctx.restore();
+      };
+
+      drawPawStamp(128, 128, 0.72, -0.22);
+      drawPawStamp(218, 108, 0.68, 0.15);
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      return tex;
+    };
+
+    const whiteBoxTopTexture = createWhiteBoxTopTexture();
+
+    const whiteBoxGroup = new THREE.Group();
+    const BOX_W = 0.455;
+    const BOX_H = 0.246;
+    const BOX_D = 0.295;
+
+    const boxCardboardMat = new THREE.MeshStandardMaterial({
+      color: 0xe6e5df,
+      roughness: 0.88,
+      metalness: 0.01,
+    });
+    const boxSeamEdgeMat = new THREE.MeshStandardMaterial({
+      color: 0xd5d3cb,
+      roughness: 0.92,
+      metalness: 0.01,
+    });
+    const boxFrontPrintMat = new THREE.MeshStandardMaterial({
+      map: whiteBoxFrontTexture,
+      color: 0xffffff,
+      roughness: 0.72,
+      metalness: 0.02,
+    });
+    const boxTopPrintMat = new THREE.MeshStandardMaterial({
+      map: whiteBoxTopTexture,
+      color: 0xffffff,
+      roughness: 0.84,
+      metalness: 0.01,
+    });
+
+    // 1. Main white corrugated box body (bottom-center grounded pivot)
+    const boxCoreMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(BOX_W, BOX_H - 0.012, BOX_D),
+      boxCardboardMat
+    );
+    boxCoreMesh.position.set(0, (BOX_H - 0.012) / 2, 0);
+    boxCoreMesh.castShadow = true;
+    boxCoreMesh.receiveShadow = true;
+    whiteBoxGroup.add(boxCoreMesh);
+
+    // 2. Printed illustrated front face panel (polygonOffset prevents z-fighting)
+    const boxFrontPlane = new THREE.Mesh(
+      new THREE.PlaneGeometry(BOX_W - 0.004, BOX_H - 0.014),
+      boxFrontPrintMat
+    );
+    boxFrontPlane.position.set(0, (BOX_H - 0.012) / 2, BOX_D / 2 + 0.0008);
+    boxFrontPlane.receiveShadow = true;
+    whiteBoxGroup.add(boxFrontPlane);
+
+    // 3. Top hinged lid overhang slab + stamped corrugated top texture
+    const boxLidSlab = new THREE.Mesh(
+      new THREE.BoxGeometry(BOX_W + 0.004, 0.012, BOX_D + 0.004),
+      boxCardboardMat
+    );
+    boxLidSlab.position.set(0, BOX_H - 0.006, 0);
+    boxLidSlab.castShadow = true;
+    boxLidSlab.receiveShadow = true;
+    whiteBoxGroup.add(boxLidSlab);
+
+    const boxTopPlane = new THREE.Mesh(
+      new THREE.PlaneGeometry(BOX_W + 0.002, BOX_D + 0.002),
+      boxTopPrintMat
+    );
+    boxTopPlane.rotation.x = -Math.PI / 2;
+    boxTopPlane.position.set(0, BOX_H + 0.0006, 0);
+    boxTopPlane.receiveShadow = true;
+    whiteBoxGroup.add(boxTopPlane);
+
+    // 4. Subtle dark crease line along top lid tuck seam + corner fold ribs
+    const lidCreaseBar = new THREE.Mesh(
+      new THREE.BoxGeometry(BOX_W + 0.005, 0.0025, 0.003),
+      boxSeamEdgeMat
+    );
+    lidCreaseBar.position.set(0, BOX_H - 0.012, BOX_D / 2 + 0.0015);
+    whiteBoxGroup.add(lidCreaseBar);
+
+    const cabInnerRightX = (CAB_W - SIDE_THICK * 2) / 2;
+    const bottomShelfFloorY = PLINTH_H + SHELF_THICK;
+    whiteBoxGroup.position.set(
+      cabInnerRightX - 0.02 - BOX_W / 2,
+      bottomShelfFloorY,
+      0.045
+    );
+    whiteBoxGroup.rotation.y = -0.025;
+    cabinetGroup.add(whiteBoxGroup);
+
     // Subtle warm fill light highlighting both 6-tier dark wood cabinets
-    const cabinetAccentLight = new THREE.PointLight(0xffebd0, 1.5, 5.2, 1.25);
+    const cabinetAccentLight = new THREE.PointLight(0xffebd0, 1.65, 5.4, 1.2);
     cabinetAccentLight.position.set((CAB_X + CAB2_X) / 2, 2.28, CAB_Z + 1.15);
     roomGroup.add(cabinetAccentLight);
 
@@ -1987,6 +3655,27 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
       displayPosterTexture.dispose();
       fanTexture.dispose();
       plaqueTexture.dispose();
+      vinylCenterTexture.dispose();
+      vinylDiscFaceTexture.dispose();
+      suzumiScrollTexture.dispose();
+      catFaceApricotTex.dispose();
+      catFaceWhiteTex.dispose();
+      catFaceRedTex.dispose();
+      switchDockLogoTex.dispose();
+      iineBaseLogoTex.dispose();
+      ririmuFrontTex.dispose();
+      ririmuBackTex.dispose();
+      ririmuSideTex.dispose();
+      chiamoBaseTex.dispose();
+      chiamoFrontAlphaTex.dispose();
+      chiamoBackAlphaTex.dispose();
+      chiamoFrontRgbTex.dispose();
+      chiamoBackRgbTex.dispose();
+      chiamoLeftRgbTex.dispose();
+      chiamoRightRgbTex.dispose();
+      signCardTexture.dispose();
+      whiteBoxFrontTexture.dispose();
+      whiteBoxTopTexture.dispose();
       renderer.dispose();
 
       if (renderer.domElement && container.contains(renderer.domElement)) {
@@ -2008,6 +3697,18 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
       if (lampShadeMatRef.current) {
         lampShadeMatRef.current.color.set(next ? 0xfff0dc : 0x4a3a2e);
         lampShadeMatRef.current.emissive = new THREE.Color(next ? 0x332211 : 0x000000);
+      }
+      if (pouchFrontMatRef.current) {
+        pouchFrontMatRef.current.roughness = next ? 0.22 : 0.36;
+        pouchFrontMatRef.current.clearcoat = next ? 0.96 : 0.32;
+        pouchFrontMatRef.current.clearcoatRoughness = next ? 0.08 : 0.24;
+        pouchFrontMatRef.current.specularIntensity = next ? 1.0 : 0.42;
+      }
+      if (pouchSideMatRef.current) {
+        pouchSideMatRef.current.roughness = next ? 0.24 : 0.36;
+        pouchSideMatRef.current.clearcoat = next ? 0.85 : 0.32;
+        pouchSideMatRef.current.clearcoatRoughness = next ? 0.10 : 0.24;
+        pouchSideMatRef.current.specularIntensity = next ? 0.95 : 0.42;
       }
       return next;
     });
