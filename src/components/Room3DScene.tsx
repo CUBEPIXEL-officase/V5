@@ -19,6 +19,9 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
   const getYawRangeHalf = () => {
     const cam = cameraRef.current;
     if (!cam) return YAW_RANGE_HALF;
+    if (!isLobbyStyleRoom(activeRoomRef.current)) {
+      return THREE.MathUtils.degToRad(72);
+    }
     const halfFovYRad = THREE.MathUtils.degToRad(cam.fov * 0.5);
     const halfFovXRad = Math.atan(Math.tan(halfFovYRad) * cam.aspect);
     // Keep desktop at ±20°, while allowing narrow/portrait viewports to pan smoothly to the left wall corner (~62° horizontal edge)
@@ -39,12 +42,27 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
   const SEATED_HEIGHT = 0.68; // 坐姿視線高度
   const SEATED_Z = 1.15; // 圓形茶几南側坐墊位置 (圓几半徑 0.85m + 坐墊中心 0.30m)
 
-  // Game, Camera Location & Light State
+  type ExtraRoomId = 'purple' | 'green' | 'gold' | 'cyan' | 'cyan_b1' | 'royalblue' | 'brown';
+  type RoomId = 'lobby' | ExtraRoomId;
+  const isLobbyStyleRoom = (id: RoomId) => id === 'lobby' || id === 'royalblue' || id === 'brown';
+  const isFoyerRoom = (id: RoomId) => id === 'cyan' || id === 'cyan_b1';
+
+  // Game, Camera Location, Active Portal Room & Light State
   const [isLampOn, setIsLampOn] = useState(true);
   const [isConsoleHeld, setIsConsoleHeld] = useState(false);
   const [isScreenActive, setIsScreenActive] = useState(false);
-  const [viewLocation, setViewLocation] = useState<'table' | 'cabinet'>('table');
-  const viewLocationRef = useRef<'table' | 'cabinet'>('table');
+  const [viewLocation, setViewLocation] = useState<'table' | 'cabinet' | 'door' | 'door2' | 'center'>('table');
+  const viewLocationRef = useRef<'table' | 'cabinet' | 'door' | 'door2' | 'center'>('table');
+  const [activeRoom, setActiveRoom] = useState<RoomId>('lobby');
+  const activeRoomRef = useRef<RoomId>('lobby');
+  const [isCyanFloorDialogOpen, setIsCyanFloorDialogOpen] = useState(false);
+  const isCyanFloorDialogOpenRef = useRef(false);
+  const enterPortalRoomRef = useRef<
+    ((targetRoom: RoomId, spawnView?: 'table' | 'door' | 'door2') => void) | null
+  >(null);
+  const portalVeilRef = useRef<HTMLDivElement | null>(null);
+  const portalSwapTimeoutRef = useRef<number | null>(null);
+  const portalFadeEndTimeoutRef = useRef<number | null>(null);
 
   const desktopEmbedUrl = React.useMemo(() => {
     if (typeof window === 'undefined') return '?desktop=1';
@@ -56,6 +74,11 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
   // Camera & Raycaster Refs
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const raycasterRef = useRef(new THREE.Raycaster());
+  const sceneRef = useRef<THREE.Scene | null>(null);
+  const ambientLightRef = useRef<THREE.AmbientLight | null>(null);
+  const hemiLightRef = useRef<THREE.HemisphereLight | null>(null);
+  const lobbyRoomGroupRef = useRef<THREE.Group | null>(null);
+  const consoleSceneRef = useRef<THREE.Group | null>(null);
 
   // Table Lamp 3D Object Refs for interactive tap & light control
   const lampGroupRef = useRef<THREE.Group | null>(null);
@@ -65,6 +88,109 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
   const lampShadeMatRef = useRef<THREE.MeshStandardMaterial | null>(null);
   const pouchFrontMatRef = useRef<THREE.MeshPhysicalMaterial | null>(null);
   const pouchSideMatRef = useRef<THREE.MeshPhysicalMaterial | null>(null);
+
+  // Lobby Door (大廳, 亮銀色) & Circular Steampunk 4-Color Portal Dial Refs
+  const lobbyDoorHitboxRef = useRef<THREE.Mesh | null>(null);
+  const lobbyDoorLeafPivotRef = useRef<THREE.Group | null>(null);
+  const portalWheelRef = useRef<THREE.Group | null>(null);
+  const portalOuterGearRef = useRef<THREE.Group | null>(null);
+  const portalHitboxRef = useRef<THREE.Mesh | null>(null);
+  const portalPointLightRef = useRef<THREE.PointLight | null>(null);
+  const portalGemMatRef = useRef<THREE.MeshStandardMaterial | null>(null);
+  const portalSectorMatsRef = useRef<THREE.MeshStandardMaterial[]>([]);
+  const portalRimGemMatsRef = useRef<THREE.MeshStandardMaterial[]>([]);
+  const portalColorIdxRef = useRef<number>(0); // 0: 草綠色, 1: 紫色, 2: 金色, 3: 青色
+  const portalCurrentAngleRef = useRef<number>(0);
+  const portalTargetAngleRef = useRef<number>(0);
+
+  // Colored Portal Rooms (紫色 / 綠色 / 金色 / 青色) & Steampunk Dial Refs
+  interface ExtraRoomDoorState {
+    roomGroup: THREE.Group | null;
+    doorHitbox: THREE.Mesh | null;
+    doorLeafPivot: THREE.Group | null;
+    wheelGroup: THREE.Group | null;
+    outerGearGroup: THREE.Group | null;
+    dialHitbox: THREE.Mesh | null;
+    dialLight: THREE.PointLight | null;
+    tipGemMat: THREE.MeshStandardMaterial | null;
+    sectorMats: THREE.MeshStandardMaterial[];
+    rimGemMats: THREE.MeshStandardMaterial[];
+    colors: readonly [number, number, number, number];
+    hasColorSlot: readonly [boolean, boolean, boolean, boolean];
+    colorIdx: number;
+    currentAngle: number;
+    targetAngle: number;
+  }
+  const createInitialExtraRoomState = (
+    colors: readonly [number, number, number, number] = [0xe8eef5, 0x111216, 0x111216, 0x111216],
+    hasColorSlot: readonly [boolean, boolean, boolean, boolean] = [true, false, false, false],
+    initialIdx = 0,
+    initialAngle = 0
+  ): ExtraRoomDoorState => ({
+    roomGroup: null,
+    doorHitbox: null,
+    doorLeafPivot: null,
+    wheelGroup: null,
+    outerGearGroup: null,
+    dialHitbox: null,
+    dialLight: null,
+    tipGemMat: null,
+    sectorMats: [],
+    rimGemMats: [],
+    colors,
+    hasColorSlot,
+    colorIdx: initialIdx,
+    currentAngle: initialAngle,
+    targetAngle: initialAngle,
+  });
+  const extraRoomsRef = useRef<Record<ExtraRoomId, ExtraRoomDoorState>>({
+    purple: createInitialExtraRoomState(),
+    green: createInitialExtraRoomState(),
+    gold: createInitialExtraRoomState(),
+    cyan: createInitialExtraRoomState(
+      [0x111216, 0x111216, 0x111216, 0x06b6d4],
+      [false, false, false, true],
+      3,
+      Math.PI / 2
+    ),
+    cyan_b1: createInitialExtraRoomState(
+      [0xc2410c, 0x111216, 0x111216, 0x06b6d4], // 上: 深橘色, 右/下: 黑色(不可用), 左: 青色(回一樓大廳)
+      [true, false, false, true],
+      3,
+      Math.PI / 2
+    ),
+    royalblue: createInitialExtraRoomState(
+      [0xe8eef5, 0x111216, 0x111216, 0x111216], // Top: 銀色(回二樓門廊), 其餘三個黑色
+      [true, false, false, false],
+      0,
+      0
+    ),
+    brown: createInitialExtraRoomState(
+      [0xe8eef5, 0x111216, 0x111216, 0x111216], // Top: 銀色(回二樓門廊), 其餘三個黑色
+      [true, false, false, false],
+      0,
+      0
+    ),
+  });
+  // Secondary far-end door inside the 12x4m 2F Foyer (二樓的門廊, on the 4m right-side wall)
+  const cyanFarDoorRef = useRef<ExtraRoomDoorState>(
+    createInitialExtraRoomState(
+      [0x1d4ed8, 0xaa7a4a, 0x111216, 0x111216], // 寶藍色, 略深淺棕色, 黑色(不可用), 黑色(不可用)
+      [true, true, false, false],
+      0,
+      0
+    )
+  );
+  // Secondary far-end door inside the 12x4m B1 Foyer (B1 門廊, on the 4m right-side wall)
+  const cyanB1FarDoorRef = useRef<ExtraRoomDoorState>(
+    createInitialExtraRoomState(
+      [0x324b8f, 0x111216, 0x111216, 0x111216], // 上: 深湖藍紫色, 右/下/左: 黑色(不可用)
+      [true, false, false, false],
+      0,
+      0
+    )
+  );
+  const doorRattleTimerRef = useRef<number>(0);
 
   // Blue-Violet Handheld Console 3D Refs & Hold Animation Tracker
   const consoleGroupRef = useRef<THREE.Group | null>(null);
@@ -125,8 +251,9 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
 
     // --- 1. SCENE SETUP (DARK COZY MOOD) ---
     const scene = new THREE.Scene();
+    sceneRef.current = scene;
     scene.background = new THREE.Color(0x0c0907);
-    scene.fog = new THREE.FogExp2(0x0c0907, 0.04);
+    scene.fog = new THREE.FogExp2(0x0c0907, 0.008);
 
     const width = container.clientWidth || window.innerWidth;
     const height = container.clientHeight || window.innerHeight;
@@ -316,8 +443,9 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
     const tabletopTexture = createTabletopWoodTexture();
     const ceilingTexture = createCeilingTexture();
 
-    // --- 3. ROOM ARCHITECTURE ---
+    // --- 3. ROOM ARCHITECTURE (大廳 - 10x7m) ---
     const roomGroup = new THREE.Group();
+    lobbyRoomGroupRef.current = roomGroup;
 
     // 1. Dark Wood Floor
     const floorGeo = new THREE.PlaneGeometry(ROOM_WIDTH, ROOM_DEPTH);
@@ -470,6 +598,477 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
     const bbB2 = new THREE.Mesh(new THREE.BoxGeometry(backWallSideWidth, 0.1, 0.04), baseboardMat);
     bbB2.position.set(ROOM_WIDTH / 2 - backWallSideWidth / 2, 0.05, ROOM_DEPTH / 2 - 0.02);
     roomGroup.add(bbB2);
+
+    // --- 3B. CLOSED PORTAL DOOR ("1F" / "2F" CARVED) & STEAMPUNK DIAL BUILDER ---
+    const createCarvedFloorTexture = (floorText: string) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 176;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return new THREE.Texture();
+
+      // Dark walnut carved plaque grain
+      const bg = ctx.createLinearGradient(0, 0, 512, 176);
+      bg.addColorStop(0, '#2a160b');
+      bg.addColorStop(0.5, '#331c0f');
+      bg.addColorStop(1, '#200f07');
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, 512, 176);
+
+      for (let y = 0; y < 176; y += 3) {
+        ctx.fillStyle = y % 6 === 0 ? 'rgba(0,0,0,0.22)' : 'rgba(180,120,70,0.06)';
+        ctx.fillRect(0, y, 512, 1.5);
+      }
+
+      // Carved inner border groove
+      ctx.strokeStyle = 'rgba(10, 4, 2, 0.85)';
+      ctx.lineWidth = 6;
+      ctx.strokeRect(14, 14, 484, 148);
+      ctx.strokeStyle = 'rgba(215, 165, 92, 0.35)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(18, 18, 476, 140);
+
+      // Deeply carved bevel floor lettering
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = 'bold 104px Georgia, "Times New Roman", serif';
+
+      // Bottom highlight catchlight (chiseled lower bevel)
+      ctx.fillStyle = 'rgba(232, 184, 110, 0.82)';
+      ctx.fillText(floorText, 257, 94);
+
+      // Upper shadow bevel
+      ctx.fillStyle = 'rgba(5, 2, 1, 0.92)';
+      ctx.fillText(floorText, 255, 89);
+
+      // Recessed carved letter face
+      ctx.fillStyle = '#cfa05a';
+      ctx.fillText(floorText, 256, 91);
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      return tex;
+    };
+    const doorEngravingTex = createCarvedFloorTexture('1F');
+    const door2FEngravingTex = createCarvedFloorTexture('2F');
+    const doorB1EngravingTex = createCarvedFloorTexture('B1');
+
+    const createPortalDoorAndDial = (opts: {
+      colors: readonly [number, number, number, number];
+      hasColorSlot: readonly [boolean, boolean, boolean, boolean];
+      initialIdx: number;
+      currentAngle: number;
+      showFloorLabel: boolean;
+      floorLabelTexture?: THREE.Texture;
+      accentWoodTint?: number;
+    }) => {
+      const doorContainer = new THREE.Group();
+      const FD_WIDTH = 0.96;
+      const FD_HEIGHT = 2.14;
+      const FD_FRAME_W = 0.085;
+      const FD_FRAME_D = 0.13;
+
+      const frameMat = new THREE.MeshStandardMaterial({
+        color: opts.accentWoodTint ?? 0x1f120a,
+        roughness: 0.48,
+        metalness: 0.12,
+      });
+      const leafMat = new THREE.MeshStandardMaterial({
+        color: 0x2c170d,
+        roughness: 0.42,
+        metalness: 0.08,
+      });
+      const recessMat = new THREE.MeshStandardMaterial({
+        color: 0x221008,
+        roughness: 0.50,
+        metalness: 0.06,
+      });
+      const doorBrassMat = new THREE.MeshStandardMaterial({
+        color: 0xdfb15b,
+        roughness: 0.24,
+        metalness: 0.88,
+      });
+
+      // Outer fixed jambs, lintel & floor sill
+      const leftJamb = new THREE.Mesh(
+        new THREE.BoxGeometry(FD_FRAME_W, FD_HEIGHT + FD_FRAME_W, FD_FRAME_D),
+        frameMat
+      );
+      leftJamb.position.set(-FD_WIDTH / 2 - FD_FRAME_W / 2, (FD_HEIGHT + FD_FRAME_W) / 2, FD_FRAME_D * 0.35);
+      leftJamb.castShadow = true;
+      leftJamb.receiveShadow = true;
+      doorContainer.add(leftJamb);
+
+      const rightJamb = new THREE.Mesh(
+        new THREE.BoxGeometry(FD_FRAME_W, FD_HEIGHT + FD_FRAME_W, FD_FRAME_D),
+        frameMat
+      );
+      rightJamb.position.set(FD_WIDTH / 2 + FD_FRAME_W / 2, (FD_HEIGHT + FD_FRAME_W) / 2, FD_FRAME_D * 0.35);
+      rightJamb.castShadow = true;
+      rightJamb.receiveShadow = true;
+      doorContainer.add(rightJamb);
+
+      const topLintel = new THREE.Mesh(
+        new THREE.BoxGeometry(FD_WIDTH + FD_FRAME_W * 2 + 0.04, FD_FRAME_W + 0.015, FD_FRAME_D + 0.015),
+        frameMat
+      );
+      topLintel.position.set(0, FD_HEIGHT + FD_FRAME_W / 2, FD_FRAME_D * 0.38);
+      topLintel.castShadow = true;
+      doorContainer.add(topLintel);
+
+      const sill = new THREE.Mesh(
+        new THREE.BoxGeometry(FD_WIDTH + FD_FRAME_W * 2, 0.022, FD_FRAME_D + 0.03),
+        baseboardMat
+      );
+      sill.position.set(0, 0.011, FD_FRAME_D * 0.42);
+      doorContainer.add(sill);
+
+      // Carved "1F" wooden signboard plaque directly above the door lintel
+      if (opts.showFloorLabel) {
+        const signGroup = new THREE.Group();
+        signGroup.position.set(0, FD_HEIGHT + FD_FRAME_W + 0.095, 0.042);
+
+        const plaqueBack = new THREE.Mesh(
+          new THREE.BoxGeometry(0.40, 0.135, 0.024),
+          frameMat
+        );
+        plaqueBack.castShadow = true;
+        signGroup.add(plaqueBack);
+
+        const plaqueFront = new THREE.Mesh(
+          new THREE.PlaneGeometry(0.37, 0.115),
+          new THREE.MeshStandardMaterial({
+            map: opts.floorLabelTexture ?? doorEngravingTex,
+            roughness: 0.45,
+            metalness: 0.08,
+          })
+        );
+        plaqueFront.position.z = 0.013;
+        signGroup.add(plaqueFront);
+
+        doorContainer.add(signGroup);
+      }
+
+      // Hinge-pivoted closed leaf group (allows realistic locked rattle feedback!)
+      const leafPivot = new THREE.Group();
+      leafPivot.position.set(-FD_WIDTH / 2, 0, 0);
+      doorContainer.add(leafPivot);
+
+      const leafOffset = new THREE.Group();
+      leafOffset.position.set(FD_WIDTH / 2, 0, 0);
+      leafPivot.add(leafOffset);
+
+      const leaf = new THREE.Mesh(new THREE.BoxGeometry(FD_WIDTH, FD_HEIGHT, 0.055), leafMat);
+      leaf.position.set(0, FD_HEIGHT / 2 + 0.01, 0.034);
+      leaf.castShadow = true;
+      leaf.receiveShadow = true;
+      leafOffset.add(leaf);
+
+      // Classic 4 recessed wooden panels & perimeter moldings
+      [
+        [-0.20, 1.56, 0.30, 0.72],
+        [0.20, 1.56, 0.30, 0.72],
+        [-0.20, 0.62, 0.30, 0.64],
+        [0.20, 0.62, 0.30, 0.64],
+      ].forEach(([px, py, pw, ph]) => {
+        const trim = new THREE.Mesh(new THREE.BoxGeometry(pw + 0.04, ph + 0.04, 0.016), frameMat);
+        trim.position.set(px, py, 0.062);
+        leafOffset.add(trim);
+        const inset = new THREE.Mesh(new THREE.BoxGeometry(pw, ph, 0.012), recessMat);
+        inset.position.set(px, py, 0.068);
+        leafOffset.add(inset);
+      });
+
+      // Brass hinge barrels
+      [0.36, 1.08, 1.80].forEach((hy) => {
+        const hinge = new THREE.Mesh(new THREE.CylinderGeometry(0.010, 0.010, 0.075, 10), doorBrassMat);
+        hinge.position.set(-FD_WIDTH / 2 + 0.008, hy, 0.068);
+        leafOffset.add(hinge);
+      });
+
+      // Brass doorknob + keyhole escutcheon
+      const escutcheon = new THREE.Mesh(new THREE.BoxGeometry(0.048, 0.165, 0.012), doorBrassMat);
+      escutcheon.position.set(FD_WIDTH / 2 - 0.095, 1.02, 0.064);
+      leafOffset.add(escutcheon);
+
+      const knobNeck = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.016, 0.036, 12), doorBrassMat);
+      knobNeck.rotation.x = Math.PI / 2;
+      knobNeck.position.set(FD_WIDTH / 2 - 0.095, 1.055, 0.082);
+      leafOffset.add(knobNeck);
+
+      const knobHead = new THREE.Mesh(new THREE.SphereGeometry(0.032, 16, 14), doorBrassMat);
+      knobHead.position.set(FD_WIDTH / 2 - 0.095, 1.055, 0.106);
+      leafOffset.add(knobHead);
+
+      // Door click hitbox (checked AFTER the circular dial hitbox)
+      const doorHitbox = new THREE.Mesh(
+        new THREE.BoxGeometry(FD_WIDTH + 0.06, FD_HEIGHT, 0.14),
+        new THREE.MeshBasicMaterial({ visible: false })
+      );
+      doorHitbox.name = 'portal_door_hitbox';
+      doorHitbox.position.set(0, FD_HEIGHT / 2, 0.07);
+      leafOffset.add(doorHitbox);
+
+      // Circular Steampunk 4-Sector Dial mounted at Peephole Spot (y = 1.54)
+      const dialGroup = new THREE.Group();
+      dialGroup.position.set(0, 1.54, 0.075);
+      dialGroup.scale.setScalar(1.30);
+
+      const dialIronMat = new THREE.MeshStandardMaterial({ color: 0x1c1714, roughness: 0.46, metalness: 0.78 });
+      const dialBronzeMat = new THREE.MeshStandardMaterial({ color: 0x9c7435, roughness: 0.28, metalness: 0.88 });
+      const dialCopperMat = new THREE.MeshStandardMaterial({ color: 0x7c4327, roughness: 0.34, metalness: 0.84 });
+      const dialDarkBronzeMat = new THREE.MeshStandardMaterial({ color: 0x352717, roughness: 0.40, metalness: 0.80 });
+
+      const circularBaseDisc = new THREE.Mesh(new THREE.CylinderGeometry(0.126, 0.130, 0.014, 48), dialIronMat);
+      circularBaseDisc.rotation.x = Math.PI / 2;
+      circularBaseDisc.castShadow = true;
+      circularBaseDisc.receiveShadow = true;
+      dialGroup.add(circularBaseDisc);
+
+      const outerBronzeRing = new THREE.Mesh(new THREE.TorusGeometry(0.118, 0.011, 16, 48), dialBronzeMat);
+      outerBronzeRing.position.z = 0.008;
+      dialGroup.add(outerBronzeRing);
+
+      const innerCopperRing = new THREE.Mesh(new THREE.TorusGeometry(0.095, 0.0055, 12, 48), dialCopperMat);
+      innerCopperRing.position.z = 0.011;
+      dialGroup.add(innerCopperRing);
+
+      for (let r = 0; r < 12; r++) {
+        const ang = (r / 12) * Math.PI * 2 + Math.PI / 12;
+        const rivet = new THREE.Mesh(new THREE.CylinderGeometry(0.0052, 0.0058, 0.008, 6), dialBronzeMat);
+        rivet.rotation.x = Math.PI / 2;
+        rivet.position.set(Math.cos(ang) * 0.116, Math.sin(ang) * 0.116, 0.016);
+        dialGroup.add(rivet);
+      }
+
+      const clockworkFaceDisc = new THREE.Mesh(new THREE.CylinderGeometry(0.094, 0.094, 0.006, 48), dialDarkBronzeMat);
+      clockworkFaceDisc.rotation.x = Math.PI / 2;
+      clockworkFaceDisc.position.z = 0.008;
+      dialGroup.add(clockworkFaceDisc);
+
+      const outerGearGroup = new THREE.Group();
+      outerGearGroup.position.set(0, 0, 0.012);
+      const gearTrackRing = new THREE.Mesh(new THREE.TorusGeometry(0.090, 0.0032, 8, 40), dialBronzeMat);
+      outerGearGroup.add(gearTrackRing);
+      for (let t = 0; t < 24; t++) {
+        const ang = (t / 24) * Math.PI * 2;
+        const tooth = new THREE.Mesh(new THREE.BoxGeometry(0.007, 0.009, 0.005), dialBronzeMat);
+        tooth.position.set(Math.cos(ang) * 0.088, Math.sin(ang) * 0.088, 0);
+        tooth.rotation.z = ang;
+        outerGearGroup.add(tooth);
+      }
+      outerGearGroup.rotation.z = -0.5 * opts.currentAngle;
+      dialGroup.add(outerGearGroup);
+
+      const SECTOR_CENTER_ANGLES = [Math.PI / 2, 0, (Math.PI * 3) / 2, Math.PI];
+      const sectorMats: THREE.MeshStandardMaterial[] = [];
+      const rimGemMats: THREE.MeshStandardMaterial[] = [];
+      const sectorGap = 0.08;
+
+      opts.colors.forEach((hex, idx) => {
+        const cAng = SECTOR_CENTER_ANGLES[idx];
+        const startAngle = cAng - Math.PI / 4 + sectorGap / 2;
+        const sweep = Math.PI / 2 - sectorGap;
+        const sectorShape = new THREE.Shape();
+        sectorShape.absarc(0, 0, 0.083, startAngle, startAngle + sweep, false);
+        sectorShape.absarc(0, 0, 0.028, startAngle + sweep, startAngle, true);
+        sectorShape.closePath();
+
+        const sectorGeo = new THREE.ExtrudeGeometry(sectorShape, {
+          depth: 0.005,
+          bevelEnabled: true,
+          bevelThickness: 0.0012,
+          bevelSize: 0.0012,
+          bevelSegments: 2,
+          curveSegments: 16,
+        });
+
+        const isActive = idx === opts.initialIdx;
+        const hasSlot = opts.hasColorSlot[idx];
+        const sectorMat = new THREE.MeshStandardMaterial({
+          color: hex,
+          emissive: new THREE.Color(hasSlot ? hex : 0x050508),
+          emissiveIntensity: hasSlot ? (isActive ? 0.90 : 0.09) : 0.01,
+          roughness: hasSlot ? (isActive ? 0.16 : 0.36) : 0.78,
+          metalness: hasSlot ? (hex === 0xe8eef5 ? 0.55 : 0.16) : 0.25,
+        });
+        sectorMats.push(sectorMat);
+
+        const sectorMesh = new THREE.Mesh(sectorGeo, sectorMat);
+        sectorMesh.position.z = 0.011;
+        dialGroup.add(sectorMesh);
+
+        const studSocket = new THREE.Mesh(new THREE.CylinderGeometry(0.0095, 0.011, 0.007, 12), dialCopperMat);
+        studSocket.rotation.x = Math.PI / 2;
+        studSocket.position.set(Math.cos(cAng) * 0.104, Math.sin(cAng) * 0.104, 0.015);
+        dialGroup.add(studSocket);
+
+        const rimGemMat = new THREE.MeshStandardMaterial({
+          color: hex,
+          emissive: new THREE.Color(hasSlot ? hex : 0x050508),
+          emissiveIntensity: hasSlot ? (isActive ? 1.0 : 0.12) : 0.01,
+          roughness: hasSlot ? 0.15 : 0.72,
+          metalness: hasSlot ? 0.18 : 0.25,
+        });
+        rimGemMats.push(rimGemMat);
+        const rimGem = new THREE.Mesh(new THREE.SphereGeometry(0.0065, 12, 10), rimGemMat);
+        rimGem.scale.set(1, 1, 0.65);
+        rimGem.position.set(Math.cos(cAng) * 0.104, Math.sin(cAng) * 0.104, 0.019);
+        dialGroup.add(rimGem);
+      });
+
+      for (let s = 0; s < 2; s++) {
+        const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.172, 0.0055, 0.008), dialBronzeMat);
+        spoke.rotation.z = Math.PI / 4 + (s * Math.PI) / 2;
+        spoke.position.z = 0.016;
+        dialGroup.add(spoke);
+      }
+
+      // Rotating Central Steampunk Pointer Hand + Toothed Escapement Cogwheel
+      const wheelGroup = new THREE.Group();
+      wheelGroup.position.set(0, 0, 0.023);
+
+      const innerCogDisc = new THREE.Mesh(new THREE.CylinderGeometry(0.029, 0.031, 0.006, 24), dialBronzeMat);
+      innerCogDisc.rotation.x = Math.PI / 2;
+      wheelGroup.add(innerCogDisc);
+
+      for (let gt = 0; gt < 14; gt++) {
+        const ang = (gt / 14) * Math.PI * 2;
+        const cTooth = new THREE.Mesh(new THREE.BoxGeometry(0.0055, 0.010, 0.005), dialCopperMat);
+        cTooth.position.set(Math.cos(ang) * 0.032, Math.sin(ang) * 0.032, 0);
+        cTooth.rotation.z = ang;
+        wheelGroup.add(cTooth);
+      }
+
+      const handShape = new THREE.Shape();
+      handShape.moveTo(0, 0.088);
+      handShape.lineTo(0.0085, 0.062);
+      handShape.lineTo(0.0050, 0.056);
+      handShape.lineTo(0.0105, 0.032);
+      handShape.lineTo(0.0065, 0.018);
+      handShape.lineTo(0.0095, -0.024);
+      handShape.lineTo(0.0165, -0.044);
+      handShape.lineTo(0.0055, -0.037);
+      handShape.lineTo(0, -0.048);
+      handShape.lineTo(-0.0055, -0.037);
+      handShape.lineTo(-0.0165, -0.044);
+      handShape.lineTo(-0.0095, -0.024);
+      handShape.lineTo(-0.0065, 0.018);
+      handShape.lineTo(-0.0105, 0.032);
+      handShape.lineTo(-0.0050, 0.056);
+      handShape.lineTo(-0.0085, 0.062);
+      handShape.closePath();
+
+      const cutHole = new THREE.Path();
+      cutHole.moveTo(0, 0.052);
+      cutHole.lineTo(0.0042, 0.034);
+      cutHole.lineTo(0, 0.022);
+      cutHole.lineTo(-0.0042, 0.034);
+      cutHole.closePath();
+      handShape.holes.push(cutHole);
+
+      const handGeo = new THREE.ExtrudeGeometry(handShape, {
+        depth: 0.0055,
+        bevelEnabled: true,
+        bevelThickness: 0.0012,
+        bevelSize: 0.0010,
+        bevelSegments: 2,
+      });
+      const steampunkHandMat = new THREE.MeshStandardMaterial({
+        color: 0xd9a84e,
+        roughness: 0.22,
+        metalness: 0.92,
+      });
+      const steampunkHandMesh = new THREE.Mesh(handGeo, steampunkHandMat);
+      steampunkHandMesh.position.z = 0.005;
+      steampunkHandMesh.castShadow = true;
+      wheelGroup.add(steampunkHandMesh);
+
+      const pointerTailRing = new THREE.Mesh(new THREE.TorusGeometry(0.012, 0.0028, 10, 20), dialCopperMat);
+      pointerTailRing.position.set(0, -0.030, 0.008);
+      wheelGroup.add(pointerTailRing);
+
+      const initActiveColor = opts.colors[opts.initialIdx];
+      const initHasSlot = opts.hasColorSlot[opts.initialIdx];
+      const tipGemMat = new THREE.MeshStandardMaterial({
+        color: initActiveColor,
+        emissive: new THREE.Color(initHasSlot ? initActiveColor : 0x050508),
+        emissiveIntensity: initHasSlot ? 1.0 : 0.02,
+        roughness: 0.14,
+        metalness: 0.15,
+      });
+      const pointerTipGem = new THREE.Mesh(new THREE.SphereGeometry(0.0055, 12, 10), tipGemMat);
+      pointerTipGem.scale.set(1, 1.35, 0.65);
+      pointerTipGem.position.set(0, 0.068, 0.011);
+      wheelGroup.add(pointerTipGem);
+
+      const centerHub = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.018, 0.014, 18), dialCopperMat);
+      centerHub.rotation.x = Math.PI / 2;
+      centerHub.position.z = 0.008;
+      wheelGroup.add(centerHub);
+
+      const centerHexScrew = new THREE.Mesh(new THREE.CylinderGeometry(0.0085, 0.0095, 0.020, 6), steampunkHandMat);
+      centerHexScrew.rotation.x = Math.PI / 2;
+      centerHexScrew.position.z = 0.011;
+      wheelGroup.add(centerHexScrew);
+
+      wheelGroup.rotation.z = opts.currentAngle;
+      dialGroup.add(wheelGroup);
+
+      const dialLight = new THREE.PointLight(
+        initHasSlot ? initActiveColor : 0x22222c,
+        initHasSlot ? 0.68 : 0.12,
+        1.25,
+        1.7
+      );
+      dialLight.position.set(0, 0, 0.15);
+      dialGroup.add(dialLight);
+
+      const dialHitbox = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.175, 0.175, 0.14, 24),
+        new THREE.MeshBasicMaterial({ visible: false })
+      );
+      dialHitbox.rotation.x = Math.PI / 2;
+      dialHitbox.name = 'portal_dial_hitbox';
+      dialHitbox.position.set(0, 0, 0.04);
+      dialGroup.add(dialHitbox);
+
+      leafOffset.add(dialGroup);
+
+      return {
+        doorGroup: doorContainer,
+        leafPivot,
+        doorHitbox,
+        dialHitbox,
+        wheelGroup,
+        outerGearGroup,
+        sectorMats,
+        rimGemMats,
+        tipGemMat,
+        dialLight,
+      };
+    };
+
+    // Lobby Closed Door ("1F") & 4-Color Dial (草綠色, 紫色, 金色, 青色)
+    const lobbyPortalDoor = createPortalDoorAndDial({
+      colors: [0x65c226, 0x9333ea, 0xeab308, 0x06b6d4],
+      hasColorSlot: [true, true, true, true],
+      initialIdx: portalColorIdxRef.current,
+      currentAngle: portalCurrentAngleRef.current,
+      showFloorLabel: true,
+    });
+    lobbyPortalDoor.doorGroup.position.set(-3.65, 0, -ROOM_DEPTH / 2);
+    roomGroup.add(lobbyPortalDoor.doorGroup);
+
+    lobbyDoorHitboxRef.current = lobbyPortalDoor.doorHitbox;
+    lobbyDoorLeafPivotRef.current = lobbyPortalDoor.leafPivot;
+    portalWheelRef.current = lobbyPortalDoor.wheelGroup;
+    portalOuterGearRef.current = lobbyPortalDoor.outerGearGroup;
+    portalHitboxRef.current = lobbyPortalDoor.dialHitbox;
+    portalPointLightRef.current = lobbyPortalDoor.dialLight;
+    portalGemMatRef.current = lobbyPortalDoor.tipGemMat;
+    portalSectorMatsRef.current = lobbyPortalDoor.sectorMats;
+    portalRimGemMatsRef.current = lobbyPortalDoor.rimGemMats;
 
     // --- 4. WALL-SIDE WOODEN TABLE (牆邊木桌 - 寬度縮小，移去舊物件，置放盆栽) ---
     const tableGroup = new THREE.Group();
@@ -2597,7 +3196,7 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
         clearcoat: isHead ? 0.18 : 0.34,
         clearcoatRoughness: isHead ? 0.42 : 0.24,
       });
-      mat.customProgramCacheKey = () => (isHead ? 'chiamo_4view_head_v1' : 'chiamo_4view_body_v1');
+      mat.customProgramCacheKey = () => (isHead ? 'chiamo_4view_head_v2' : 'chiamo_4view_body_v2');
       mat.onBeforeCompile = (shader) => {
         shader.uniforms.uTexFront = { value: chiamoFrontRgbTex };
         shader.uniforms.uTexBack = { value: chiamoBackRgbTex };
@@ -2639,6 +3238,9 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
             float wB = pow(max(-fn.z, 0.0), 2.8);
             float wL = pow(max(fn.x, 0.0), 2.8);
             float wR = pow(max(-fn.x, 0.0), 2.8);
+            if (uIsHead < 0.5 && vFigPos.y > 0.136 && vFigPos.y < 0.188 && vFigPos.z > 0.005 && fn.z > 0.02) {
+              wF += 0.35 * smoothstep(0.02, 0.35, fn.z);
+            }
             float fy = clamp((vFigPos.y - (-0.010)) / 0.280, 0.002, 0.998);
             vec2 uvF = vec2(clamp(0.5 + vFigPos.x / 0.210, 0.002, 0.998), fy);
             vec2 uvB = vec2(clamp(0.5 - vFigPos.x / 0.210, 0.002, 0.998), fy);
@@ -2810,7 +3412,7 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
       { y: 0.123, cx: 0.005, cz: 0.002, rx: 0.0255, rz: 0.0215 }, // belt & jacket bottom
       { y: 0.136, cx: 0.005, cz: 0.002, rx: 0.0230, rz: 0.0205 }, // waist
       { y: 0.150, cx: 0.005, cz: 0.004, rx: 0.0235, rz: 0.0215 }, // mid torso
-      { y: 0.165, cx: 0.005, cz: 0.009, rx: 0.0250, rz: 0.0225 }, // bust fullness
+      { y: 0.165, cx: 0.005, cz: 0.010, rx: 0.0250, rz: 0.0232 }, // bust fullness
       { y: 0.180, cx: 0.005, cz: 0.003, rx: 0.0265, rz: 0.0200 }, // sailor collar
       { y: 0.190, cx: 0.005, cz: 0.002, rx: 0.0185, rz: 0.0155 }, // shoulders top
       { y: 0.197, cx: 0.005, cz: 0.002, rx: 0.0085, rz: 0.0085 }, // neck
@@ -2845,9 +3447,9 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
     torsoLoftGeo.setIndex(tIdx);
     addBakedProjMesh(torsoLoftGeo, chiamoBodyProjMat);
 
-    // Subtle sculpted 3D bust domes so sailor bow & chest silhouette catch authentic light
-    makeBakedEllipsoid(-0.004, 0.165, 0.021, 0.0125, 0.0120, 0.0120);
-    makeBakedEllipsoid(0.014, 0.165, 0.021, 0.0125, 0.0120, 0.0120);
+    // Smoothly contoured 3D bust relief domes so sailor bow & chest silhouette catch authentic light without steep underside shadow seams
+    makeBakedEllipsoid(-0.004, 0.165, 0.0175, 0.0122, 0.0115, 0.0092);
+    makeBakedEllipsoid(0.014, 0.165, 0.0175, 0.0122, 0.0115, 0.0092);
 
     // 6. Symmetrical Raised Puffy Hoodie Sleeves (calibrated CatmullRomCurve3 tubes)
     const rightSleeveCurve = new THREE.CatmullRomCurve3([
@@ -3122,8 +3724,8 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
     whiteBoxGroup.rotation.y = -0.025;
     cabinetGroup.add(whiteBoxGroup);
 
-    // Subtle warm fill light highlighting both 6-tier dark wood cabinets
-    const cabinetAccentLight = new THREE.PointLight(0xffebd0, 1.65, 5.4, 1.2);
+    // Bright warm fill light highlighting both 6-tier dark wood cabinets
+    const cabinetAccentLight = new THREE.PointLight(0xffebd0, 2.6, 7.5, 1.0);
     cabinetAccentLight.position.set((CAB_X + CAB2_X) / 2, 2.28, CAB_Z + 1.15);
     roomGroup.add(cabinetAccentLight);
 
@@ -3417,33 +4019,39 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
     consoleGroup.scale.setScalar(1.0);
 
     consoleGroupRef.current = consoleGroup;
+    consoleSceneRef.current = consoleGroup;
     scene.add(consoleGroup);
 
-    // --- 5. ATMOSPHERIC WARM LIGHTING RIG ---
-    const ambientLight = new THREE.AmbientLight(0xffecd6, 0.85);
+    // --- 5. BRIGHT WARM LIGHTING RIG (MAIN LOBBY ROOM) ---
+    const ambientLight = new THREE.AmbientLight(0xffecd6, 1.55);
+    ambientLightRef.current = ambientLight;
     scene.add(ambientLight);
 
-    // Ceiling Main Downlight (10m x 10m room coverage)
-    const ceilingDownlight = new THREE.PointLight(0xffebd2, 2.8, 22, 1.1);
+    const hemiLight = new THREE.HemisphereLight(0xfff5ea, 0x6e5a47, 0.95);
+    hemiLightRef.current = hemiLight;
+    scene.add(hemiLight);
+
+    // Ceiling Main Downlight (10m x 7m bright room coverage)
+    const ceilingDownlight = new THREE.PointLight(0xffebd2, 4.6, 28, 0.95);
     ceilingDownlight.position.set(0, ROOM_HEIGHT - 0.25, 0);
     ceilingDownlight.castShadow = true;
     ceilingDownlight.shadow.mapSize.width = 1024;
     ceilingDownlight.shadow.mapSize.height = 1024;
     ceilingDownlight.shadow.bias = -0.001;
-    scene.add(ceilingDownlight);
+    roomGroup.add(ceilingDownlight);
 
     // Wooden Ceiling Fixture
     const fixGeo = new THREE.CylinderGeometry(0.45, 0.45, 0.05, 24);
     const fixMat = new THREE.MeshStandardMaterial({ color: 0x22130a, roughness: 0.5 });
     const fixture = new THREE.Mesh(fixGeo, fixMat);
     fixture.position.set(0, ROOM_HEIGHT - 0.025, 0);
-    scene.add(fixture);
+    roomGroup.add(fixture);
 
     const diffGeo = new THREE.CylinderGeometry(0.38, 0.38, 0.02, 24);
     const diffMat = new THREE.MeshBasicMaterial({ color: 0xfffae6 });
     const diffuser = new THREE.Mesh(diffGeo, diffMat);
     diffuser.position.set(0, ROOM_HEIGHT - 0.055, 0);
-    scene.add(diffuser);
+    roomGroup.add(diffuser);
 
     // Hanging Wooden Pendant Lamp above Center Tea Table
     const pendantGroup = new THREE.Group();
@@ -3462,23 +4070,747 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
     pendantGroup.add(shade);
 
     // Warm golden glow illuminating the tea table
-    const teaTablePendantLight = new THREE.PointLight(0xffdfa4, 2.6, 6.5, 1.2);
+    const teaTablePendantLight = new THREE.PointLight(0xffdfa4, 3.5, 8.5, 1.05);
     teaTablePendantLight.position.set(0, -1.55, 0);
     teaTablePendantLight.castShadow = true;
     pendantGroup.add(teaTablePendantLight);
 
-    scene.add(pendantGroup);
+    roomGroup.add(pendantGroup);
 
     // Directional wall wash highlighting the front wall slats & bonsai
-    const wallWashLight = new THREE.DirectionalLight(0xffe8cf, 0.7);
+    const wallWashLight = new THREE.DirectionalLight(0xffe8cf, 1.35);
     wallWashLight.position.set(0, 3.5, -2.0);
     wallWashLight.target = frontWall;
-    scene.add(wallWashLight);
+    roomGroup.add(wallWashLight);
 
     // Doorway spill light from outside behind the player
-    const doorLight = new THREE.PointLight(0xffcf88, 1.6, 10);
+    const doorLight = new THREE.PointLight(0xffcf88, 2.6, 14);
     doorLight.position.set(0, 2.0, ROOM_DEPTH / 2 - 0.4);
-    scene.add(doorLight);
+    roomGroup.add(doorLight);
+
+    // --- 5B. NEW EMPTY 7x7m ROOMS: PURPLE, GREEN & GOLD ROOMS (7x7公尺空屋) ---
+    // Positioned at X ∈ [-5.0, +2.0] (7m wide), Z ∈ [-3.5, +3.5] (7m deep) so the door at (-3.65, 0, -3.5)
+    // retains the exact 1.35m left-corner relative position inside every room.
+    const PR_SIZE = 7.0;
+    const PR_HEIGHT = 3.0;
+    const PR_CENTER_X = -1.5; // -5.0 + 7.0 / 2
+    const extraRoomTexturesToDispose: THREE.Texture[] = [];
+
+    const EXTRA_ROOM_THEMES: Record<
+      'purple' | 'green' | 'gold',
+      {
+        floorColor: number;
+        ceilingColor: number;
+        wallColor: number;
+        baseboardColor: number;
+        accentWoodTint: number;
+        ceilingRoseColor: number;
+        lampCapColor: number;
+        bulbColor: number;
+        mainLightColor: number;
+        upGlowColor: number;
+        doorAccentColor: number;
+      }
+    > = {
+      purple: {
+        floorColor: 0x8f74b3,
+        ceilingColor: 0x5c3e82,
+        wallColor: 0xa78bfa,
+        baseboardColor: 0x1b0e29,
+        accentWoodTint: 0x1d1124,
+        ceilingRoseColor: 0x1c0f29,
+        lampCapColor: 0x2a183b,
+        bulbColor: 0xf5ebff,
+        mainLightColor: 0xd8b4fe,
+        upGlowColor: 0xc084fc,
+        doorAccentColor: 0xd8b4fe,
+      },
+      green: {
+        floorColor: 0x639e4b,
+        ceilingColor: 0x3a6328,
+        wallColor: 0x84cc52,
+        baseboardColor: 0x101f0c,
+        accentWoodTint: 0x12220e,
+        ceilingRoseColor: 0x11210c,
+        lampCapColor: 0x1c3615,
+        bulbColor: 0xf0fde8,
+        mainLightColor: 0xbef292,
+        upGlowColor: 0x86efac,
+        doorAccentColor: 0xbef292,
+      },
+      gold: {
+        floorColor: 0xb38b3e,
+        ceilingColor: 0x6e511c,
+        wallColor: 0xf5c84c,
+        baseboardColor: 0x241908,
+        accentWoodTint: 0x261a09,
+        ceilingRoseColor: 0x241907,
+        lampCapColor: 0x3d2a0d,
+        bulbColor: 0xfff8dc,
+        mainLightColor: 0xfde68a,
+        upGlowColor: 0xfbbf24,
+        doorAccentColor: 0xfde68a,
+      },
+    };
+
+    const buildColoredRoomCore = (roomId: 'purple' | 'green' | 'gold') => {
+      const theme = EXTRA_ROOM_THEMES[roomId];
+      const roomState = extraRoomsRef.current[roomId];
+      const coloredRoomGroup = new THREE.Group();
+      coloredRoomGroup.visible = activeRoomRef.current === roomId;
+      roomState.roomGroup = coloredRoomGroup;
+
+      // 1. Empty 7x7 Colored Hardwood Floor
+      const cFloorTex = floorTexture.clone();
+      cFloorTex.repeat.set(3.5, 3.5);
+      cFloorTex.needsUpdate = true;
+      extraRoomTexturesToDispose.push(cFloorTex);
+      const cFloor = new THREE.Mesh(
+        new THREE.PlaneGeometry(PR_SIZE, PR_SIZE),
+        new THREE.MeshStandardMaterial({
+          map: cFloorTex,
+          color: theme.floorColor,
+          roughness: 0.46,
+          metalness: 0.06,
+        })
+      );
+      cFloor.rotation.x = -Math.PI / 2;
+      cFloor.position.set(PR_CENTER_X, 0, 0);
+      cFloor.receiveShadow = true;
+      coloredRoomGroup.add(cFloor);
+
+      // 2. Empty 7x7 Ceiling
+      const cCeilingTex = ceilingTexture.clone();
+      cCeilingTex.repeat.set(3, 3);
+      cCeilingTex.needsUpdate = true;
+      extraRoomTexturesToDispose.push(cCeilingTex);
+      const cCeiling = new THREE.Mesh(
+        new THREE.PlaneGeometry(PR_SIZE, PR_SIZE),
+        new THREE.MeshStandardMaterial({
+          map: cCeilingTex,
+          color: theme.ceilingColor,
+          roughness: 0.88,
+          metalness: 0.03,
+        })
+      );
+      cCeiling.position.set(PR_CENTER_X, PR_HEIGHT, 0);
+      cCeiling.rotation.x = Math.PI / 2;
+      coloredRoomGroup.add(cCeiling);
+
+      // 3. Four Empty 7x3m Colored Timber Slat Walls
+      const makeColoredWallMat = () => {
+        const tex = wallTexture.clone();
+        tex.repeat.set(PR_SIZE * 2.2, 1);
+        tex.needsUpdate = true;
+        extraRoomTexturesToDispose.push(tex);
+        return new THREE.MeshStandardMaterial({
+          map: tex,
+          color: theme.wallColor,
+          roughness: 0.62,
+          metalness: 0.05,
+        });
+      };
+
+      const cFrontWall = new THREE.Mesh(new THREE.PlaneGeometry(PR_SIZE, PR_HEIGHT), makeColoredWallMat());
+      cFrontWall.position.set(PR_CENTER_X, PR_HEIGHT / 2, -PR_SIZE / 2);
+      cFrontWall.receiveShadow = true;
+      coloredRoomGroup.add(cFrontWall);
+
+      const cBackWall = new THREE.Mesh(new THREE.PlaneGeometry(PR_SIZE, PR_HEIGHT), makeColoredWallMat());
+      cBackWall.position.set(PR_CENTER_X, PR_HEIGHT / 2, PR_SIZE / 2);
+      cBackWall.rotation.y = Math.PI;
+      cBackWall.receiveShadow = true;
+      coloredRoomGroup.add(cBackWall);
+
+      const cLeftWall = new THREE.Mesh(new THREE.PlaneGeometry(PR_SIZE, PR_HEIGHT), makeColoredWallMat());
+      cLeftWall.position.set(-5.0, PR_HEIGHT / 2, 0);
+      cLeftWall.rotation.y = Math.PI / 2;
+      cLeftWall.receiveShadow = true;
+      coloredRoomGroup.add(cLeftWall);
+
+      const cRightWall = new THREE.Mesh(new THREE.PlaneGeometry(PR_SIZE, PR_HEIGHT), makeColoredWallMat());
+      cRightWall.position.set(2.0, PR_HEIGHT / 2, 0);
+      cRightWall.rotation.y = -Math.PI / 2;
+      cRightWall.receiveShadow = true;
+      coloredRoomGroup.add(cRightWall);
+
+      // Baseboards
+      const cBaseboardMat = new THREE.MeshStandardMaterial({ color: theme.baseboardColor, roughness: 0.55 });
+      [
+        [PR_SIZE, 0.1, 0.04, PR_CENTER_X, 0.05, PR_SIZE / 2 - 0.02],
+        [0.04, 0.1, PR_SIZE, -5.0 + 0.02, 0.05, 0],
+        [0.04, 0.1, PR_SIZE, 2.0 - 0.02, 0.05, 0],
+        [PR_SIZE, 0.1, 0.04, PR_CENTER_X, 0.05, -PR_SIZE / 2 + 0.02],
+      ].forEach(([bw, bh, bd, bx, by, bz]) => {
+        const bb = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bd), cBaseboardMat);
+        bb.position.set(bx, by, bz);
+        coloredRoomGroup.add(bb);
+      });
+
+      // Door in exact same relative front-left corner offset (-3.65, 0, -3.50)
+      // Dial has 3 Black sectors (Right/Bottom/Left) and ONLY Top is Bright Silver (亮銀色 -> returns to 大廳)
+      const cPortalDoor = createPortalDoorAndDial({
+        colors: roomState.colors,
+        hasColorSlot: roomState.hasColorSlot,
+        initialIdx: roomState.colorIdx,
+        currentAngle: roomState.currentAngle,
+        showFloorLabel: false,
+        accentWoodTint: theme.accentWoodTint,
+      });
+      cPortalDoor.doorGroup.position.set(-3.65, 0, -PR_SIZE / 2);
+      coloredRoomGroup.add(cPortalDoor.doorGroup);
+
+      roomState.doorHitbox = cPortalDoor.doorHitbox;
+      roomState.doorLeafPivot = cPortalDoor.leafPivot;
+      roomState.wheelGroup = cPortalDoor.wheelGroup;
+      roomState.outerGearGroup = cPortalDoor.outerGearGroup;
+      roomState.dialHitbox = cPortalDoor.dialHitbox;
+      roomState.dialLight = cPortalDoor.dialLight;
+      roomState.tipGemMat = cPortalDoor.tipGemMat;
+      roomState.sectorMats = cPortalDoor.sectorMats;
+      roomState.rimGemMats = cPortalDoor.rimGemMats;
+
+      // Overhead Center Pendant Light Fixture (頭頂正中央吊燈光源)
+      const cCeilingRose = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.14, 0.16, 0.04, 24),
+        new THREE.MeshStandardMaterial({ color: theme.ceilingRoseColor, roughness: 0.45, metalness: 0.5 })
+      );
+      cCeilingRose.position.set(PR_CENTER_X, PR_HEIGHT - 0.02, 0);
+      coloredRoomGroup.add(cCeilingRose);
+
+      const cLightRod = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.010, 0.010, 0.36, 12),
+        new THREE.MeshStandardMaterial({ color: 0x8f6b32, roughness: 0.32, metalness: 0.85 })
+      );
+      cLightRod.position.set(PR_CENTER_X, PR_HEIGHT - 0.20, 0);
+      coloredRoomGroup.add(cLightRod);
+
+      const cLampCap = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.06, 0.15, 0.07, 24),
+        new THREE.MeshStandardMaterial({ color: theme.lampCapColor, roughness: 0.38, metalness: 0.65 })
+      );
+      cLampCap.position.set(PR_CENTER_X, PR_HEIGHT - 0.38, 0);
+      coloredRoomGroup.add(cLampCap);
+
+      const cOverheadBulb = new THREE.Mesh(
+        new THREE.SphereGeometry(0.115, 24, 18),
+        new THREE.MeshBasicMaterial({ color: theme.bulbColor })
+      );
+      cOverheadBulb.scale.set(1.15, 0.85, 1.15);
+      cOverheadBulb.position.set(PR_CENTER_X, PR_HEIGHT - 0.46, 0);
+      coloredRoomGroup.add(cOverheadBulb);
+
+      const cMainLight = new THREE.PointLight(theme.mainLightColor, 5.2, 28, 0.85);
+      cMainLight.position.set(PR_CENTER_X, PR_HEIGHT - 0.52, 0);
+      cMainLight.castShadow = true;
+      cMainLight.shadow.mapSize.width = 1024;
+      cMainLight.shadow.mapSize.height = 1024;
+      cMainLight.shadow.bias = -0.001;
+      coloredRoomGroup.add(cMainLight);
+
+      const cUpGlow = new THREE.PointLight(theme.upGlowColor, 2.2, 11, 1.05);
+      cUpGlow.position.set(PR_CENTER_X, PR_HEIGHT - 0.30, 0);
+      coloredRoomGroup.add(cUpGlow);
+
+      const cDoorAccentLight = new THREE.PointLight(theme.doorAccentColor, 2.4, 10, 1.0);
+      cDoorAccentLight.position.set(-3.65, 2.25, -2.05);
+      coloredRoomGroup.add(cDoorAccentLight);
+
+      scene.add(coloredRoomGroup);
+    };
+
+    (['purple', 'green', 'gold'] as const).forEach(buildColoredRoomCore);
+
+    // --- 5C. CYAN FOYERS: 2F FOYER (「二樓的門廊」) & CLONED B1 FOYER (「地下一樓的門廊」) ---
+    // X ∈ [-5.0, +7.0] (12m wide front/back walls), Z ∈ [-3.5, +0.5] (4m deep side walls), 鎖視角, 雙門
+    const CY_WIDTH = 12.0;
+    const CY_DEPTH = 4.0;
+    const CY_HEIGHT = 3.0;
+    const CY_CENTER_X = 1.0;  // -5.0 + 12.0 / 2
+    const CY_CENTER_Z = -1.5; // -3.5 + 4.0 / 2
+
+    const buildFoyerRoom = (
+      roomId: 'cyan' | 'cyan_b1',
+      farDoorState: ExtraRoomDoorState,
+      floorPlaqueTex: THREE.Texture
+    ) => {
+      const foyerState = extraRoomsRef.current[roomId];
+      const foyerGroup = new THREE.Group();
+      foyerGroup.visible = activeRoomRef.current === roomId;
+      foyerState.roomGroup = foyerGroup;
+
+      // 1. 12x4m Cyan-Tinted Hardwood Floor
+      const cyFloorTex = floorTexture.clone();
+      cyFloorTex.repeat.set(6, 2);
+      cyFloorTex.needsUpdate = true;
+      extraRoomTexturesToDispose.push(cyFloorTex);
+      const cyFloor = new THREE.Mesh(
+        new THREE.PlaneGeometry(CY_WIDTH, CY_DEPTH),
+        new THREE.MeshStandardMaterial({
+          map: cyFloorTex,
+          color: 0x3b8c9e,
+          roughness: 0.45,
+          metalness: 0.07,
+        })
+      );
+      cyFloor.rotation.x = -Math.PI / 2;
+      cyFloor.position.set(CY_CENTER_X, 0, CY_CENTER_Z);
+      cyFloor.receiveShadow = true;
+      foyerGroup.add(cyFloor);
+
+      // 2. 12x4m Deep Cyan Ceiling
+      const cyCeilingTex = ceilingTexture.clone();
+      cyCeilingTex.repeat.set(5, 2);
+      cyCeilingTex.needsUpdate = true;
+      extraRoomTexturesToDispose.push(cyCeilingTex);
+      const cyCeiling = new THREE.Mesh(
+        new THREE.PlaneGeometry(CY_WIDTH, CY_DEPTH),
+        new THREE.MeshStandardMaterial({
+          map: cyCeilingTex,
+          color: 0x1a4d5c,
+          roughness: 0.88,
+          metalness: 0.03,
+        })
+      );
+      cyCeiling.position.set(CY_CENTER_X, CY_HEIGHT, CY_CENTER_Z);
+      cyCeiling.rotation.x = Math.PI / 2;
+      foyerGroup.add(cyCeiling);
+
+      // 3. 12x3m Front/Back Walls & 4x3m Left/Right Side Walls
+      const makeCyanWallMat = (wallSpan: number) => {
+        const tex = wallTexture.clone();
+        tex.repeat.set(wallSpan * 2.2, 1);
+        tex.needsUpdate = true;
+        extraRoomTexturesToDispose.push(tex);
+        return new THREE.MeshStandardMaterial({
+          map: tex,
+          color: 0x38bdf8,
+          roughness: 0.60,
+          metalness: 0.06,
+        });
+      };
+
+      const cyFrontWall = new THREE.Mesh(new THREE.PlaneGeometry(CY_WIDTH, CY_HEIGHT), makeCyanWallMat(CY_WIDTH));
+      cyFrontWall.position.set(CY_CENTER_X, CY_HEIGHT / 2, -3.5);
+      cyFrontWall.receiveShadow = true;
+      foyerGroup.add(cyFrontWall);
+
+      const cyBackWall = new THREE.Mesh(new THREE.PlaneGeometry(CY_WIDTH, CY_HEIGHT), makeCyanWallMat(CY_WIDTH));
+      cyBackWall.position.set(CY_CENTER_X, CY_HEIGHT / 2, 0.5);
+      cyBackWall.rotation.y = Math.PI;
+      cyBackWall.receiveShadow = true;
+      foyerGroup.add(cyBackWall);
+
+      const cyLeftWall = new THREE.Mesh(new THREE.PlaneGeometry(CY_DEPTH, CY_HEIGHT), makeCyanWallMat(CY_DEPTH));
+      cyLeftWall.position.set(-5.0, CY_HEIGHT / 2, CY_CENTER_Z);
+      cyLeftWall.rotation.y = Math.PI / 2;
+      cyLeftWall.receiveShadow = true;
+      foyerGroup.add(cyLeftWall);
+
+      const cyRightWall = new THREE.Mesh(new THREE.PlaneGeometry(CY_DEPTH, CY_HEIGHT), makeCyanWallMat(CY_DEPTH));
+      cyRightWall.position.set(7.0, CY_HEIGHT / 2, CY_CENTER_Z);
+      cyRightWall.rotation.y = -Math.PI / 2;
+      cyRightWall.receiveShadow = true;
+      foyerGroup.add(cyRightWall);
+
+      // Baseboards along 12m & 4m walls
+      const cyBaseboardMat = new THREE.MeshStandardMaterial({ color: 0x0b2229, roughness: 0.55 });
+      [
+        [CY_WIDTH, 0.1, 0.04, CY_CENTER_X, 0.05, 0.5 - 0.02],
+        [0.04, 0.1, CY_DEPTH, -5.0 + 0.02, 0.05, CY_CENTER_Z],
+        [0.04, 0.1, CY_DEPTH, 7.0 - 0.02, 0.05, CY_CENTER_Z],
+        [CY_WIDTH, 0.1, 0.04, CY_CENTER_X, 0.05, -3.5 + 0.02],
+      ].forEach(([bw, bh, bd, bx, by, bz]) => {
+        const bb = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bd), cyBaseboardMat);
+        bb.position.set(bx, by, bz);
+        foyerGroup.add(bb);
+      });
+
+      // Door 1 (12m front wall left end, same offset (-3.65, 0, -3.50))
+      // Dial: ONLY Left is Cyan (0x06b6d4), other 3 sectors are Black
+      const foyerDoor1 = createPortalDoorAndDial({
+        colors: foyerState.colors,
+        hasColorSlot: foyerState.hasColorSlot,
+        initialIdx: foyerState.colorIdx,
+        currentAngle: foyerState.currentAngle,
+        showFloorLabel: true,
+        floorLabelTexture: floorPlaqueTex,
+        accentWoodTint: 0x0d2129,
+      });
+      foyerDoor1.doorGroup.position.set(-3.65, 0, -3.5);
+      foyerGroup.add(foyerDoor1.doorGroup);
+
+      foyerState.doorHitbox = foyerDoor1.doorHitbox;
+      foyerState.doorLeafPivot = foyerDoor1.leafPivot;
+      foyerState.wheelGroup = foyerDoor1.wheelGroup;
+      foyerState.outerGearGroup = foyerDoor1.outerGearGroup;
+      foyerState.dialHitbox = foyerDoor1.dialHitbox;
+      foyerState.dialLight = foyerDoor1.dialLight;
+      foyerState.tipGemMat = foyerDoor1.tipGemMat;
+      foyerState.sectorMats = foyerDoor1.sectorMats;
+      foyerState.rimGemMats = foyerDoor1.rimGemMats;
+
+      // Door 2 (Other end on the 4m right-side wall at X = +7.0, Z = -1.5, facing -X, identical door + plaque)
+      const foyerDoor2 = createPortalDoorAndDial({
+        colors: farDoorState.colors,
+        hasColorSlot: farDoorState.hasColorSlot,
+        initialIdx: farDoorState.colorIdx,
+        currentAngle: farDoorState.currentAngle,
+        showFloorLabel: true,
+        floorLabelTexture: floorPlaqueTex,
+        accentWoodTint: 0x0d2129,
+      });
+      foyerDoor2.doorGroup.position.set(7.0, 0, CY_CENTER_Z);
+      foyerDoor2.doorGroup.rotation.y = -Math.PI / 2;
+      foyerGroup.add(foyerDoor2.doorGroup);
+
+      farDoorState.doorHitbox = foyerDoor2.doorHitbox;
+      farDoorState.doorLeafPivot = foyerDoor2.leafPivot;
+      farDoorState.wheelGroup = foyerDoor2.wheelGroup;
+      farDoorState.outerGearGroup = foyerDoor2.outerGearGroup;
+      farDoorState.dialHitbox = foyerDoor2.dialHitbox;
+      farDoorState.dialLight = foyerDoor2.dialLight;
+      farDoorState.tipGemMat = foyerDoor2.tipGemMat;
+      farDoorState.sectorMats = foyerDoor2.sectorMats;
+      farDoorState.rimGemMats = foyerDoor2.rimGemMats;
+
+      // 1F-Lobby-Matching Bright Warm Lighting Rig for Foyer
+      const cyCeilingDownlight = new THREE.PointLight(0xffebd2, 4.8, 30, 0.9);
+      cyCeilingDownlight.position.set(CY_CENTER_X, CY_HEIGHT - 0.25, CY_CENTER_Z);
+      cyCeilingDownlight.castShadow = true;
+      cyCeilingDownlight.shadow.mapSize.width = 1024;
+      cyCeilingDownlight.shadow.mapSize.height = 1024;
+      cyCeilingDownlight.shadow.bias = -0.001;
+      foyerGroup.add(cyCeilingDownlight);
+
+      const cyFixture = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.45, 0.45, 0.05, 24),
+        new THREE.MeshStandardMaterial({ color: 0x22130a, roughness: 0.5 })
+      );
+      cyFixture.position.set(CY_CENTER_X, CY_HEIGHT - 0.025, CY_CENTER_Z);
+      foyerGroup.add(cyFixture);
+
+      const cyDiffuser = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.38, 0.38, 0.02, 24),
+        new THREE.MeshBasicMaterial({ color: 0xfffae6 })
+      );
+      cyDiffuser.position.set(CY_CENTER_X, CY_HEIGHT - 0.055, CY_CENTER_Z);
+      foyerGroup.add(cyDiffuser);
+
+      const cyPendantGroup = new THREE.Group();
+      cyPendantGroup.position.set(CY_CENTER_X, CY_HEIGHT, CY_CENTER_Z);
+      const cyCord = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.005, 0.005, 1.1, 8),
+        new THREE.MeshBasicMaterial({ color: 0x111111 })
+      );
+      cyCord.position.y = -0.55;
+      cyPendantGroup.add(cyCord);
+      const cyShade = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.24, 0.34, 0.32, 16),
+        new THREE.MeshStandardMaterial({ color: 0x28180c, roughness: 0.6 })
+      );
+      cyShade.position.y = -1.20;
+      cyPendantGroup.add(cyShade);
+      const cyPendantLight = new THREE.PointLight(0xffdfa4, 3.8, 12, 1.0);
+      cyPendantLight.position.set(0, -1.25, 0);
+      cyPendantGroup.add(cyPendantLight);
+      foyerGroup.add(cyPendantGroup);
+
+      const cyWallWashLight = new THREE.DirectionalLight(0xffe8cf, 1.35);
+      cyWallWashLight.position.set(CY_CENTER_X, 3.5, -1.2);
+      cyWallWashLight.target = cyFrontWall;
+      foyerGroup.add(cyWallWashLight);
+
+      const cyDoor1SpillLight = new THREE.PointLight(0xffcf88, 3.0, 14);
+      cyDoor1SpillLight.position.set(-3.65, 2.0, -1.85);
+      foyerGroup.add(cyDoor1SpillLight);
+
+      const cyDoor2SpillLight = new THREE.PointLight(0xffcf88, 3.0, 14);
+      cyDoor2SpillLight.position.set(5.35, 2.0, CY_CENTER_Z);
+      foyerGroup.add(cyDoor2SpillLight);
+
+      scene.add(foyerGroup);
+    };
+
+    buildFoyerRoom('cyan', cyanFarDoorRef.current, door2FEngravingTex);
+    buildFoyerRoom('cyan_b1', cyanB1FarDoorRef.current, doorB1EngravingTex);
+
+    // --- 5D. TWO 10x7m EMPTY LOBBY-LOGIC 2F HALLS (寶藍色大廳 & 淺棕色大廳) ---
+    // Exact 1F Lobby dimensions (10m x 7m x 3m), warm 1F lighting, T-shape seated look,
+    // clean center round wooden table + cushions, and front-left 2F return door to 二樓的門廊 (Top=銀色).
+    const LOBBY_2F_THEMES: Record<
+      'royalblue' | 'brown',
+      {
+        floorColor: number;
+        wallColor: number;
+        ceilingColor: number;
+        baseboardColor: number;
+        accentWoodTint: number;
+      }
+    > = {
+      royalblue: {
+        floorColor: 0x7b92c4,
+        wallColor: 0x4f74c9,
+        ceilingColor: 0xc2d1eb,
+        baseboardColor: 0x0f182e,
+        accentWoodTint: 0x101930,
+      },
+      brown: {
+        floorColor: 0xb38a62,
+        wallColor: 0xc28c59,
+        ceilingColor: 0xebd9c5,
+        baseboardColor: 0x24160b,
+        accentWoodTint: 0x26170b,
+      },
+    };
+
+    const buildLobbyLogic2FRoom = (roomId: 'royalblue' | 'brown') => {
+      const theme = LOBBY_2F_THEMES[roomId];
+      const roomState = extraRoomsRef.current[roomId];
+      const hallGroup = new THREE.Group();
+      hallGroup.visible = activeRoomRef.current === roomId;
+      roomState.roomGroup = hallGroup;
+
+      // 1. 10x7m Hardwood Floor
+      const hFloorTex = floorTexture.clone();
+      hFloorTex.repeat.set(4, 5);
+      hFloorTex.needsUpdate = true;
+      extraRoomTexturesToDispose.push(hFloorTex);
+      const hFloor = new THREE.Mesh(
+        new THREE.PlaneGeometry(ROOM_WIDTH, ROOM_DEPTH),
+        new THREE.MeshStandardMaterial({
+          map: hFloorTex,
+          color: theme.floorColor,
+          roughness: 0.42,
+          metalness: 0.05,
+        })
+      );
+      hFloor.rotation.x = -Math.PI / 2;
+      hFloor.receiveShadow = true;
+      hallGroup.add(hFloor);
+
+      // 2. 10x7m Ceiling
+      const hCeilingTex = ceilingTexture.clone();
+      hCeilingTex.repeat.set(4, 4);
+      hCeilingTex.needsUpdate = true;
+      extraRoomTexturesToDispose.push(hCeilingTex);
+      const hCeiling = new THREE.Mesh(
+        new THREE.PlaneGeometry(ROOM_WIDTH, ROOM_DEPTH),
+        new THREE.MeshStandardMaterial({
+          map: hCeilingTex,
+          color: theme.ceilingColor,
+          roughness: 0.9,
+          metalness: 0.02,
+        })
+      );
+      hCeiling.position.y = ROOM_HEIGHT;
+      hCeiling.rotation.x = Math.PI / 2;
+      hallGroup.add(hCeiling);
+
+      // 3. 10x7m Vertical Wood Slat Walls (matching 1F Lobby proportions & doorway behind player)
+      const makeHallWallMat = (repeatX: number) => {
+        const tex = wallTexture.clone();
+        tex.repeat.set(repeatX, 1);
+        tex.needsUpdate = true;
+        extraRoomTexturesToDispose.push(tex);
+        return new THREE.MeshStandardMaterial({
+          map: tex,
+          color: theme.wallColor,
+          roughness: 0.58,
+          metalness: 0.08,
+        });
+      };
+
+      const hFrontWall = new THREE.Mesh(
+        new THREE.PlaneGeometry(ROOM_WIDTH, ROOM_HEIGHT),
+        makeHallWallMat(ROOM_WIDTH * 2.2)
+      );
+      hFrontWall.position.set(0, ROOM_HEIGHT / 2, -ROOM_DEPTH / 2);
+      hFrontWall.receiveShadow = true;
+      hallGroup.add(hFrontWall);
+
+      const hLeftWall = new THREE.Mesh(
+        new THREE.PlaneGeometry(ROOM_DEPTH, ROOM_HEIGHT),
+        makeHallWallMat(ROOM_DEPTH * 2.2)
+      );
+      hLeftWall.position.set(-ROOM_WIDTH / 2, ROOM_HEIGHT / 2, 0);
+      hLeftWall.rotation.y = Math.PI / 2;
+      hLeftWall.receiveShadow = true;
+      hallGroup.add(hLeftWall);
+
+      const hRightWall = new THREE.Mesh(
+        new THREE.PlaneGeometry(ROOM_DEPTH, ROOM_HEIGHT),
+        makeHallWallMat(ROOM_DEPTH * 2.2)
+      );
+      hRightWall.position.set(ROOM_WIDTH / 2, ROOM_HEIGHT / 2, 0);
+      hRightWall.rotation.y = -Math.PI / 2;
+      hRightWall.receiveShadow = true;
+      hallGroup.add(hRightWall);
+
+      const hBackWallMat = makeHallWallMat(backWallSideWidth * 2.2);
+      const hBwLeft = new THREE.Mesh(new THREE.PlaneGeometry(backWallSideWidth, ROOM_HEIGHT), hBackWallMat);
+      hBwLeft.position.set(-ROOM_WIDTH / 2 + backWallSideWidth / 2, ROOM_HEIGHT / 2, ROOM_DEPTH / 2);
+      hBwLeft.rotation.y = Math.PI;
+      hallGroup.add(hBwLeft);
+
+      const hBwRight = new THREE.Mesh(new THREE.PlaneGeometry(backWallSideWidth, ROOM_HEIGHT), hBackWallMat);
+      hBwRight.position.set(ROOM_WIDTH / 2 - backWallSideWidth / 2, ROOM_HEIGHT / 2, ROOM_DEPTH / 2);
+      hBwRight.rotation.y = Math.PI;
+      hallGroup.add(hBwRight);
+
+      const hBwHeader = new THREE.Mesh(
+        new THREE.PlaneGeometry(doorwayWidth, ROOM_HEIGHT - doorwayHeight),
+        hBackWallMat
+      );
+      hBwHeader.position.set(0, ROOM_HEIGHT - (ROOM_HEIGHT - doorwayHeight) / 2, ROOM_DEPTH / 2);
+      hBwHeader.rotation.y = Math.PI;
+      hallGroup.add(hBwHeader);
+
+      const hFrameL = new THREE.Mesh(framePillarGeo, doorFrameMat);
+      hFrameL.position.set(-doorwayWidth / 2 + 0.05, doorwayHeight / 2, ROOM_DEPTH / 2);
+      hallGroup.add(hFrameL);
+      const hFrameR = new THREE.Mesh(framePillarGeo, doorFrameMat);
+      hFrameR.position.set(doorwayWidth / 2 - 0.05, doorwayHeight / 2, ROOM_DEPTH / 2);
+      hallGroup.add(hFrameR);
+      const hFrameT = new THREE.Mesh(frameTopGeo, doorFrameMat);
+      hFrameT.position.set(0, doorwayHeight, ROOM_DEPTH / 2);
+      hallGroup.add(hFrameT);
+
+      // Baseboards
+      const hBaseboardMat = new THREE.MeshStandardMaterial({ color: theme.baseboardColor, roughness: 0.55 });
+      const hBbL = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.1, ROOM_DEPTH), hBaseboardMat);
+      hBbL.position.set(-ROOM_WIDTH / 2 + 0.02, 0.05, 0);
+      hallGroup.add(hBbL);
+      const hBbR = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.1, ROOM_DEPTH), hBaseboardMat);
+      hBbR.position.set(ROOM_WIDTH / 2 - 0.02, 0.05, 0);
+      hallGroup.add(hBbR);
+      const hBbB1 = new THREE.Mesh(new THREE.BoxGeometry(backWallSideWidth, 0.1, 0.04), hBaseboardMat);
+      hBbB1.position.set(-ROOM_WIDTH / 2 + backWallSideWidth / 2, 0.05, ROOM_DEPTH / 2 - 0.02);
+      hallGroup.add(hBbB1);
+      const hBbB2 = new THREE.Mesh(new THREE.BoxGeometry(backWallSideWidth, 0.1, 0.04), hBaseboardMat);
+      hBbB2.position.set(ROOM_WIDTH / 2 - backWallSideWidth / 2, 0.05, ROOM_DEPTH / 2 - 0.02);
+      hallGroup.add(hBbB2);
+
+      // 4. Center Round Wooden Table + Surrounding Cushions (空大廳正中央的圓桌)
+      const hRoundTableGroup = new THREE.Group();
+      hRoundTableGroup.position.set(0, 0, 0);
+
+      const hTeaTop = new THREE.Mesh(teaTopGeo, tableMat);
+      hTeaTop.position.set(0, TEA_TABLE_HEIGHT - TEA_TABLE_TOP_THICK / 2, 0);
+      hTeaTop.castShadow = true;
+      hTeaTop.receiveShadow = true;
+      hRoundTableGroup.add(hTeaTop);
+
+      const hRoundRim = new THREE.Mesh(roundRimGeo, tableDarkWoodMat);
+      hRoundRim.position.set(0, TEA_TABLE_HEIGHT - TEA_TABLE_TOP_THICK / 2, 0);
+      hRoundRim.rotation.x = Math.PI / 2;
+      hRoundTableGroup.add(hRoundRim);
+
+      [Math.PI * 0.25, Math.PI * 0.75, Math.PI * 1.25, Math.PI * 1.75].forEach((angle) => {
+        const lx = Math.cos(angle) * legRadius;
+        const lz = Math.sin(angle) * legRadius;
+        const hLeg = new THREE.Mesh(roundLegGeo, tableDarkWoodMat);
+        hLeg.position.set(lx, roundLegHeight / 2, lz);
+        hLeg.rotation.y = -angle;
+        hLeg.castShadow = true;
+        hRoundTableGroup.add(hLeg);
+      });
+
+      const hBrace1 = new THREE.Mesh(braceGeo, tableDarkWoodMat);
+      hBrace1.position.set(0, 0.12, 0);
+      hBrace1.rotation.y = Math.PI * 0.25;
+      hRoundTableGroup.add(hBrace1);
+      const hBrace2 = new THREE.Mesh(braceGeo, tableDarkWoodMat);
+      hBrace2.position.set(0, 0.12, 0);
+      hBrace2.rotation.y = Math.PI * 0.75;
+      hRoundTableGroup.add(hBrace2);
+
+      cushionPositions.forEach((pos) => {
+        const cGroup = new THREE.Group();
+        cGroup.position.set(pos.x, 0.0325, pos.z);
+        const cushion = new THREE.Mesh(cushionGeo, pos.mat);
+        cushion.castShadow = true;
+        cushion.receiveShadow = true;
+        cGroup.add(cushion);
+        const btn = new THREE.Mesh(
+          new THREE.SphereGeometry(0.016, 10, 8),
+          new THREE.MeshStandardMaterial({ color: 0x16120e, roughness: 0.6 })
+        );
+        btn.position.y = 0.033;
+        btn.scale.set(1, 0.4, 1);
+        cGroup.add(btn);
+        hRoundTableGroup.add(cGroup);
+      });
+
+      hallGroup.add(hRoundTableGroup);
+
+      // 5. Front-Left Portal Door ("2F" plaque, Top=銀色 returning to 二樓的門廊, other 3=黑色)
+      const hPortalDoor = createPortalDoorAndDial({
+        colors: roomState.colors,
+        hasColorSlot: roomState.hasColorSlot,
+        initialIdx: roomState.colorIdx,
+        currentAngle: roomState.currentAngle,
+        showFloorLabel: true,
+        floorLabelTexture: door2FEngravingTex,
+        accentWoodTint: theme.accentWoodTint,
+      });
+      hPortalDoor.doorGroup.position.set(-3.65, 0, -ROOM_DEPTH / 2);
+      hallGroup.add(hPortalDoor.doorGroup);
+
+      roomState.doorHitbox = hPortalDoor.doorHitbox;
+      roomState.doorLeafPivot = hPortalDoor.leafPivot;
+      roomState.wheelGroup = hPortalDoor.wheelGroup;
+      roomState.outerGearGroup = hPortalDoor.outerGearGroup;
+      roomState.dialHitbox = hPortalDoor.dialHitbox;
+      roomState.dialLight = hPortalDoor.dialLight;
+      roomState.tipGemMat = hPortalDoor.tipGemMat;
+      roomState.sectorMats = hPortalDoor.sectorMats;
+      roomState.rimGemMats = hPortalDoor.rimGemMats;
+
+      // 6. Exact 1F Lobby Bright Warm Lighting Rig
+      const hCeilingDownlight = new THREE.PointLight(0xffebd2, 4.8, 28, 0.95);
+      hCeilingDownlight.position.set(0, ROOM_HEIGHT - 0.25, 0);
+      hCeilingDownlight.castShadow = true;
+      hCeilingDownlight.shadow.mapSize.width = 1024;
+      hCeilingDownlight.shadow.mapSize.height = 1024;
+      hCeilingDownlight.shadow.bias = -0.001;
+      hallGroup.add(hCeilingDownlight);
+
+      const hFixture = new THREE.Mesh(fixGeo, fixMat);
+      hFixture.position.set(0, ROOM_HEIGHT - 0.025, 0);
+      hallGroup.add(hFixture);
+
+      const hDiffuser = new THREE.Mesh(diffGeo, diffMat);
+      hDiffuser.position.set(0, ROOM_HEIGHT - 0.055, 0);
+      hallGroup.add(hDiffuser);
+
+      const hPendantGroup = new THREE.Group();
+      hPendantGroup.position.set(0, ROOM_HEIGHT, 0);
+      const hCord = new THREE.Mesh(cordGeo, cordMat);
+      hCord.position.y = -0.7;
+      hPendantGroup.add(hCord);
+      const hShade = new THREE.Mesh(shadeGeo, shadeMat);
+      hShade.position.y = -1.50;
+      hPendantGroup.add(hShade);
+      const hTeaLight = new THREE.PointLight(0xffdfa4, 3.6, 9.0, 1.0);
+      hTeaLight.position.set(0, -1.55, 0);
+      hTeaLight.castShadow = true;
+      hPendantGroup.add(hTeaLight);
+      hallGroup.add(hPendantGroup);
+
+      const hWallWashLight = new THREE.DirectionalLight(0xffe8cf, 1.35);
+      hWallWashLight.position.set(0, 3.5, -2.0);
+      hWallWashLight.target = hFrontWall;
+      hallGroup.add(hWallWashLight);
+
+      const hDoorLight = new THREE.PointLight(0xffcf88, 2.6, 14);
+      hDoorLight.position.set(0, 2.0, ROOM_DEPTH / 2 - 0.4);
+      hallGroup.add(hDoorLight);
+
+      scene.add(hallGroup);
+    };
+
+    (['royalblue', 'brown'] as const).forEach(buildLobbyLogic2FRoom);
 
     // --- 6. ANIMATION & RENDER LOOP ---
     let animationId: number;
@@ -3494,12 +4826,24 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
 
     const TABLE_VIEW_POS = new THREE.Vector3(0, SEATED_HEIGHT, SEATED_Z);
     const CABINET_VIEW_POS = new THREE.Vector3((CAB_X + CAB2_X) / 2, 1.10, CAB_Z + 2.75);
+    const DOOR_VIEW_POS = new THREE.Vector3(-3.65, 1.28, -1.62);
+    const CYAN_DOOR2_VIEW_POS = new THREE.Vector3(5.12, 1.28, CY_CENTER_Z);
+    const ROOM_CENTER_POS = new THREE.Vector3(PR_CENTER_X, 1.38, 0);
 
     const renderLoop = () => {
       const delta = Math.min(clock.getDelta(), 0.1);
 
-      // Smoothly move camera between tea table and 6-tier cabinet + T-shape look around
-      const targetPos = viewLocationRef.current === 'cabinet' ? CABINET_VIEW_POS : TABLE_VIEW_POS;
+      // Smoothly move camera between tea table, 6-tier cabinet, doors, and center of colored rooms
+      const targetPos =
+        viewLocationRef.current === 'cabinet'
+          ? CABINET_VIEW_POS
+          : viewLocationRef.current === 'door'
+            ? DOOR_VIEW_POS
+            : viewLocationRef.current === 'door2'
+              ? CYAN_DOOR2_VIEW_POS
+              : viewLocationRef.current === 'center'
+                ? ROOM_CENTER_POS
+                : TABLE_VIEW_POS;
       playerPosRef.current.x = THREE.MathUtils.damp(playerPosRef.current.x, targetPos.x, 4.6, delta);
       playerPosRef.current.y = THREE.MathUtils.damp(playerPosRef.current.y, targetPos.y, 4.6, delta);
       playerPosRef.current.z = THREE.MathUtils.damp(playerPosRef.current.z, targetPos.z, 4.6, delta);
@@ -3614,6 +4958,55 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
         }
       }
 
+      // Smooth clockwise damped rotation for Lobby & Colored Rooms' steampunk pointers & outer gear rings
+      if (portalWheelRef.current) {
+        portalCurrentAngleRef.current = THREE.MathUtils.damp(
+          portalCurrentAngleRef.current,
+          portalTargetAngleRef.current,
+          10.5,
+          delta
+        );
+        portalWheelRef.current.rotation.z = portalCurrentAngleRef.current;
+        if (portalOuterGearRef.current) {
+          portalOuterGearRef.current.rotation.z = -0.5 * portalCurrentAngleRef.current;
+        }
+      }
+      const animateDialState = (rs: ExtraRoomDoorState) => {
+        if (rs.wheelGroup) {
+          rs.currentAngle = THREE.MathUtils.damp(rs.currentAngle, rs.targetAngle, 10.5, delta);
+          rs.wheelGroup.rotation.z = rs.currentAngle;
+          if (rs.outerGearGroup) {
+            rs.outerGearGroup.rotation.z = -0.5 * rs.currentAngle;
+          }
+        }
+      };
+      (['purple', 'green', 'gold', 'cyan', 'cyan_b1', 'royalblue', 'brown'] as const).forEach((roomId) => {
+        animateDialState(extraRoomsRef.current[roomId]);
+      });
+      animateDialState(cyanFarDoorRef.current);
+      animateDialState(cyanB1FarDoorRef.current);
+
+      // Brief hinge rattle when clicking a locked door (pointer color doesn't match a room)
+      if (doorRattleTimerRef.current > 0) {
+        doorRattleTimerRef.current = Math.max(0, doorRattleTimerRef.current - delta);
+        const wobble = Math.sin(doorRattleTimerRef.current * 42) * 0.014 * (doorRattleTimerRef.current / 0.35);
+        if (lobbyDoorLeafPivotRef.current) lobbyDoorLeafPivotRef.current.rotation.y = wobble;
+        (['purple', 'green', 'gold', 'cyan', 'cyan_b1', 'royalblue', 'brown'] as const).forEach((roomId) => {
+          const pivot = extraRoomsRef.current[roomId].doorLeafPivot;
+          if (pivot) pivot.rotation.y = wobble;
+        });
+        if (cyanFarDoorRef.current.doorLeafPivot) cyanFarDoorRef.current.doorLeafPivot.rotation.y = wobble;
+        if (cyanB1FarDoorRef.current.doorLeafPivot) cyanB1FarDoorRef.current.doorLeafPivot.rotation.y = wobble;
+      } else {
+        if (lobbyDoorLeafPivotRef.current) lobbyDoorLeafPivotRef.current.rotation.y = 0;
+        (['purple', 'green', 'gold', 'cyan', 'cyan_b1', 'royalblue', 'brown'] as const).forEach((roomId) => {
+          const pivot = extraRoomsRef.current[roomId].doorLeafPivot;
+          if (pivot) pivot.rotation.y = 0;
+        });
+        if (cyanFarDoorRef.current.doorLeafPivot) cyanFarDoorRef.current.doorLeafPivot.rotation.y = 0;
+        if (cyanB1FarDoorRef.current.doorLeafPivot) cyanB1FarDoorRef.current.doorLeafPivot.rotation.y = 0;
+      }
+
       renderer.render(scene, camera);
       animationId = requestAnimationFrame(renderLoop);
     };
@@ -3634,6 +5027,8 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
     return () => {
       cancelAnimationFrame(animationId);
       window.removeEventListener('resize', handleResize);
+      if (portalSwapTimeoutRef.current !== null) window.clearTimeout(portalSwapTimeoutRef.current);
+      if (portalFadeEndTimeoutRef.current !== null) window.clearTimeout(portalFadeEndTimeoutRef.current);
 
       scene.traverse((obj) => {
         if (obj instanceof THREE.Mesh) {
@@ -3650,6 +5045,11 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
       wallTexture.dispose();
       tabletopTexture.dispose();
       ceilingTexture.dispose();
+      enterPortalRoomRef.current = null;
+      doorEngravingTex.dispose();
+      door2FEngravingTex.dispose();
+      doorB1EngravingTex.dispose();
+      extraRoomTexturesToDispose.forEach((tex) => tex.dispose());
       consoleScreenTex.dispose();
       scrollTexture.dispose();
       displayPosterTexture.dispose();
@@ -3821,56 +5221,351 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
     activeDpadDirRef.current = 0;
   };
 
-  // Raycast tap handler: Console pickup/putdown & Table Lamp toggle
-  const handleSceneTap = (clientX: number, clientY: number): boolean => {
-    if (isConsoleHeldRef.current) {
-      const hit = raycastHeldConsole(clientX, clientY);
-      if (hit.role === 'outside') {
-        handleToggleConsole(false);
-        return true;
+    // Rotate steampunk pointer clockwise on a dial state
+    const LOBBY_DIAL_COLORS = [0x65c226, 0x9333ea, 0xeab308, 0x06b6d4] as const; // 草綠色, 紫色, 金色, 青色
+
+    const cycleDialState = (roomState: ExtraRoomDoorState) => {
+      const nextIdx = (roomState.colorIdx + 1) % 4;
+      roomState.colorIdx = nextIdx;
+      roomState.targetAngle -= Math.PI / 2;
+      const isSlotActive = roomState.hasColorSlot[nextIdx];
+      const activeHex = roomState.colors[nextIdx];
+
+      roomState.sectorMats.forEach((mat, idx) => {
+        if (roomState.hasColorSlot[idx]) {
+          const isSelected = idx === nextIdx;
+          mat.emissiveIntensity = isSelected ? 0.92 : 0.10;
+          mat.roughness = isSelected ? 0.16 : 0.34;
+        } else {
+          mat.emissiveIntensity = 0.01;
+          mat.roughness = 0.78;
+        }
+      });
+      roomState.rimGemMats.forEach((mat, idx) => {
+        mat.emissiveIntensity = roomState.hasColorSlot[idx] ? (idx === nextIdx ? 1.0 : 0.14) : 0.01;
+      });
+      if (roomState.tipGemMat) {
+        roomState.tipGemMat.color.setHex(activeHex);
+        roomState.tipGemMat.emissive.setHex(isSlotActive ? activeHex : 0x050508);
+        roomState.tipGemMat.emissiveIntensity = isSlotActive ? 1.0 : 0.02;
       }
-      return false;
-    }
+      if (roomState.dialLight) {
+        roomState.dialLight.color.setHex(isSlotActive ? activeHex : 0x22222c);
+        roomState.dialLight.intensity = isSlotActive ? 0.72 : 0.12;
+      }
+    };
 
-    if (!containerRef.current || !cameraRef.current) return false;
-    const rect = containerRef.current.getBoundingClientRect();
-    const x = ((clientX - rect.left) / rect.width) * 2 - 1;
-    const y = -((clientY - rect.top) / rect.height) * 2 + 1;
+    const handleCyclePortalColor = (dialTarget?: ExtraRoomDoorState) => {
+      if (dialTarget) {
+        cycleDialState(dialTarget);
+      } else if (activeRoomRef.current === 'lobby') {
+        const nextIdx = (portalColorIdxRef.current + 1) % 4;
+        portalColorIdxRef.current = nextIdx;
+        portalTargetAngleRef.current -= Math.PI / 2;
+        const activeHex = LOBBY_DIAL_COLORS[nextIdx];
 
-    raycasterRef.current.setFromCamera(new THREE.Vector2(x, y), cameraRef.current);
+        portalSectorMatsRef.current.forEach((mat, idx) => {
+          const isActive = idx === nextIdx;
+          mat.emissiveIntensity = isActive ? 0.90 : 0.09;
+          mat.roughness = isActive ? 0.16 : 0.36;
+        });
+        portalRimGemMatsRef.current.forEach((mat, idx) => {
+          mat.emissiveIntensity = idx === nextIdx ? 1.0 : 0.12;
+        });
+        if (portalGemMatRef.current) {
+          portalGemMatRef.current.color.setHex(activeHex);
+          portalGemMatRef.current.emissive.setHex(activeHex);
+        }
+        if (portalPointLightRef.current) {
+          portalPointLightRef.current.color.setHex(activeHex);
+          portalPointLightRef.current.intensity = 0.68;
+        }
+      } else {
+        cycleDialState(extraRoomsRef.current[activeRoomRef.current]);
+      }
 
-    if (viewLocationRef.current === 'table') {
-      // 1. Check Blue-Violet Handheld Console tap first
-      if (consoleGroupRef.current) {
-        const consoleHits = raycasterRef.current.intersectObjects(consoleGroupRef.current.children, true);
-        if (consoleHits.length > 0) {
-          handleToggleConsole(true);
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        try { navigator.vibrate(14); } catch {}
+      }
+    };
+
+    const ROOM_ATMOSPHERE: Record<
+      RoomId,
+      {
+        name: string;
+        floor: '1F' | '2F' | 'B1';
+        bgHex: number;
+        ambientColor: number;
+        ambientIntensity: number;
+        hemiSky: number;
+        hemiGround: number;
+        hemiIntensity: number;
+      }
+    > = {
+      lobby: { name: '大廳', floor: '1F', bgHex: 0x0c0907, ambientColor: 0xffecd6, ambientIntensity: 1.55, hemiSky: 0xfff5ea, hemiGround: 0x6e5a47, hemiIntensity: 0.95 },
+      purple: { name: '紫色房間', floor: '1F', bgHex: 0x10081c, ambientColor: 0xd8b4fe, ambientIntensity: 1.65, hemiSky: 0xede0ff, hemiGround: 0x563f73, hemiIntensity: 1.0 },
+      green: { name: '綠色房間', floor: '1F', bgHex: 0x081406, ambientColor: 0xbef292, ambientIntensity: 1.65, hemiSky: 0xe2fcd4, hemiGround: 0x456936, hemiIntensity: 1.0 },
+      gold: { name: '金色房間', floor: '1F', bgHex: 0x171005, ambientColor: 0xfde68a, ambientIntensity: 1.65, hemiSky: 0xfff3c4, hemiGround: 0x785c28, hemiIntensity: 1.0 },
+      cyan: { name: '二樓的門廊', floor: '2F', bgHex: 0x0c0907, ambientColor: 0xffecd6, ambientIntensity: 1.60, hemiSky: 0xfff5ea, hemiGround: 0x5c686e, hemiIntensity: 0.95 },
+      cyan_b1: { name: '地下一樓的門廊', floor: 'B1', bgHex: 0x0c0907, ambientColor: 0xffecd6, ambientIntensity: 1.60, hemiSky: 0xfff5ea, hemiGround: 0x5c686e, hemiIntensity: 0.95 },
+      royalblue: { name: '寶藍色大廳', floor: '2F', bgHex: 0x0c0907, ambientColor: 0xffecd6, ambientIntensity: 1.60, hemiSky: 0xfff5ea, hemiGround: 0x52607a, hemiIntensity: 0.95 },
+      brown: { name: '棕色大廳', floor: '2F', bgHex: 0x0c0907, ambientColor: 0xffecd6, ambientIntensity: 1.60, hemiSky: 0xfff5ea, hemiGround: 0x6e5844, hemiIntensity: 0.95 },
+    };
+
+    // Switch behind-the-door room seamlessly across 1F, 2F & B1 rooms
+    const handleEnterPortalRoom = (
+      targetRoom: RoomId,
+      spawnView: 'table' | 'door' | 'door2' = 'door'
+    ) => {
+      if (portalSwapTimeoutRef.current !== null) window.clearTimeout(portalSwapTimeoutRef.current);
+      if (portalFadeEndTimeoutRef.current !== null) window.clearTimeout(portalFadeEndTimeoutRef.current);
+
+      if (portalVeilRef.current) {
+        portalVeilRef.current.style.opacity = '0.94';
+      }
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        try { navigator.vibrate([16, 40, 22]); } catch {}
+      }
+
+      portalSwapTimeoutRef.current = window.setTimeout(() => {
+        const isLobby = targetRoom === 'lobby';
+        activeRoomRef.current = targetRoom;
+        setActiveRoom(targetRoom);
+
+        if (lobbyRoomGroupRef.current) lobbyRoomGroupRef.current.visible = isLobby;
+        if (consoleSceneRef.current) consoleSceneRef.current.visible = isLobby;
+        (['purple', 'green', 'gold', 'cyan', 'cyan_b1', 'royalblue', 'brown'] as const).forEach((roomId) => {
+          const rg = extraRoomsRef.current[roomId].roomGroup;
+          if (rg) rg.visible = targetRoom === roomId;
+        });
+
+        const atmo = ROOM_ATMOSPHERE[targetRoom];
+        if (sceneRef.current) {
+          sceneRef.current.background = new THREE.Color(atmo.bgHex);
+          sceneRef.current.fog = new THREE.FogExp2(atmo.bgHex, 0.008);
+        }
+        if (ambientLightRef.current) {
+          ambientLightRef.current.color.setHex(atmo.ambientColor);
+          ambientLightRef.current.intensity = atmo.ambientIntensity;
+        }
+        if (hemiLightRef.current) {
+          hemiLightRef.current.color.setHex(atmo.hemiSky);
+          hemiLightRef.current.groundColor.setHex(atmo.hemiGround);
+          hemiLightRef.current.intensity = atmo.hemiIntensity;
+        }
+
+        viewLocationRef.current = spawnView;
+        setViewLocation(spawnView);
+        if (spawnView === 'table') {
+          playerPosRef.current.set(0, SEATED_HEIGHT, SEATED_Z);
+          targetYawRef.current = CENTER_YAW;
+          cameraYawRef.current = CENTER_YAW;
+        } else if (spawnView === 'door2') {
+          playerPosRef.current.set(5.12, 1.28, -1.5);
+          targetYawRef.current = -Math.PI / 2;
+          cameraYawRef.current = -Math.PI / 2;
+        } else {
+          playerPosRef.current.set(-3.65, 1.28, -1.62);
+          targetYawRef.current = CENTER_YAW;
+          cameraYawRef.current = CENTER_YAW;
+        }
+        targetPitchRef.current = 0;
+        cameraPitchRef.current = 0;
+
+        portalFadeEndTimeoutRef.current = window.setTimeout(() => {
+          if (portalVeilRef.current) {
+            portalVeilRef.current.style.opacity = '0';
+          }
+        }, 60);
+      }, 180);
+    };
+    enterPortalRoomRef.current = handleEnterPortalRoom;
+
+    // Raycast tap handler: Dial spin, Portal Door room swap, Console pickup & Table Lamp toggle
+    const handleSceneTap = (clientX: number, clientY: number): boolean => {
+      if (isCyanFloorDialogOpenRef.current) {
+        return false;
+      }
+      if (isConsoleHeldRef.current) {
+        const hit = raycastHeldConsole(clientX, clientY);
+        if (hit.role === 'outside') {
+          handleToggleConsole(false);
+          return true;
+        }
+        return false;
+      }
+
+      if (!containerRef.current || !cameraRef.current) return false;
+      const rect = containerRef.current.getBoundingClientRect();
+      const x = ((clientX - rect.left) / rect.width) * 2 - 1;
+      const y = -((clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycasterRef.current.setFromCamera(new THREE.Vector2(x, y), cameraRef.current);
+
+      const triggerLockedRattle = () => {
+        doorRattleTimerRef.current = 0.35;
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          try { navigator.vibrate([12, 30, 12]); } catch {}
+        }
+      };
+
+      const currentRoom = activeRoomRef.current;
+
+      // 1. Check active room's circular steampunk dial(s) FIRST (mounted on front of door)
+      if (currentRoom === 'lobby') {
+        if (portalHitboxRef.current && raycasterRef.current.intersectObject(portalHitboxRef.current, false).length > 0) {
+          handleCyclePortalColor();
+          return true;
+        }
+      } else if (currentRoom === 'cyan' || currentRoom === 'cyan_b1') {
+        const foyerDials = [
+          extraRoomsRef.current[currentRoom],
+          currentRoom === 'cyan' ? cyanFarDoorRef.current : cyanB1FarDoorRef.current,
+        ];
+        for (const ds of foyerDials) {
+          if (ds.dialHitbox && raycasterRef.current.intersectObject(ds.dialHitbox, false).length > 0) {
+            handleCyclePortalColor(ds);
+            return true;
+          }
+        }
+      } else {
+        const dialHitbox = extraRoomsRef.current[currentRoom].dialHitbox;
+        if (dialHitbox && raycasterRef.current.intersectObject(dialHitbox, false).length > 0) {
+          handleCyclePortalColor();
           return true;
         }
       }
 
-      // 2. Check Table Lamp tap
-      if (lampGroupRef.current) {
-        const lampHits = raycasterRef.current.intersectObjects(lampGroupRef.current.children, true);
-        if (lampHits.length > 0) {
-          handleToggleLamp();
-          if (typeof navigator !== 'undefined' && navigator.vibrate) {
-            try { navigator.vibrate(18); } catch {}
+      // 2. Check active room's portal door click: swap room behind door if pointer color matches
+      if (currentRoom === 'lobby') {
+        if (lobbyDoorHitboxRef.current && raycasterRef.current.intersectObject(lobbyDoorHitboxRef.current, false).length > 0) {
+          const lobbyDestinationByColorIdx: Record<number, ExtraRoomId | undefined> = {
+            0: 'green',  // 草綠色 -> 綠色房間
+            1: 'purple', // 紫色 -> 紫色房間
+            2: 'gold',   // 金色 -> 金色房間
+            3: 'cyan',   // 青色 -> 跳出「上樓」(2F門廊) / 「下樓」(B1門廊) 對話框
+          };
+          const dest = lobbyDestinationByColorIdx[portalColorIdxRef.current];
+          if (dest === 'cyan') {
+            isCyanFloorDialogOpenRef.current = true;
+            setIsCyanFloorDialogOpen(true);
+            if (typeof navigator !== 'undefined' && navigator.vibrate) {
+              try { navigator.vibrate(14); } catch {}
+            }
+          } else if (dest) {
+            handleEnterPortalRoom(dest, 'door');
+          } else {
+            triggerLockedRattle();
+          }
+          return true;
+        }
+      } else if (currentRoom === 'cyan') {
+        const nearDoor = extraRoomsRef.current.cyan;
+        const farDoor = cyanFarDoorRef.current;
+        if (nearDoor.doorHitbox && raycasterRef.current.intersectObject(nearDoor.doorHitbox, false).length > 0) {
+          // Near door (12m wall): only Left (idx 3) is Cyan -> returns to Lobby; others are Black
+          if (nearDoor.colorIdx === 3) {
+            handleEnterPortalRoom('lobby', 'door');
+          } else {
+            triggerLockedRattle();
+          }
+          return true;
+        }
+        if (farDoor.doorHitbox && raycasterRef.current.intersectObject(farDoor.doorHitbox, false).length > 0) {
+          // Far door (4m end wall): Top (0)=寶藍色, Right (1)=棕色 -> 複製「大廳邏輯」空大廳; Bottom/Left=黑色
+          if (farDoor.colorIdx === 0) {
+            handleEnterPortalRoom('royalblue', 'table');
+          } else if (farDoor.colorIdx === 1) {
+            handleEnterPortalRoom('brown', 'table');
+          } else {
+            triggerLockedRattle();
+          }
+          return true;
+        }
+      } else if (currentRoom === 'cyan_b1') {
+        const nearDoor = extraRoomsRef.current.cyan_b1;
+        const farDoor = cyanB1FarDoorRef.current;
+        if (nearDoor.doorHitbox && raycasterRef.current.intersectObject(nearDoor.doorHitbox, false).length > 0) {
+          // Near door (12m wall): Top (0)=深橘色, Left (3)=青色 -> returns to Lobby; Right/Bottom=黑色
+          if (nearDoor.colorIdx === 3) {
+            handleEnterPortalRoom('lobby', 'door');
+          } else {
+            triggerLockedRattle();
+          }
+          return true;
+        }
+        if (farDoor.doorHitbox && raycasterRef.current.intersectObject(farDoor.doorHitbox, false).length > 0) {
+          // Far door (4m end wall): Top (0)=深湖藍紫色, Right/Bottom/Left=黑色
+          triggerLockedRattle();
+          return true;
+        }
+      } else if (currentRoom === 'royalblue' || currentRoom === 'brown') {
+        const doorHitbox = extraRoomsRef.current[currentRoom].doorHitbox;
+        if (doorHitbox && raycasterRef.current.intersectObject(doorHitbox, false).length > 0) {
+          // Top (idx 0) is Silver -> returns directly to 二樓的門廊 facing Door 2
+          if (extraRoomsRef.current[currentRoom].colorIdx === 0) {
+            handleEnterPortalRoom('cyan', 'door2');
+          } else {
+            triggerLockedRattle();
+          }
+          return true;
+        }
+      } else {
+        const doorHitbox = extraRoomsRef.current[currentRoom].doorHitbox;
+        if (doorHitbox && raycasterRef.current.intersectObject(doorHitbox, false).length > 0) {
+          if (extraRoomsRef.current[currentRoom].colorIdx === 0) {
+            handleEnterPortalRoom('lobby', 'door');
+          } else {
+            triggerLockedRattle();
           }
           return true;
         }
       }
-    }
 
-    return false;
+      if (activeRoomRef.current === 'lobby' && viewLocationRef.current === 'table') {
+        // 3. Check Blue-Violet Handheld Console tap first
+        if (consoleGroupRef.current) {
+          const consoleHits = raycasterRef.current.intersectObjects(consoleGroupRef.current.children, true);
+          if (consoleHits.length > 0) {
+            handleToggleConsole(true);
+            return true;
+          }
+        }
+
+        // 4. Check Table Lamp tap
+        if (lampGroupRef.current) {
+          const lampHits = raycasterRef.current.intersectObjects(lampGroupRef.current.children, true);
+          if (lampHits.length > 0) {
+            handleToggleLamp();
+            if (typeof navigator !== 'undefined' && navigator.vibrate) {
+              try { navigator.vibrate(18); } catch {}
+            }
+            return true;
+          }
+        }
+      }
+
+      return false;
+    };
+
+  // Helper: normalize yaw into [-PI, PI] so returning to door takes the shortest turn
+  const normalizeCurrentYaw = () => {
+    const twoPi = Math.PI * 2;
+    cameraYawRef.current = (((cameraYawRef.current + Math.PI) % twoPi) + twoPi) % twoPi - Math.PI;
   };
 
-  // Move smoothly between the tea table and the front of the 6-tier dark wood cabinet
-  const handleToggleViewLocation = () => {
+  // Move smoothly inside Lobby (tea table, door, cabinet)
+  const handleToggleViewLocation = (target: 'door' | 'cabinet') => {
+    if (isCyanFloorDialogOpenRef.current) {
+      isCyanFloorDialogOpenRef.current = false;
+      setIsCyanFloorDialogOpen(false);
+    }
     if (isConsoleHeldRef.current) {
       handleToggleConsole(false);
     }
-    const next: 'table' | 'cabinet' = viewLocationRef.current === 'table' ? 'cabinet' : 'table';
+    normalizeCurrentYaw();
+    const next: 'table' | 'cabinet' | 'door' | 'door2' | 'center' =
+      viewLocationRef.current === target ? 'table' : target;
     viewLocationRef.current = next;
     setViewLocation(next);
     targetYawRef.current = CENTER_YAW;
@@ -3880,7 +5575,77 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
     }
   };
 
-  // --- TOUCH HANDLERS (T-SHAPE ROTATION + CONSOLE CONTROLS/LAMP TAP) ---
+  // Close or confirm the 1F Lobby Cyan door floor-choice dialog
+  const handleCloseCyanFloorDialog = () => {
+    isCyanFloorDialogOpenRef.current = false;
+    setIsCyanFloorDialogOpen(false);
+  };
+
+  const handleSelectCyanFloor = (targetFoyer: 'cyan' | 'cyan_b1') => {
+    isCyanFloorDialogOpenRef.current = false;
+    setIsCyanFloorDialogOpen(false);
+    enterPortalRoomRef.current?.(targetFoyer, 'door');
+  };
+
+  // Move smoothly inside non-lobby rooms:
+  // - Cyan Foyers (2F / B1) swap between the two doors
+  // - Royalblue & Brown 2F Lobby-logic rooms toggle between center round table and door
+  // - Other 7x7 rooms toggle between door and center
+  const handleToggleRoomCenterOrDoor = () => {
+    normalizeCurrentYaw();
+    if (isFoyerRoom(activeRoomRef.current)) {
+      const next: 'door' | 'door2' = viewLocationRef.current === 'door2' ? 'door' : 'door2';
+      viewLocationRef.current = next;
+      setViewLocation(next);
+      targetYawRef.current = next === 'door2' ? -Math.PI / 2 : CENTER_YAW;
+      targetPitchRef.current = 0;
+    } else if (activeRoomRef.current === 'royalblue' || activeRoomRef.current === 'brown') {
+      const next: 'table' | 'door' = viewLocationRef.current === 'door' ? 'table' : 'door';
+      viewLocationRef.current = next;
+      setViewLocation(next);
+      targetYawRef.current = CENTER_YAW;
+      targetPitchRef.current = 0;
+    } else {
+      const next: 'door' | 'center' = viewLocationRef.current === 'center' ? 'door' : 'center';
+      viewLocationRef.current = next;
+      setViewLocation(next);
+      targetYawRef.current = CENTER_YAW;
+      targetPitchRef.current = 0;
+    }
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      try { navigator.vibrate(15); } catch {}
+    }
+  };
+
+  // Apply look rotation: Lobby-style rooms (lobby, royalblue, brown) preserve T-shape bounds;
+  // Cyan Foyers (2F & B1) lock camera angle; other rooms allow 360° horizontal + slight vertical
+  const applyLookDelta = (deltaX: number, deltaY: number, sensitivity: number) => {
+    if (isFoyerRoom(activeRoomRef.current) || isCyanFloorDialogOpenRef.current) {
+      return;
+    }
+    targetYawRef.current -= deltaX * sensitivity;
+    targetPitchRef.current -= deltaY * sensitivity;
+
+    if (isLobbyStyleRoom(activeRoomRef.current)) {
+      const yawHalf = getYawRangeHalf();
+      targetYawRef.current = THREE.MathUtils.clamp(
+        targetYawRef.current,
+        CENTER_YAW - yawHalf,
+        CENTER_YAW + yawHalf
+      );
+      targetPitchRef.current = THREE.MathUtils.clamp(targetPitchRef.current, MIN_PITCH, MAX_PITCH);
+    } else {
+      const OTHER_MIN_PITCH = (-14 * Math.PI) / 180;
+      const OTHER_MAX_PITCH = (14 * Math.PI) / 180;
+      targetPitchRef.current = THREE.MathUtils.clamp(
+        targetPitchRef.current,
+        OTHER_MIN_PITCH,
+        OTHER_MAX_PITCH
+      );
+    }
+  };
+
+  // --- TOUCH HANDLERS (T-SHAPE IN LOBBY, 360° IN OTHER ROOMS + TAP INTERACTION) ---
   const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     lastTouchTimeRef.current = performance.now();
     if (e.touches.length === 1) {
@@ -3920,19 +5685,7 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
           const deltaX = touch.clientX - lookLastPosRef.current.x;
           const deltaY = touch.clientY - lookLastPosRef.current.y;
           lookLastPosRef.current = { x: touch.clientX, y: touch.clientY };
-
-          const sensitivity = 0.0032;
-          targetYawRef.current -= deltaX * sensitivity;
-          targetPitchRef.current -= deltaY * sensitivity;
-
-          // T-Shape viewing (yaw clamped dynamically so narrow screens can also reach the left-wall corner, 0° to -26° pitch down)
-          const yawHalf = getYawRangeHalf();
-          targetYawRef.current = THREE.MathUtils.clamp(
-            targetYawRef.current,
-            CENTER_YAW - yawHalf,
-            CENTER_YAW + yawHalf
-          );
-          targetPitchRef.current = THREE.MathUtils.clamp(targetPitchRef.current, MIN_PITCH, MAX_PITCH);
+          applyLookDelta(deltaX, deltaY, 0.0032);
         }
       }
     }
@@ -3994,18 +5747,7 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
       const deltaX = e.clientX - mouseLastPosRef.current.x;
       const deltaY = e.clientY - mouseLastPosRef.current.y;
       mouseLastPosRef.current = { x: e.clientX, y: e.clientY };
-
-      const sensitivity = 0.0026;
-      targetYawRef.current -= deltaX * sensitivity;
-      targetPitchRef.current -= deltaY * sensitivity;
-
-      const yawHalf = getYawRangeHalf();
-      targetYawRef.current = THREE.MathUtils.clamp(
-        targetYawRef.current,
-        CENTER_YAW - yawHalf,
-        CENTER_YAW + yawHalf
-      );
-      targetPitchRef.current = THREE.MathUtils.clamp(targetPitchRef.current, MIN_PITCH, MAX_PITCH);
+      applyLookDelta(deltaX, deltaY, 0.0026);
     }
   };
 
@@ -4051,7 +5793,11 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
       <div 
         ref={containerRef} 
         className={`absolute inset-0 w-full h-full touch-none ${
-          isConsoleHeld ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'
+          isConsoleHeld
+            ? 'cursor-pointer'
+            : isFoyerRoom(activeRoom)
+              ? 'cursor-default'
+              : 'cursor-grab active:cursor-grabbing'
         }`} 
       />
 
@@ -4099,23 +5845,145 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
         </div>
       )}
 
-      {/* Bottom-Right Navigation Button: Move between Tea Table and 6-Tier Dark Wood Cabinet */}
-      {!isConsoleHeld && (
-        <button
-          type="button"
+      {/* Portal Door Room-Switch Cross-Dissolve Veil */}
+      <div
+        ref={portalVeilRef}
+        style={{ opacity: 0, transition: 'opacity 180ms ease-in-out' }}
+        className="absolute inset-0 z-40 bg-[#0b0712] pointer-events-none"
+      />
+
+      {/* Bottom-Right Navigation Buttons */}
+      {!isConsoleHeld && activeRoom === 'lobby' && (
+        <div className="absolute bottom-5 right-5 z-30 flex flex-col gap-2.5">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleToggleViewLocation('door');
+            }}
+            onTouchStart={(e) => e.stopPropagation()}
+            onTouchMove={(e) => e.stopPropagation()}
+            onTouchEnd={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            onMouseUp={(e) => e.stopPropagation()}
+            className="px-4 py-2.5 rounded-lg bg-[#1c110a]/90 border border-amber-500/45 text-amber-100 text-sm font-medium tracking-wide shadow-[0_4px_16px_rgba(0,0,0,0.55)] hover:bg-[#2a1a10] hover:border-amber-400/75 active:scale-95 transition-all cursor-pointer select-none"
+          >
+            {viewLocation === 'door' ? '回到茶几前面' : '去門前'}
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleToggleViewLocation('cabinet');
+            }}
+            onTouchStart={(e) => e.stopPropagation()}
+            onTouchMove={(e) => e.stopPropagation()}
+            onTouchEnd={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            onMouseUp={(e) => e.stopPropagation()}
+            className="px-4 py-2.5 rounded-lg bg-[#1c110a]/90 border border-amber-500/45 text-amber-100 text-sm font-medium tracking-wide shadow-[0_4px_16px_rgba(0,0,0,0.55)] hover:bg-[#2a1a10] hover:border-amber-400/75 active:scale-95 transition-all cursor-pointer select-none"
+          >
+            {viewLocation === 'cabinet' ? '回到茶几前面' : '去櫃子前面'}
+          </button>
+        </div>
+      )}
+
+      {/* 1F Lobby Cyan Portal Door Floor-Choice Dialog (上樓 / 下樓) */}
+      {!isConsoleHeld && activeRoom === 'lobby' && isCyanFloorDialogOpen && (
+        <div
+          className="absolute inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-[2px] p-4"
           onClick={(e) => {
             e.stopPropagation();
-            handleToggleViewLocation();
+            handleCloseCyanFloorDialog();
           }}
           onTouchStart={(e) => e.stopPropagation()}
           onTouchMove={(e) => e.stopPropagation()}
           onTouchEnd={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
+          onMouseMove={(e) => e.stopPropagation()}
           onMouseUp={(e) => e.stopPropagation()}
-          className="absolute bottom-5 right-5 z-30 px-4 py-2.5 rounded-lg bg-[#1c110a]/90 border border-amber-500/45 text-amber-100 text-sm font-medium tracking-wide shadow-[0_4px_16px_rgba(0,0,0,0.55)] hover:bg-[#2a1a10] hover:border-amber-400/75 active:scale-95 transition-all cursor-pointer select-none"
         >
-          {viewLocation === 'cabinet' ? '回到茶几前面' : '去櫃子前面'}
-        </button>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="選擇前往樓層"
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-[300px] rounded-2xl bg-[#160e09]/95 border border-cyan-400/50 p-5 text-center shadow-[0_20px_50px_rgba(0,0,0,0.8)]"
+          >
+            <p className="text-xs font-medium tracking-[0.18em] text-cyan-300/80 mb-1">
+              青色傳送門
+            </p>
+            <h2 className="text-base font-semibold text-amber-50 tracking-wide mb-4">
+              請選擇前往樓層
+            </h2>
+            <div className="flex flex-col gap-2.5">
+              <button
+                type="button"
+                onClick={() => handleSelectCyanFloor('cyan')}
+                className="w-full py-3 px-4 rounded-xl bg-[#0b2530] border border-cyan-400/60 text-cyan-50 text-sm font-semibold tracking-wider shadow-[0_4px_14px_rgba(6,182,212,0.18)] hover:bg-[#113747] hover:border-cyan-300 active:scale-95 transition-all cursor-pointer select-none flex items-center justify-between"
+              >
+                <span>上樓</span>
+                <span className="text-xs font-normal text-cyan-200/80">2F 門廊</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSelectCyanFloor('cyan_b1')}
+                className="w-full py-3 px-4 rounded-xl bg-[#0b2530] border border-cyan-400/60 text-cyan-50 text-sm font-semibold tracking-wider shadow-[0_4px_14px_rgba(6,182,212,0.18)] hover:bg-[#113747] hover:border-cyan-300 active:scale-95 transition-all cursor-pointer select-none flex items-center justify-between"
+              >
+                <span>下樓</span>
+                <span className="text-xs font-normal text-cyan-200/80">B1 門廊</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleCloseCyanFloorDialog}
+                className="mt-1 w-full py-2 px-4 rounded-lg bg-transparent border border-amber-500/25 text-amber-200/75 text-xs tracking-wider hover:bg-white/5 hover:text-amber-100 active:scale-95 transition-all cursor-pointer select-none"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Non-Lobby Rooms Bottom-Right Button */}
+      {!isConsoleHeld && activeRoom !== 'lobby' && (
+        <div className="absolute bottom-5 right-5 z-30 flex flex-col gap-2.5">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleToggleRoomCenterOrDoor();
+            }}
+            onTouchStart={(e) => e.stopPropagation()}
+            onTouchMove={(e) => e.stopPropagation()}
+            onTouchEnd={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            onMouseUp={(e) => e.stopPropagation()}
+            className={`px-4 py-2.5 rounded-lg text-sm font-medium tracking-wide shadow-[0_4px_16px_rgba(0,0,0,0.55)] active:scale-95 transition-all cursor-pointer select-none border ${
+              activeRoom === 'green'
+                ? 'bg-[#0f1f0c]/90 border-lime-400/50 text-lime-100 hover:bg-[#193314] hover:border-lime-300/80'
+                : activeRoom === 'gold'
+                  ? 'bg-[#241907]/90 border-amber-400/55 text-amber-100 hover:bg-[#38270c] hover:border-amber-300/85'
+                  : isFoyerRoom(activeRoom)
+                    ? 'bg-[#081c24]/90 border-cyan-400/55 text-cyan-100 hover:bg-[#0e2d3a] hover:border-cyan-300/85'
+                    : activeRoom === 'royalblue'
+                      ? 'bg-[#0c1633]/90 border-blue-400/55 text-blue-100 hover:bg-[#14234f] hover:border-blue-300/85'
+                      : activeRoom === 'brown'
+                        ? 'bg-[#21150b]/90 border-amber-600/55 text-amber-100 hover:bg-[#332011] hover:border-amber-500/85'
+                        : 'bg-[#1b1028]/90 border-purple-400/50 text-purple-100 hover:bg-[#29173d] hover:border-purple-300/80'
+            }`}
+          >
+            {isFoyerRoom(activeRoom)
+              ? '去另一邊的門'
+              : activeRoom === 'royalblue' || activeRoom === 'brown'
+                ? viewLocation === 'door'
+                  ? '回到圓桌前面'
+                  : '去門前'
+                : viewLocation === 'center'
+                  ? '去門前'
+                  : '去房間正中央'}
+          </button>
+        </div>
       )}
     </div>
   );
