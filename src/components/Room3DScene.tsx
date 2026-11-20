@@ -42,7 +42,7 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
   const SEATED_HEIGHT = 0.68; // 坐姿視線高度
   const SEATED_Z = 1.15; // 圓形茶几南側坐墊位置 (圓几半徑 0.85m + 坐墊中心 0.30m)
 
-  type ExtraRoomId = 'purple' | 'green' | 'gold' | 'cyan' | 'cyan_b1' | 'royalblue' | 'brown';
+  type ExtraRoomId = 'purple' | 'green' | 'gold' | 'pink' | 'cyan' | 'cyan_b1' | 'royalblue' | 'brown';
   type RoomId = 'lobby' | ExtraRoomId;
   const isLobbyStyleRoom = (id: RoomId) => id === 'lobby' || id === 'royalblue' || id === 'brown';
   const isFoyerRoom = (id: RoomId) => id === 'cyan' || id === 'cyan_b1';
@@ -147,6 +147,7 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
     purple: createInitialExtraRoomState(),
     green: createInitialExtraRoomState(),
     gold: createInitialExtraRoomState(),
+    pink: createInitialExtraRoomState(),
     cyan: createInitialExtraRoomState(
       [0x111216, 0x111216, 0x111216, 0x06b6d4],
       [false, false, false, true],
@@ -184,8 +185,8 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
   // Secondary far-end door inside the 12x4m B1 Foyer (B1 門廊, on the 4m right-side wall)
   const cyanB1FarDoorRef = useRef<ExtraRoomDoorState>(
     createInitialExtraRoomState(
-      [0x324b8f, 0x111216, 0x111216, 0x111216], // 上: 深湖藍紫色, 右/下/左: 黑色(不可用)
-      [true, false, false, false],
+      [0x324b8f, 0x111216, 0x111216, 0xf9a8d4], // 上: 深湖藍紫色, 右/下: 黑色(不可用), 左: 淺粉色
+      [true, false, false, true],
       0,
       0
     )
@@ -253,7 +254,7 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
     const scene = new THREE.Scene();
     sceneRef.current = scene;
     scene.background = new THREE.Color(0x0c0907);
-    scene.fog = new THREE.FogExp2(0x0c0907, 0.008);
+    scene.fog = new THREE.FogExp2(0x0c0907, 0.016);
 
     const width = container.clientWidth || window.innerWidth;
     const height = container.clientHeight || window.innerHeight;
@@ -3725,7 +3726,7 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
     cabinetGroup.add(whiteBoxGroup);
 
     // Bright warm fill light highlighting both 6-tier dark wood cabinets
-    const cabinetAccentLight = new THREE.PointLight(0xffebd0, 2.6, 7.5, 1.0);
+    const cabinetAccentLight = new THREE.PointLight(0xffebd0, 1.85, 7.0, 1.15);
     cabinetAccentLight.position.set((CAB_X + CAB2_X) / 2, 2.28, CAB_Z + 1.15);
     roomGroup.add(cabinetAccentLight);
 
@@ -4022,17 +4023,17 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
     consoleSceneRef.current = consoleGroup;
     scene.add(consoleGroup);
 
-    // --- 5. BRIGHT WARM LIGHTING RIG (MAIN LOBBY ROOM) ---
-    const ambientLight = new THREE.AmbientLight(0xffecd6, 1.55);
+    // --- 5. WARM LIGHTING RIG (MAIN LOBBY ROOM) ---
+    const ambientLight = new THREE.AmbientLight(0xffecd6, 0.95);
     ambientLightRef.current = ambientLight;
     scene.add(ambientLight);
 
-    const hemiLight = new THREE.HemisphereLight(0xfff5ea, 0x6e5a47, 0.95);
+    const hemiLight = new THREE.HemisphereLight(0xfff5ea, 0x6e5a47, 0.60);
     hemiLightRef.current = hemiLight;
     scene.add(hemiLight);
 
-    // Ceiling Main Downlight (10m x 7m bright room coverage)
-    const ceilingDownlight = new THREE.PointLight(0xffebd2, 4.6, 28, 0.95);
+    // Ceiling Main Downlight (10m x 7m room coverage)
+    const ceilingDownlight = new THREE.PointLight(0xffebd2, 3.0, 24, 1.1);
     ceilingDownlight.position.set(0, ROOM_HEIGHT - 0.25, 0);
     ceilingDownlight.castShadow = true;
     ceilingDownlight.shadow.mapSize.width = 1024;
@@ -4070,7 +4071,7 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
     pendantGroup.add(shade);
 
     // Warm golden glow illuminating the tea table
-    const teaTablePendantLight = new THREE.PointLight(0xffdfa4, 3.5, 8.5, 1.05);
+    const teaTablePendantLight = new THREE.PointLight(0xffdfa4, 2.3, 7.5, 1.2);
     teaTablePendantLight.position.set(0, -1.55, 0);
     teaTablePendantLight.castShadow = true;
     pendantGroup.add(teaTablePendantLight);
@@ -4078,13 +4079,13 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
     roomGroup.add(pendantGroup);
 
     // Directional wall wash highlighting the front wall slats & bonsai
-    const wallWashLight = new THREE.DirectionalLight(0xffe8cf, 1.35);
+    const wallWashLight = new THREE.DirectionalLight(0xffe8cf, 0.85);
     wallWashLight.position.set(0, 3.5, -2.0);
     wallWashLight.target = frontWall;
     roomGroup.add(wallWashLight);
 
     // Doorway spill light from outside behind the player
-    const doorLight = new THREE.PointLight(0xffcf88, 2.6, 14);
+    const doorLight = new THREE.PointLight(0xffcf88, 1.75, 12);
     doorLight.position.set(0, 2.0, ROOM_DEPTH / 2 - 0.4);
     roomGroup.add(doorLight);
 
@@ -4097,7 +4098,7 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
     const extraRoomTexturesToDispose: THREE.Texture[] = [];
 
     const EXTRA_ROOM_THEMES: Record<
-      'purple' | 'green' | 'gold',
+      'purple' | 'green' | 'gold' | 'pink',
       {
         floorColor: number;
         ceilingColor: number;
@@ -4151,17 +4152,258 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
         upGlowColor: 0xfbbf24,
         doorAccentColor: 0xfde68a,
       },
+      pink: {
+        floorColor: 0xffffff,
+        ceilingColor: 0xf3f5f8,
+        wallColor: 0xffffff,
+        baseboardColor: 0xd9dde2,
+        accentWoodTint: 0x2d1420,
+        ceilingRoseColor: 0x29111c,
+        lampCapColor: 0x451d30,
+        bulbColor: 0xf4f8ff,
+        mainLightColor: 0xeef5ff,
+        upGlowColor: 0xe6f0ff,
+        doorAccentColor: 0xf0f6ff,
+      },
     };
 
-    const buildColoredRoomCore = (roomId: 'purple' | 'green' | 'gold') => {
+    const createGrayOakFloorTexture = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1024;
+      canvas.height = 1024;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return new THREE.Texture();
+
+      ctx.fillStyle = '#383633';
+      ctx.fillRect(0, 0, 1024, 1024);
+
+      const rows = 16;
+      const rowHeight = 1024 / rows;
+      const plankCols = 4;
+      const colWidth = 1024 / plankCols;
+      const grayOakPalette = [
+        '#5f5c57', '#56534e', '#66635e', '#4f4c47',
+        '#5a5752', '#625f5a', '#524f4a', '#585550',
+      ];
+
+      for (let r = 0; r < rows; r++) {
+        const y = r * rowHeight;
+        const colShift = (r % 2) * (colWidth / 2);
+        for (let c = -1; c <= plankCols; c++) {
+          const x = c * colWidth + colShift;
+          const colorIdx = Math.floor((Math.sin(r * 12.3 + c * 33.7) * 0.5 + 0.5) * grayOakPalette.length);
+          ctx.fillStyle = grayOakPalette[colorIdx % grayOakPalette.length];
+          ctx.fillRect(x + 1, y + 1, colWidth - 2, rowHeight - 2);
+
+          ctx.fillStyle = 'rgba(28, 26, 24, 0.24)';
+          for (let g = 3; g < rowHeight - 3; g += 5) {
+            ctx.fillRect(x + 2, y + g, colWidth - 4, 1.3);
+          }
+          ctx.fillStyle = 'rgba(180, 176, 170, 0.08)';
+          for (let g = 6; g < rowHeight - 3; g += 8) {
+            ctx.fillRect(x + 2, y + g, colWidth - 4, 1);
+          }
+
+          ctx.fillStyle = 'rgba(34, 32, 30, 0.72)';
+          ctx.fillRect(x, y + rowHeight - 2, colWidth, 2);
+          ctx.fillRect(x + colWidth - 2, y, 2, rowHeight);
+        }
+      }
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      return texture;
+    };
+
+    const createWhitePlasterWallTexture = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return new THREE.Texture();
+
+      // Very subtle light-gray matte plaster base
+      ctx.fillStyle = '#eaeced';
+      ctx.fillRect(0, 0, 512, 512);
+
+      // Subtle hand-troweled mineral plaster variation
+      for (let i = 0; i < 420; i++) {
+        const px = ((Math.sin(i * 19.7 + 1.3) * 0.5 + 0.5) * 512);
+        const py = ((Math.cos(i * 31.1 + 2.7) * 0.5 + 0.5) * 512);
+        const rad = 14 + ((i * 17) % 34);
+        const isLight = i % 2 === 0;
+        const grad = ctx.createRadialGradient(px, py, 2, px, py, rad);
+        grad.addColorStop(0, isLight ? 'rgba(248, 250, 252, 0.16)' : 'rgba(204, 208, 214, 0.16)');
+        grad.addColorStop(1, 'rgba(234, 236, 237, 0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(px - rad, py - rad, rad * 2, rad * 2);
+      }
+
+      // Fine gypsum/plaster mineral micro-grain
+      for (let i = 0; i < 1800; i++) {
+        const gx = ((Math.sin(i * 47.3) * 0.5 + 0.5) * 512);
+        const gy = ((Math.cos(i * 73.9) * 0.5 + 0.5) * 512);
+        ctx.fillStyle = i % 3 === 0 ? 'rgba(255, 255, 255, 0.22)' : 'rgba(176, 181, 188, 0.14)';
+        ctx.fillRect(gx, gy, 1.5, 1.5);
+      }
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      return texture;
+    };
+
+    const createLightWoodTexture = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return new THREE.Texture();
+
+      const grad = ctx.createLinearGradient(0, 0, 512, 0);
+      grad.addColorStop(0.0, '#f4ede3');
+      grad.addColorStop(0.5, '#f8f2ea');
+      grad.addColorStop(1.0, '#ece3d6');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 512, 512);
+
+      ctx.fillStyle = 'rgba(165, 148, 130, 0.15)';
+      for (let y = 0; y < 512; y += 4) {
+        ctx.fillRect(0, y, 512, 1.2);
+      }
+      ctx.fillStyle = 'rgba(255, 252, 247, 0.35)';
+      for (let y = 2; y < 512; y += 9) {
+        ctx.fillRect(0, y, 512, 1.0);
+      }
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      return texture;
+    };
+
+    const createCoolWhiteWoodTexture = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return new THREE.Texture();
+
+      const grad = ctx.createLinearGradient(0, 0, 512, 0);
+      grad.addColorStop(0.0, '#eef2f6');
+      grad.addColorStop(0.5, '#f6f8fb');
+      grad.addColorStop(1.0, '#e7ecf2');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 512, 512);
+
+      ctx.fillStyle = 'rgba(128, 138, 152, 0.13)';
+      for (let y = 0; y < 512; y += 4) {
+        ctx.fillRect(0, y, 512, 1.2);
+      }
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.42)';
+      for (let y = 2; y < 512; y += 9) {
+        ctx.fillRect(0, y, 512, 1.0);
+      }
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      return texture;
+    };
+
+    const createCatScratchFabricTexture = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return new THREE.Texture();
+
+      // Soft light blue-gray faux cat-scratch micro-weave base
+      ctx.fillStyle = '#a7b8c7';
+      ctx.fillRect(0, 0, 512, 512);
+
+      // Tight cross-hatch woven fiber threads (fine slubbed cat-scratch textile look)
+      for (let y = 0; y < 512; y += 3) {
+        ctx.fillStyle = y % 6 === 0 ? 'rgba(232, 240, 247, 0.22)' : 'rgba(104, 122, 140, 0.20)';
+        ctx.fillRect(0, y, 512, 1.4);
+      }
+      for (let x = 0; x < 512; x += 3) {
+        ctx.fillStyle = x % 6 === 0 ? 'rgba(238, 244, 250, 0.20)' : 'rgba(98, 116, 134, 0.18)';
+        ctx.fillRect(x, 0, 1.4, 512);
+      }
+
+      // Subtle heathered fiber slubs characteristic of cat-scratch-resistant upholstery
+      for (let i = 0; i < 1400; i++) {
+        const fx = (Math.sin(i * 41.7) * 0.5 + 0.5) * 504;
+        const fy = (Math.cos(i * 67.3) * 0.5 + 0.5) * 510;
+        ctx.fillStyle = i % 2 === 0 ? 'rgba(245, 248, 252, 0.16)' : 'rgba(88, 106, 124, 0.16)';
+        ctx.fillRect(fx, fy, 4 + (i % 5), 1.2);
+      }
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      return texture;
+    };
+
+    const createCurtainFabricTexture = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return new THREE.Texture();
+
+      // Light blue-gray woven linen/drape curtain base
+      ctx.fillStyle = '#aebfcc';
+      ctx.fillRect(0, 0, 512, 512);
+
+      // Vertical drape thread texture & subtle woven slubbing
+      for (let x = 0; x < 512; x += 3) {
+        ctx.fillStyle = x % 6 === 0 ? 'rgba(234, 241, 248, 0.16)' : 'rgba(110, 128, 145, 0.14)';
+        ctx.fillRect(x, 0, 1.3, 512);
+      }
+      for (let y = 0; y < 512; y += 4) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+        ctx.fillRect(0, y, 512, 1.0);
+      }
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      return texture;
+    };
+
+    const grayOakFloorBaseTex = createGrayOakFloorTexture();
+    const whitePlasterWallBaseTex = createWhitePlasterWallTexture();
+    const lightWoodBaseTex = createLightWoodTexture();
+    const coolWhiteWoodBaseTex = createCoolWhiteWoodTexture();
+    const catScratchFabricBaseTex = createCatScratchFabricTexture();
+    const curtainFabricBaseTex = createCurtainFabricTexture();
+    extraRoomTexturesToDispose.push(
+      grayOakFloorBaseTex,
+      whitePlasterWallBaseTex,
+      lightWoodBaseTex,
+      coolWhiteWoodBaseTex,
+      catScratchFabricBaseTex,
+      curtainFabricBaseTex
+    );
+
+    const buildColoredRoomCore = (roomId: 'purple' | 'green' | 'gold' | 'pink') => {
       const theme = EXTRA_ROOM_THEMES[roomId];
       const roomState = extraRoomsRef.current[roomId];
       const coloredRoomGroup = new THREE.Group();
       coloredRoomGroup.visible = activeRoomRef.current === roomId;
       roomState.roomGroup = coloredRoomGroup;
 
-      // 1. Empty 7x7 Colored Hardwood Floor
-      const cFloorTex = floorTexture.clone();
+      // 1. Empty 7x7 Colored Hardwood Floor (Pink room uses Darker Gray Oak floor)
+      const cFloorTex = (roomId === 'pink' ? grayOakFloorBaseTex : floorTexture).clone();
       cFloorTex.repeat.set(3.5, 3.5);
       cFloorTex.needsUpdate = true;
       extraRoomTexturesToDispose.push(cFloorTex);
@@ -4170,8 +4412,8 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
         new THREE.MeshStandardMaterial({
           map: cFloorTex,
           color: theme.floorColor,
-          roughness: 0.46,
-          metalness: 0.06,
+          roughness: roomId === 'pink' ? 0.48 : 0.46,
+          metalness: roomId === 'pink' ? 0.04 : 0.06,
         })
       );
       cFloor.rotation.x = -Math.PI / 2;
@@ -4180,25 +4422,44 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
       coloredRoomGroup.add(cFloor);
 
       // 2. Empty 7x7 Ceiling
-      const cCeilingTex = ceilingTexture.clone();
-      cCeilingTex.repeat.set(3, 3);
-      cCeilingTex.needsUpdate = true;
-      extraRoomTexturesToDispose.push(cCeilingTex);
-      const cCeiling = new THREE.Mesh(
-        new THREE.PlaneGeometry(PR_SIZE, PR_SIZE),
-        new THREE.MeshStandardMaterial({
+      let cCeilingMat: THREE.MeshStandardMaterial;
+      if (roomId === 'pink') {
+        cCeilingMat = new THREE.MeshStandardMaterial({
+          color: theme.ceilingColor,
+          roughness: 0.90,
+          metalness: 0.01,
+        });
+      } else {
+        const cCeilingTex = ceilingTexture.clone();
+        cCeilingTex.repeat.set(3, 3);
+        cCeilingTex.needsUpdate = true;
+        extraRoomTexturesToDispose.push(cCeilingTex);
+        cCeilingMat = new THREE.MeshStandardMaterial({
           map: cCeilingTex,
           color: theme.ceilingColor,
           roughness: 0.88,
           metalness: 0.03,
-        })
-      );
+        });
+      }
+      const cCeiling = new THREE.Mesh(new THREE.PlaneGeometry(PR_SIZE, PR_SIZE), cCeilingMat);
       cCeiling.position.set(PR_CENTER_X, PR_HEIGHT, 0);
       cCeiling.rotation.x = Math.PI / 2;
       coloredRoomGroup.add(cCeiling);
 
-      // 3. Four Empty 7x3m Colored Timber Slat Walls
+      // 3. Four 7x3m Walls (Pink room uses Matte White Plaster walls)
       const makeColoredWallMat = () => {
+        if (roomId === 'pink') {
+          const tex = whitePlasterWallBaseTex.clone();
+          tex.repeat.set(3.0, 1.5);
+          tex.needsUpdate = true;
+          extraRoomTexturesToDispose.push(tex);
+          return new THREE.MeshStandardMaterial({
+            map: tex,
+            color: theme.wallColor,
+            roughness: 0.90,
+            metalness: 0.0,
+          });
+        }
         const tex = wallTexture.clone();
         tex.repeat.set(PR_SIZE * 2.2, 1);
         tex.needsUpdate = true;
@@ -4248,13 +4509,14 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
       });
 
       // Door in exact same relative front-left corner offset (-3.65, 0, -3.50)
-      // Dial has 3 Black sectors (Right/Bottom/Left) and ONLY Top is Bright Silver (亮銀色 -> returns to 大廳)
+      // Dial has 3 Black sectors (Right/Bottom/Left) and ONLY Top is Bright Silver (亮銀色)
       const cPortalDoor = createPortalDoorAndDial({
         colors: roomState.colors,
         hasColorSlot: roomState.hasColorSlot,
         initialIdx: roomState.colorIdx,
         currentAngle: roomState.currentAngle,
-        showFloorLabel: false,
+        showFloorLabel: roomId === 'pink',
+        floorLabelTexture: roomId === 'pink' ? doorB1EngravingTex : undefined,
         accentWoodTint: theme.accentWoodTint,
       });
       cPortalDoor.doorGroup.position.set(-3.65, 0, -PR_SIZE / 2);
@@ -4300,7 +4562,13 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
       cOverheadBulb.position.set(PR_CENTER_X, PR_HEIGHT - 0.46, 0);
       coloredRoomGroup.add(cOverheadBulb);
 
-      const cMainLight = new THREE.PointLight(theme.mainLightColor, 5.2, 28, 0.85);
+      const isPinkBright = roomId === 'pink';
+      const cMainLight = new THREE.PointLight(
+        theme.mainLightColor,
+        isPinkBright ? 4.0 : 3.4,
+        isPinkBright ? 28 : 25,
+        isPinkBright ? 0.95 : 1.0
+      );
       cMainLight.position.set(PR_CENTER_X, PR_HEIGHT - 0.52, 0);
       cMainLight.castShadow = true;
       cMainLight.shadow.mapSize.width = 1024;
@@ -4308,18 +4576,764 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
       cMainLight.shadow.bias = -0.001;
       coloredRoomGroup.add(cMainLight);
 
-      const cUpGlow = new THREE.PointLight(theme.upGlowColor, 2.2, 11, 1.05);
+      const cUpGlow = new THREE.PointLight(
+        theme.upGlowColor,
+        isPinkBright ? 1.5 : 1.35,
+        isPinkBright ? 12 : 10,
+        isPinkBright ? 1.1 : 1.15
+      );
       cUpGlow.position.set(PR_CENTER_X, PR_HEIGHT - 0.30, 0);
       coloredRoomGroup.add(cUpGlow);
 
-      const cDoorAccentLight = new THREE.PointLight(theme.doorAccentColor, 2.4, 10, 1.0);
+      const cDoorAccentLight = new THREE.PointLight(
+        theme.doorAccentColor,
+        isPinkBright ? 1.6 : 1.5,
+        isPinkBright ? 11 : 9.5,
+        isPinkBright ? 1.05 : 1.1
+      );
       cDoorAccentLight.position.set(-3.65, 2.25, -2.05);
       coloredRoomGroup.add(cDoorAccentLight);
+
+      if (roomId === 'pink') {
+        // 120×60 cm Dorm-Style Corner Study Desk (1.20m wide × 0.60m deep × 0.74m tall)
+        const DESK_W = 1.20;
+        const DESK_D = 0.60;
+        const DESK_H = 0.74;
+        const TOP_T = 0.026;
+        const LEG_H = DESK_H - TOP_T;
+
+        const deskGroup = new THREE.Group();
+        deskGroup.position.set(2.0 - 0.04 - DESK_W / 2, 0, -PR_SIZE / 2 + 0.04 + DESK_D / 2);
+
+        const deskWoodTex = lightWoodBaseTex.clone();
+        deskWoodTex.repeat.set(1.6, 0.9);
+        deskWoodTex.needsUpdate = true;
+        extraRoomTexturesToDispose.push(deskWoodTex);
+
+        const deskTopMat = new THREE.MeshStandardMaterial({
+          map: deskWoodTex,
+          color: 0xf0e0cc,
+          roughness: 0.34,
+          metalness: 0.03,
+        });
+        const dormWhiteMat = new THREE.MeshStandardMaterial({
+          color: 0xf6f4f0,
+          roughness: 0.42,
+          metalness: 0.05,
+        });
+        const dormDrawerMat = new THREE.MeshStandardMaterial({
+          color: 0xffffff,
+          roughness: 0.36,
+          metalness: 0.04,
+        });
+        const dormSilverMat = new THREE.MeshStandardMaterial({
+          color: 0xd1d5db,
+          roughness: 0.28,
+          metalness: 0.78,
+        });
+        const dormFootPadMat = new THREE.MeshStandardMaterial({
+          color: 0x374151,
+          roughness: 0.75,
+        });
+
+        // Tabletop slab (120×60 cm light oak dorm desktop)
+        const desktop = new THREE.Mesh(new THREE.BoxGeometry(DESK_W, TOP_T, DESK_D), deskTopMat);
+        desktop.position.y = DESK_H - TOP_T / 2;
+        desktop.castShadow = true;
+        desktop.receiveShadow = true;
+        deskGroup.add(desktop);
+
+        // Slim under-desk dorm drawer box & dual flat-front drawers facing +Z
+        const apronH = 0.088;
+        const apronD = DESK_D - 0.07;
+        const apron = new THREE.Mesh(
+          new THREE.BoxGeometry(DESK_W - 0.08, apronH, apronD),
+          dormWhiteMat
+        );
+        apron.position.y = LEG_H - apronH / 2;
+        apron.castShadow = true;
+        apron.receiveShadow = true;
+        deskGroup.add(apron);
+
+        [-0.275, 0.275].forEach((dx) => {
+          const drawerFace = new THREE.Mesh(
+            new THREE.BoxGeometry(0.51, 0.068, 0.014),
+            dormDrawerMat
+          );
+          drawerFace.position.set(dx, LEG_H - apronH / 2, apronD / 2 + 0.007);
+          drawerFace.castShadow = true;
+          deskGroup.add(drawerFace);
+
+          const barPull = new THREE.Mesh(
+            new THREE.BoxGeometry(0.11, 0.009, 0.012),
+            dormSilverMat
+          );
+          barPull.position.set(dx, LEG_H - apronH / 2, apronD / 2 + 0.018);
+          deskGroup.add(barPull);
+        });
+
+        // 4 Clean White Dorm Frame Legs + Glides + Side/Rear Crossbars
+        const legOffX = DESK_W / 2 - 0.055;
+        const legOffZ = DESK_D / 2 - 0.055;
+        [
+          [-legOffX, -legOffZ],
+          [legOffX, -legOffZ],
+          [-legOffX, legOffZ],
+          [legOffX, legOffZ],
+        ].forEach(([lx, lz]) => {
+          const leg = new THREE.Mesh(new THREE.BoxGeometry(0.038, LEG_H, 0.038), dormWhiteMat);
+          leg.position.set(lx, LEG_H / 2, lz);
+          leg.castShadow = true;
+          leg.receiveShadow = true;
+          deskGroup.add(leg);
+
+          const footPad = new THREE.Mesh(new THREE.BoxGeometry(0.040, 0.012, 0.040), dormFootPadMat);
+          footPad.position.set(lx, 0.006, lz);
+          deskGroup.add(footPad);
+        });
+
+        [-legOffX, legOffX].forEach((lx) => {
+          const sideRail = new THREE.Mesh(
+            new THREE.BoxGeometry(0.024, 0.026, DESK_D - 0.12),
+            dormWhiteMat
+          );
+          sideRail.position.set(lx, 0.18, 0);
+          sideRail.castShadow = true;
+          deskGroup.add(sideRail);
+        });
+
+        const backRail = new THREE.Mesh(
+          new THREE.BoxGeometry(DESK_W - 0.12, 0.028, 0.024),
+          dormWhiteMat
+        );
+        backRail.position.set(0, 0.18, -legOffZ);
+        backRail.castShadow = true;
+        deskGroup.add(backRail);
+
+        const modestyBar = new THREE.Mesh(
+          new THREE.BoxGeometry(DESK_W - 0.12, 0.055, 0.018),
+          dormWhiteMat
+        );
+        modestyBar.position.set(0, LEG_H - apronH - 0.035, -legOffZ);
+        modestyBar.castShadow = true;
+        deskGroup.add(modestyBar);
+
+        coloredRoomGroup.add(deskGroup);
+
+        // 4-Column × 3-Row Cube Shelf (四排×高三格、每格40×30公分的長方格子櫃) placed beside the desk
+        const CUBE_INNER_W = 0.40;
+        const CUBE_INNER_H = 0.30;
+        const CUBE_DEPTH = 0.38;
+        const OUTER_T = 0.032;
+        const INNER_T = 0.018;
+        const SHELF_COLS = 4;
+        const SHELF_ROWS = 3;
+        const SHELF_W = OUTER_T * 2 + SHELF_COLS * CUBE_INNER_W + (SHELF_COLS - 1) * INNER_T; // 1.718m
+        const SHELF_H = OUTER_T * 2 + SHELF_ROWS * CUBE_INNER_H + (SHELF_ROWS - 1) * INNER_T; // 1.000m
+        const INNER_SPAN_W = SHELF_W - OUTER_T * 2; // 1.654m
+        const INNER_SPAN_H = SHELF_H - OUTER_T * 2; // 0.936m
+
+        const cubeShelfGroup = new THREE.Group();
+        const deskLeftEdgeX = 2.0 - 0.04 - DESK_W; // 0.76
+        const cubeShelfCenterX = deskLeftEdgeX - 0.07 - SHELF_W / 2;
+        cubeShelfGroup.position.set(
+          cubeShelfCenterX,
+          0,
+          -PR_SIZE / 2 + 0.04 + CUBE_DEPTH / 2
+        );
+
+        const cubeWoodTex = coolWhiteWoodBaseTex.clone();
+        cubeWoodTex.repeat.set(1.6, 1.2);
+        cubeWoodTex.needsUpdate = true;
+        extraRoomTexturesToDispose.push(cubeWoodTex);
+
+        const cubeMat = new THREE.MeshStandardMaterial({
+          map: cubeWoodTex,
+          color: 0xf8fafc,
+          roughness: 0.42,
+          metalness: 0.03,
+        });
+        const cubeBackMat = new THREE.MeshStandardMaterial({
+          map: cubeWoodTex,
+          color: 0xe9eef4,
+          roughness: 0.54,
+          metalness: 0.02,
+        });
+
+        // Outer top & bottom planks
+        const topPlank = new THREE.Mesh(new THREE.BoxGeometry(SHELF_W, OUTER_T, CUBE_DEPTH), cubeMat);
+        topPlank.position.y = SHELF_H - OUTER_T / 2;
+        topPlank.castShadow = true;
+        topPlank.receiveShadow = true;
+        cubeShelfGroup.add(topPlank);
+
+        const bottomPlank = new THREE.Mesh(new THREE.BoxGeometry(SHELF_W, OUTER_T, CUBE_DEPTH), cubeMat);
+        bottomPlank.position.y = OUTER_T / 2;
+        bottomPlank.castShadow = true;
+        bottomPlank.receiveShadow = true;
+        cubeShelfGroup.add(bottomPlank);
+
+        // Outer left & right vertical sides
+        [-1, 1].forEach((side) => {
+          const sidePlank = new THREE.Mesh(
+            new THREE.BoxGeometry(OUTER_T, INNER_SPAN_H, CUBE_DEPTH),
+            cubeMat
+          );
+          sidePlank.position.set(side * (SHELF_W / 2 - OUTER_T / 2), SHELF_H / 2, 0);
+          sidePlank.castShadow = true;
+          sidePlank.receiveShadow = true;
+          cubeShelfGroup.add(sidePlank);
+        });
+
+        // 2 Inner horizontal shelves dividing into 3 equal 30cm-tall rows
+        for (let r = 1; r < SHELF_ROWS; r++) {
+          const hShelf = new THREE.Mesh(
+            new THREE.BoxGeometry(INNER_SPAN_W, INNER_T, CUBE_DEPTH - 0.012),
+            cubeMat
+          );
+          const sy = OUTER_T + r * CUBE_INNER_H + (r - 0.5) * INNER_T;
+          hShelf.position.set(0, sy, 0.004);
+          hShelf.castShadow = true;
+          hShelf.receiveShadow = true;
+          cubeShelfGroup.add(hShelf);
+        }
+
+        // 3 Inner vertical dividers creating 4 equal 40cm-wide columns
+        [-1, 0, 1].forEach((colIdx) => {
+          const vDiv = new THREE.Mesh(
+            new THREE.BoxGeometry(INNER_T, INNER_SPAN_H, CUBE_DEPTH - 0.012),
+            cubeMat
+          );
+          vDiv.position.set(colIdx * (CUBE_INNER_W + INNER_T), SHELF_H / 2, 0.004);
+          vDiv.castShadow = true;
+          vDiv.receiveShadow = true;
+          cubeShelfGroup.add(vDiv);
+        });
+
+        // Clean recessed back panel so all 12 40x30cm cubbies read crisply
+        const backPanel = new THREE.Mesh(
+          new THREE.BoxGeometry(SHELF_W - 0.02, SHELF_H - 0.02, 0.012),
+          cubeBackMat
+        );
+        backPanel.position.set(0, SHELF_H / 2, -CUBE_DEPTH / 2 + 0.006);
+        backPanel.receiveShadow = true;
+        cubeShelfGroup.add(backPanel);
+
+        // 4 Light Blue-Gray Faux Cat-Scratch-Fabric Storage Baskets (淺藍灰色仿貓抓布纖維收納格/籃子) in the bottom row cubbies
+        const basketFabricTex = catScratchFabricBaseTex.clone();
+        basketFabricTex.repeat.set(2.2, 1.8);
+        basketFabricTex.needsUpdate = true;
+        extraRoomTexturesToDispose.push(basketFabricTex);
+
+        const basketOuterMat = new THREE.MeshStandardMaterial({
+          map: basketFabricTex,
+          color: 0xffffff,
+          roughness: 0.92,
+          metalness: 0.0,
+        });
+        const basketRimMat = new THREE.MeshStandardMaterial({
+          map: basketFabricTex,
+          color: 0xeef3f7,
+          roughness: 0.90,
+          metalness: 0.0,
+        });
+        const basketInnerMat = new THREE.MeshStandardMaterial({
+          map: basketFabricTex,
+          color: 0x8ea1b2,
+          roughness: 0.95,
+          metalness: 0.0,
+        });
+        const basketHandleStrapMat = new THREE.MeshStandardMaterial({
+          color: 0xe8e2d8,
+          roughness: 0.85,
+          metalness: 0.02,
+        });
+        const basketRivetMat = new THREE.MeshStandardMaterial({
+          color: 0xd1d5db,
+          roughness: 0.35,
+          metalness: 0.72,
+        });
+
+        const BIN_W = 0.368;
+        const BIN_H = 0.270;
+        const BIN_D = 0.344;
+        const BIN_WALL = 0.014;
+        const RIM_H = 0.022;
+        const RIM_THICK = 0.018;
+
+        for (let col = 0; col < SHELF_COLS; col++) {
+          const binGroup = new THREE.Group();
+          const colCenterX = (-1.5 + col) * (CUBE_INNER_W + INNER_T);
+          binGroup.position.set(colCenterX, OUTER_T, 0.012);
+
+          // Bottom floor of basket
+          const binBase = new THREE.Mesh(
+            new THREE.BoxGeometry(BIN_W, 0.012, BIN_D),
+            basketOuterMat
+          );
+          binBase.position.y = 0.006;
+          binBase.castShadow = true;
+          binBase.receiveShadow = true;
+          binGroup.add(binBase);
+
+          // Front & back woven walls
+          const wallH = BIN_H - 0.012;
+          const fbWallGeo = new THREE.BoxGeometry(BIN_W, wallH, BIN_WALL);
+          [-1, 1].forEach((zSide) => {
+            const fbWall = new THREE.Mesh(fbWallGeo, basketOuterMat);
+            fbWall.position.set(0, 0.012 + wallH / 2, zSide * (BIN_D / 2 - BIN_WALL / 2));
+            fbWall.castShadow = true;
+            fbWall.receiveShadow = true;
+            binGroup.add(fbWall);
+          });
+
+          // Left & right woven walls
+          const lrWallGeo = new THREE.BoxGeometry(BIN_WALL, wallH, BIN_D - BIN_WALL * 2);
+          [-1, 1].forEach((xSide) => {
+            const lrWall = new THREE.Mesh(lrWallGeo, basketOuterMat);
+            lrWall.position.set(xSide * (BIN_W / 2 - BIN_WALL / 2), 0.012 + wallH / 2, 0);
+            lrWall.castShadow = true;
+            lrWall.receiveShadow = true;
+            binGroup.add(lrWall);
+          });
+
+          // Recessed darker blue inner lining floor so hollow top reads cleanly
+          const innerFloor = new THREE.Mesh(
+            new THREE.BoxGeometry(BIN_W - BIN_WALL * 2, 0.006, BIN_D - BIN_WALL * 2),
+            basketInnerMat
+          );
+          innerFloor.position.y = 0.015;
+          innerFloor.receiveShadow = true;
+          binGroup.add(innerFloor);
+
+          // Reinforced stitched fabric top collar/rim around upper perimeter
+          const fbRimGeo = new THREE.BoxGeometry(BIN_W + 0.006, RIM_H, RIM_THICK);
+          [-1, 1].forEach((zSide) => {
+            const fbRim = new THREE.Mesh(fbRimGeo, basketRimMat);
+            fbRim.position.set(0, BIN_H - RIM_H / 2, zSide * (BIN_D / 2 - RIM_THICK / 2 + 0.002));
+            fbRim.castShadow = true;
+            binGroup.add(fbRim);
+          });
+          const lrRimGeo = new THREE.BoxGeometry(RIM_THICK, RIM_H, BIN_D - RIM_THICK * 2 + 0.006);
+          [-1, 1].forEach((xSide) => {
+            const lrRim = new THREE.Mesh(lrRimGeo, basketRimMat);
+            lrRim.position.set(xSide * (BIN_W / 2 - RIM_THICK / 2 + 0.002), BIN_H - RIM_H / 2, 0);
+            lrRim.castShadow = true;
+            binGroup.add(lrRim);
+          });
+
+          // Front woven linen pull handle strap + twin brushed rivets
+          const pullStrap = new THREE.Mesh(
+            new THREE.BoxGeometry(0.115, 0.022, 0.014),
+            basketHandleStrapMat
+          );
+          pullStrap.position.set(0, BIN_H * 0.56, BIN_D / 2 + 0.006);
+          pullStrap.castShadow = true;
+          binGroup.add(pullStrap);
+
+          [-0.044, 0.044].forEach((rx) => {
+            const rivet = new THREE.Mesh(
+              new THREE.CylinderGeometry(0.0045, 0.0045, 0.004, 12),
+              basketRivetMat
+            );
+            rivet.rotation.x = Math.PI / 2;
+            rivet.position.set(rx, BIN_H * 0.56, BIN_D / 2 + 0.014);
+            binGroup.add(rivet);
+          });
+
+          cubeShelfGroup.add(binGroup);
+        }
+
+        coloredRoomGroup.add(cubeShelfGroup);
+
+        // 3 Floating Horizontal Wood Shelves (三層橫木片橫架) above the cube shelf at 40cm vertical intervals
+        const WALL_SHELF_W = SHELF_W;
+        const WALL_SHELF_D = 0.24;
+        const WALL_SHELF_T = 0.026;
+        const WALL_SHELF_STEP = 0.40;
+        const wallShelfBracketMat = new THREE.MeshStandardMaterial({
+          color: 0xd6d3cd,
+          roughness: 0.38,
+          metalness: 0.55,
+        });
+
+        for (let tier = 1; tier <= 3; tier++) {
+          const shelfY = SHELF_H + tier * WALL_SHELF_STEP;
+          const ledgeGroup = new THREE.Group();
+          ledgeGroup.position.set(
+            cubeShelfCenterX,
+            shelfY,
+            -PR_SIZE / 2 + WALL_SHELF_D / 2
+          );
+
+          const ledgeBoard = new THREE.Mesh(
+            new THREE.BoxGeometry(WALL_SHELF_W, WALL_SHELF_T, WALL_SHELF_D),
+            cubeMat
+          );
+          ledgeBoard.castShadow = true;
+          ledgeBoard.receiveShadow = true;
+          ledgeGroup.add(ledgeBoard);
+
+          // Slim rear wall-mount brackets tucked subtly underneath the plank
+          [-WALL_SHELF_W * 0.32, WALL_SHELF_W * 0.32].forEach((bx) => {
+            const wallArm = new THREE.Mesh(
+              new THREE.BoxGeometry(0.022, 0.068, 0.012),
+              wallShelfBracketMat
+            );
+            wallArm.position.set(bx, -WALL_SHELF_T / 2 - 0.034, -WALL_SHELF_D / 2 + 0.006);
+            ledgeGroup.add(wallArm);
+
+            const plankArm = new THREE.Mesh(
+              new THREE.BoxGeometry(0.022, 0.012, 0.14),
+              wallShelfBracketMat
+            );
+            plankArm.position.set(bx, -WALL_SHELF_T / 2 - 0.006, -WALL_SHELF_D / 2 + 0.07);
+            ledgeGroup.add(plankArm);
+          });
+
+          coloredRoomGroup.add(ledgeGroup);
+        }
+
+        // Light Blue-Gray Curtain on the Right Wall beside the Desk (書桌側面牆面、離天花板下30cm至桌面高74cm、寬120cm的淺藍灰色窗簾)
+        const CURTAIN_W = 1.20;
+        const CURTAIN_TOP_Y = PR_HEIGHT - 0.30; // 2.70m (30cm below ceiling)
+        const CURTAIN_BOT_Y = DESK_H;           // 0.74m (desk top height)
+        const CURTAIN_H = CURTAIN_TOP_Y - CURTAIN_BOT_Y; // 1.96m hanging drop
+        const curtainGroup = new THREE.Group();
+        curtainGroup.position.set(2.0 - 0.044, CURTAIN_BOT_Y + CURTAIN_H / 2, -PR_SIZE / 2 + 0.08 + CURTAIN_W / 2);
+
+        const curtainFabTex = curtainFabricBaseTex.clone();
+        curtainFabTex.repeat.set(3.2, 2.4);
+        curtainFabTex.needsUpdate = true;
+        extraRoomTexturesToDispose.push(curtainFabTex);
+
+        const curtainGeo = new THREE.PlaneGeometry(CURTAIN_W, CURTAIN_H, 56, 10);
+        const cPos = curtainGeo.attributes.position;
+        for (let i = 0; i < cPos.count; i++) {
+          const px = cPos.getX(i); // along curtain width [-0.60, +0.60]
+          const py = cPos.getY(i); // along height [-0.98, +0.98]
+          const u = Math.max(0, Math.min(1, (px + CURTAIN_W / 2) / CURTAIN_W));
+          const vFromTop = Math.max(0, Math.min(1, (CURTAIN_H / 2 - py) / CURTAIN_H)); // 0 at top rod, 1 at bottom hem
+          const foldAmp = 0.011 + 0.015 * Math.pow(vFromTop, 0.7);
+          const pleatZ = Math.sin(u * Math.PI * 13.0) * foldAmp + Math.sin(u * Math.PI * 5.0) * 0.005;
+          cPos.setZ(i, pleatZ);
+        }
+        cPos.needsUpdate = true;
+        curtainGeo.computeVertexNormals();
+        curtainGeo.computeBoundingBox();
+        curtainGeo.computeBoundingSphere();
+
+        const curtainMat = new THREE.MeshStandardMaterial({
+          map: curtainFabTex,
+          color: 0xffffff,
+          roughness: 0.90,
+          metalness: 0.0,
+          side: THREE.DoubleSide,
+        });
+        const curtainPanel = new THREE.Mesh(curtainGeo, curtainMat);
+        curtainPanel.rotation.y = -Math.PI / 2;
+        curtainPanel.castShadow = true;
+        curtainPanel.receiveShadow = true;
+        curtainGroup.add(curtainPanel);
+
+        // Clean Curtain Track/Rod + Wall Brackets & Finials at Y = 2.70m
+        const curtainRodMat = new THREE.MeshStandardMaterial({
+          color: 0xe2e6ec,
+          roughness: 0.35,
+          metalness: 0.45,
+        });
+        const curtainRod = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.011, 0.011, CURTAIN_W + 0.12, 16),
+          curtainRodMat
+        );
+        curtainRod.rotation.x = Math.PI / 2;
+        curtainRod.position.set(0, CURTAIN_H / 2 + 0.012, 0);
+        curtainRod.castShadow = true;
+        curtainGroup.add(curtainRod);
+
+        [-CURTAIN_W / 2 - 0.06, CURTAIN_W / 2 + 0.06].forEach((fz) => {
+          const finial = new THREE.Mesh(
+            new THREE.SphereGeometry(0.018, 12, 10),
+            curtainRodMat
+          );
+          finial.position.set(0, CURTAIN_H / 2 + 0.012, fz);
+          curtainGroup.add(finial);
+        });
+
+        [-CURTAIN_W * 0.40, CURTAIN_W * 0.40].forEach((bz) => {
+          const bracket = new THREE.Mesh(
+            new THREE.BoxGeometry(0.044, 0.014, 0.018),
+            curtainRodMat
+          );
+          bracket.position.set(0.022, CURTAIN_H / 2 + 0.012, bz);
+          curtainGroup.add(bracket);
+        });
+
+        coloredRoomGroup.add(curtainGroup);
+
+        // Dorm Bed directly opposite the door (門的對側: Back Wall Z = +3.5, X = -3.65, facing -Z)
+        const BED_W = 1.20;
+        const BED_L = 2.00;
+        const bedGroup = new THREE.Group();
+        bedGroup.position.set(-3.65, 0, PR_SIZE / 2 - 0.04 - BED_L / 2);
+
+        const bedWoodTex = lightWoodBaseTex.clone();
+        bedWoodTex.repeat.set(1.4, 1.4);
+        bedWoodTex.needsUpdate = true;
+        extraRoomTexturesToDispose.push(bedWoodTex);
+
+        const bedWoodMat = new THREE.MeshStandardMaterial({
+          map: bedWoodTex,
+          color: 0xfbf7f1,
+          roughness: 0.42,
+          metalness: 0.03,
+        });
+        const mattressMat = new THREE.MeshStandardMaterial({
+          color: 0xfaf8f5,
+          roughness: 0.78,
+          metalness: 0.02,
+        });
+        const duvetMat = new THREE.MeshStandardMaterial({
+          color: 0xf5d0dc,
+          roughness: 0.85,
+          metalness: 0.01,
+        });
+        const sheetCuffMat = new THREE.MeshStandardMaterial({
+          color: 0xffffff,
+          roughness: 0.75,
+        });
+        const pillowRoseMat = new THREE.MeshStandardMaterial({
+          color: 0xf8d7e3,
+          roughness: 0.82,
+        });
+
+        // White-wood headboard against Back Wall (+Z side of bedGroup)
+        const headboard = new THREE.Mesh(new THREE.BoxGeometry(BED_W, 0.88, 0.045), bedWoodMat);
+        headboard.position.set(0, 0.44, BED_L / 2 - 0.0225);
+        headboard.castShadow = true;
+        headboard.receiveShadow = true;
+        bedGroup.add(headboard);
+
+        const headboardCap = new THREE.Mesh(new THREE.BoxGeometry(BED_W + 0.03, 0.032, 0.060), bedWoodMat);
+        headboardCap.position.set(0, 0.896, BED_L / 2 - 0.0225);
+        headboardCap.castShadow = true;
+        bedGroup.add(headboardCap);
+
+        // Footboard, side rails & 4 square white-wood legs
+        const footboard = new THREE.Mesh(new THREE.BoxGeometry(BED_W, 0.34, 0.038), bedWoodMat);
+        footboard.position.set(0, 0.17, -BED_L / 2 + 0.019);
+        footboard.castShadow = true;
+        footboard.receiveShadow = true;
+        bedGroup.add(footboard);
+
+        [-BED_W / 2 + 0.016, BED_W / 2 - 0.016].forEach((rx) => {
+          const rail = new THREE.Mesh(new THREE.BoxGeometry(0.032, 0.16, BED_L - 0.08), bedWoodMat);
+          rail.position.set(rx, 0.25, 0);
+          rail.castShadow = true;
+          rail.receiveShadow = true;
+          bedGroup.add(rail);
+        });
+
+        [
+          [-BED_W / 2 + 0.028, -BED_L / 2 + 0.028],
+          [BED_W / 2 - 0.028, -BED_L / 2 + 0.028],
+          [-BED_W / 2 + 0.028, BED_L / 2 - 0.028],
+          [BED_W / 2 - 0.028, BED_L / 2 - 0.028],
+        ].forEach(([lx, lz]) => {
+          const bLeg = new THREE.Mesh(new THREE.BoxGeometry(0.056, 0.34, 0.056), bedWoodMat);
+          bLeg.position.set(lx, 0.17, lz);
+          bLeg.castShadow = true;
+          bLeg.receiveShadow = true;
+          bedGroup.add(bLeg);
+        });
+
+        // Plush Mattress
+        const mattress = new THREE.Mesh(new THREE.BoxGeometry(1.13, 0.20, 1.91), mattressMat);
+        mattress.position.set(0, 0.36, 0);
+        mattress.castShadow = true;
+        mattress.receiveShadow = true;
+        bedGroup.add(mattress);
+
+        // Cozy Duvet/Blanket + Side Drapes + Folded White Sheet Cuff
+        const duvetTop = new THREE.Mesh(new THREE.BoxGeometry(1.17, 0.065, 1.34), duvetMat);
+        duvetTop.position.set(0, 0.475, -0.26);
+        duvetTop.castShadow = true;
+        duvetTop.receiveShadow = true;
+        bedGroup.add(duvetTop);
+
+        [-0.585, 0.585].forEach((sx) => {
+          const sideDrape = new THREE.Mesh(new THREE.BoxGeometry(0.024, 0.14, 1.34), duvetMat);
+          sideDrape.position.set(sx, 0.415, -0.26);
+          sideDrape.castShadow = true;
+          bedGroup.add(sideDrape);
+        });
+
+        const footDrape = new THREE.Mesh(new THREE.BoxGeometry(1.17, 0.14, 0.024), duvetMat);
+        footDrape.position.set(0, 0.415, -0.928);
+        footDrape.castShadow = true;
+        bedGroup.add(footDrape);
+
+        const sheetCuff = new THREE.Mesh(new THREE.BoxGeometry(1.16, 0.048, 0.17), sheetCuffMat);
+        sheetCuff.position.set(0, 0.472, 0.42);
+        sheetCuff.castShadow = true;
+        bedGroup.add(sheetCuff);
+
+        // Two Plump Dorm Pillows propped against the headboard
+        const leftPillow = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.11, 0.31), sheetCuffMat);
+        leftPillow.position.set(-0.26, 0.535, 0.74);
+        leftPillow.rotation.x = -0.26;
+        leftPillow.castShadow = true;
+        bedGroup.add(leftPillow);
+
+        const rightPillow = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.11, 0.31), pillowRoseMat);
+        rightPillow.position.set(0.26, 0.535, 0.74);
+        rightPillow.rotation.x = -0.22;
+        rightPillow.castShadow = true;
+        bedGroup.add(rightPillow);
+
+        coloredRoomGroup.add(bedGroup);
+
+        // Four Lobby-style Six-Tier Cool White-Wood Cabinets (與格子櫃同色之冷白木色六層櫃×4) along Back Wall next to the bed
+        const P_CAB_W = 1.12;
+        const P_CAB_D = 0.44;
+        const P_CAB_H = 2.16;
+        const P_PLINTH_H = 0.08;
+        const P_CROWN_H = 0.06;
+        const P_SIDE_THICK = 0.036;
+        const P_SHELF_THICK = 0.032;
+
+        const cabLightWoodTex = coolWhiteWoodBaseTex.clone();
+        cabLightWoodTex.repeat.set(1.2, 1.6);
+        cabLightWoodTex.needsUpdate = true;
+        extraRoomTexturesToDispose.push(cabLightWoodTex);
+
+        const cabLightWoodTrimTex = coolWhiteWoodBaseTex.clone();
+        cabLightWoodTrimTex.repeat.set(1.4, 0.5);
+        cabLightWoodTrimTex.needsUpdate = true;
+        extraRoomTexturesToDispose.push(cabLightWoodTrimTex);
+
+        const lightCabBodyMat = new THREE.MeshStandardMaterial({
+          map: cabLightWoodTex,
+          color: 0xf8fafc,
+          roughness: 0.42,
+          metalness: 0.03,
+        });
+        const lightCabTrimMat = new THREE.MeshStandardMaterial({
+          map: cabLightWoodTrimTex,
+          color: 0xf1f5f9,
+          roughness: 0.42,
+          metalness: 0.03,
+        });
+        const lightCabEdgeMat = new THREE.MeshStandardMaterial({
+          map: cabLightWoodTex,
+          color: 0xe7ecf2,
+          roughness: 0.46,
+          metalness: 0.03,
+        });
+        const lightCabBackMat = new THREE.MeshStandardMaterial({
+          map: cabLightWoodTex,
+          color: 0xe3e8ef,
+          roughness: 0.54,
+          metalness: 0.02,
+        });
+
+        const createLightWhiteSixTierCabinet = () => {
+          const cab = new THREE.Group();
+
+          const plinthCore = new THREE.Mesh(
+            new THREE.BoxGeometry(P_CAB_W - 0.03, P_PLINTH_H, P_CAB_D - 0.03),
+            lightCabEdgeMat
+          );
+          plinthCore.position.set(0, P_PLINTH_H / 2, -0.01);
+          plinthCore.castShadow = true;
+          plinthCore.receiveShadow = true;
+          cab.add(plinthCore);
+
+          const kickplate = new THREE.Mesh(
+            new THREE.BoxGeometry(P_CAB_W + 0.01, P_PLINTH_H * 0.85, 0.024),
+            lightCabTrimMat
+          );
+          kickplate.position.set(0, (P_PLINTH_H * 0.85) / 2, P_CAB_D / 2 - 0.008);
+          cab.add(kickplate);
+
+          const bodyHeight = P_CAB_H - P_PLINTH_H - P_CROWN_H;
+          const sideGeo = new THREE.BoxGeometry(P_SIDE_THICK, bodyHeight, P_CAB_D);
+          const stileGeo = new THREE.BoxGeometry(0.044, bodyHeight, 0.014);
+
+          [-1, 1].forEach((side) => {
+            const sx = side * (P_CAB_W / 2 - P_SIDE_THICK / 2);
+            const sidePanel = new THREE.Mesh(sideGeo, lightCabBodyMat);
+            sidePanel.position.set(sx, P_PLINTH_H + bodyHeight / 2, 0);
+            sidePanel.castShadow = true;
+            sidePanel.receiveShadow = true;
+            cab.add(sidePanel);
+
+            const frontStile = new THREE.Mesh(stileGeo, lightCabEdgeMat);
+            frontStile.position.set(sx, P_PLINTH_H + bodyHeight / 2, P_CAB_D / 2 + 0.005);
+            frontStile.castShadow = true;
+            cab.add(frontStile);
+          });
+
+          const cabBack = new THREE.Mesh(
+            new THREE.BoxGeometry(P_CAB_W - P_SIDE_THICK * 2 + 0.01, bodyHeight, 0.018),
+            lightCabBackMat
+          );
+          cabBack.position.set(0, P_PLINTH_H + bodyHeight / 2, -P_CAB_D / 2 + 0.01);
+          cabBack.receiveShadow = true;
+          cab.add(cabBack);
+
+          const innerSpanW = P_CAB_W - P_SIDE_THICK * 2;
+          const shelfGeo = new THREE.BoxGeometry(innerSpanW, P_SHELF_THICK, P_CAB_D - 0.02);
+          const shelfLipGeo = new THREE.BoxGeometry(innerSpanW, P_SHELF_THICK + 0.004, 0.014);
+          const tierPitch = (bodyHeight - P_SHELF_THICK) / 6;
+
+          for (let i = 0; i <= 6; i++) {
+            const sy = P_PLINTH_H + P_SHELF_THICK / 2 + i * tierPitch;
+            const shelf = new THREE.Mesh(shelfGeo, lightCabBodyMat);
+            shelf.position.set(0, sy, 0.004);
+            shelf.castShadow = true;
+            shelf.receiveShadow = true;
+            cab.add(shelf);
+
+            const shelfLip = new THREE.Mesh(shelfLipGeo, lightCabEdgeMat);
+            shelfLip.position.set(0, sy, P_CAB_D / 2 - 0.003);
+            cab.add(shelfLip);
+          }
+
+          const lowerCrown = new THREE.Mesh(
+            new THREE.BoxGeometry(P_CAB_W + 0.028, P_CROWN_H * 0.45, P_CAB_D + 0.022),
+            lightCabEdgeMat
+          );
+          lowerCrown.position.set(0, P_CAB_H - P_CROWN_H + (P_CROWN_H * 0.45) / 2, 0.008);
+          lowerCrown.castShadow = true;
+          cab.add(lowerCrown);
+
+          const upperCrown = new THREE.Mesh(
+            new THREE.BoxGeometry(P_CAB_W + 0.06, P_CROWN_H * 0.55, P_CAB_D + 0.044),
+            lightCabTrimMat
+          );
+          upperCrown.position.set(0, P_CAB_H - (P_CROWN_H * 0.55) / 2, 0.014);
+          upperCrown.castShadow = true;
+          cab.add(upperCrown);
+
+          return cab;
+        };
+
+        const P_CAB_Z = PR_SIZE / 2 - 0.04 - 0.232;
+        const P_CAB_FIRST_X = 2.0 - 0.04 - (P_CAB_W + 0.06) / 2 - 0.01;
+        const P_CAB_STEP = P_CAB_W + 0.08;
+        for (let idx = 0; idx < 4; idx++) {
+          const wallCab = createLightWhiteSixTierCabinet();
+          wallCab.position.set(P_CAB_FIRST_X - idx * P_CAB_STEP, 0, P_CAB_Z);
+          wallCab.rotation.y = Math.PI;
+          coloredRoomGroup.add(wallCab);
+        }
+      }
 
       scene.add(coloredRoomGroup);
     };
 
-    (['purple', 'green', 'gold'] as const).forEach(buildColoredRoomCore);
+    (['purple', 'green', 'gold', 'pink'] as const).forEach(buildColoredRoomCore);
 
     // --- 5C. CYAN FOYERS: 2F FOYER (「二樓的門廊」) & CLONED B1 FOYER (「地下一樓的門廊」) ---
     // X ∈ [-5.0, +7.0] (12m wide front/back walls), Z ∈ [-3.5, +0.5] (4m deep side walls), 鎖視角, 雙門
@@ -4474,8 +5488,8 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
       farDoorState.sectorMats = foyerDoor2.sectorMats;
       farDoorState.rimGemMats = foyerDoor2.rimGemMats;
 
-      // 1F-Lobby-Matching Bright Warm Lighting Rig for Foyer
-      const cyCeilingDownlight = new THREE.PointLight(0xffebd2, 4.8, 30, 0.9);
+      // 1F-Lobby-Matching Warm Lighting Rig for Foyer
+      const cyCeilingDownlight = new THREE.PointLight(0xffebd2, 3.1, 26, 1.05);
       cyCeilingDownlight.position.set(CY_CENTER_X, CY_HEIGHT - 0.25, CY_CENTER_Z);
       cyCeilingDownlight.castShadow = true;
       cyCeilingDownlight.shadow.mapSize.width = 1024;
@@ -4511,21 +5525,21 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
       );
       cyShade.position.y = -1.20;
       cyPendantGroup.add(cyShade);
-      const cyPendantLight = new THREE.PointLight(0xffdfa4, 3.8, 12, 1.0);
+      const cyPendantLight = new THREE.PointLight(0xffdfa4, 2.4, 10, 1.15);
       cyPendantLight.position.set(0, -1.25, 0);
       cyPendantGroup.add(cyPendantLight);
       foyerGroup.add(cyPendantGroup);
 
-      const cyWallWashLight = new THREE.DirectionalLight(0xffe8cf, 1.35);
+      const cyWallWashLight = new THREE.DirectionalLight(0xffe8cf, 0.85);
       cyWallWashLight.position.set(CY_CENTER_X, 3.5, -1.2);
       cyWallWashLight.target = cyFrontWall;
       foyerGroup.add(cyWallWashLight);
 
-      const cyDoor1SpillLight = new THREE.PointLight(0xffcf88, 3.0, 14);
+      const cyDoor1SpillLight = new THREE.PointLight(0xffcf88, 1.9, 12);
       cyDoor1SpillLight.position.set(-3.65, 2.0, -1.85);
       foyerGroup.add(cyDoor1SpillLight);
 
-      const cyDoor2SpillLight = new THREE.PointLight(0xffcf88, 3.0, 14);
+      const cyDoor2SpillLight = new THREE.PointLight(0xffcf88, 1.9, 12);
       cyDoor2SpillLight.position.set(5.35, 2.0, CY_CENTER_Z);
       foyerGroup.add(cyDoor2SpillLight);
 
@@ -4767,8 +5781,8 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
       roomState.sectorMats = hPortalDoor.sectorMats;
       roomState.rimGemMats = hPortalDoor.rimGemMats;
 
-      // 6. Exact 1F Lobby Bright Warm Lighting Rig
-      const hCeilingDownlight = new THREE.PointLight(0xffebd2, 4.8, 28, 0.95);
+      // 6. Exact 1F Lobby Warm Lighting Rig
+      const hCeilingDownlight = new THREE.PointLight(0xffebd2, 3.1, 25, 1.1);
       hCeilingDownlight.position.set(0, ROOM_HEIGHT - 0.25, 0);
       hCeilingDownlight.castShadow = true;
       hCeilingDownlight.shadow.mapSize.width = 1024;
@@ -4792,18 +5806,18 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
       const hShade = new THREE.Mesh(shadeGeo, shadeMat);
       hShade.position.y = -1.50;
       hPendantGroup.add(hShade);
-      const hTeaLight = new THREE.PointLight(0xffdfa4, 3.6, 9.0, 1.0);
+      const hTeaLight = new THREE.PointLight(0xffdfa4, 2.4, 8.0, 1.15);
       hTeaLight.position.set(0, -1.55, 0);
       hTeaLight.castShadow = true;
       hPendantGroup.add(hTeaLight);
       hallGroup.add(hPendantGroup);
 
-      const hWallWashLight = new THREE.DirectionalLight(0xffe8cf, 1.35);
+      const hWallWashLight = new THREE.DirectionalLight(0xffe8cf, 0.85);
       hWallWashLight.position.set(0, 3.5, -2.0);
       hWallWashLight.target = hFrontWall;
       hallGroup.add(hWallWashLight);
 
-      const hDoorLight = new THREE.PointLight(0xffcf88, 2.6, 14);
+      const hDoorLight = new THREE.PointLight(0xffcf88, 1.75, 12);
       hDoorLight.position.set(0, 2.0, ROOM_DEPTH / 2 - 0.4);
       hallGroup.add(hDoorLight);
 
@@ -4980,7 +5994,7 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
           }
         }
       };
-      (['purple', 'green', 'gold', 'cyan', 'cyan_b1', 'royalblue', 'brown'] as const).forEach((roomId) => {
+      (['purple', 'green', 'gold', 'pink', 'cyan', 'cyan_b1', 'royalblue', 'brown'] as const).forEach((roomId) => {
         animateDialState(extraRoomsRef.current[roomId]);
       });
       animateDialState(cyanFarDoorRef.current);
@@ -4991,7 +6005,7 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
         doorRattleTimerRef.current = Math.max(0, doorRattleTimerRef.current - delta);
         const wobble = Math.sin(doorRattleTimerRef.current * 42) * 0.014 * (doorRattleTimerRef.current / 0.35);
         if (lobbyDoorLeafPivotRef.current) lobbyDoorLeafPivotRef.current.rotation.y = wobble;
-        (['purple', 'green', 'gold', 'cyan', 'cyan_b1', 'royalblue', 'brown'] as const).forEach((roomId) => {
+        (['purple', 'green', 'gold', 'pink', 'cyan', 'cyan_b1', 'royalblue', 'brown'] as const).forEach((roomId) => {
           const pivot = extraRoomsRef.current[roomId].doorLeafPivot;
           if (pivot) pivot.rotation.y = wobble;
         });
@@ -4999,7 +6013,7 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
         if (cyanB1FarDoorRef.current.doorLeafPivot) cyanB1FarDoorRef.current.doorLeafPivot.rotation.y = wobble;
       } else {
         if (lobbyDoorLeafPivotRef.current) lobbyDoorLeafPivotRef.current.rotation.y = 0;
-        (['purple', 'green', 'gold', 'cyan', 'cyan_b1', 'royalblue', 'brown'] as const).forEach((roomId) => {
+        (['purple', 'green', 'gold', 'pink', 'cyan', 'cyan_b1', 'royalblue', 'brown'] as const).forEach((roomId) => {
           const pivot = extraRoomsRef.current[roomId].doorLeafPivot;
           if (pivot) pivot.rotation.y = 0;
         });
@@ -5302,14 +6316,15 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
         hemiIntensity: number;
       }
     > = {
-      lobby: { name: '大廳', floor: '1F', bgHex: 0x0c0907, ambientColor: 0xffecd6, ambientIntensity: 1.55, hemiSky: 0xfff5ea, hemiGround: 0x6e5a47, hemiIntensity: 0.95 },
-      purple: { name: '紫色房間', floor: '1F', bgHex: 0x10081c, ambientColor: 0xd8b4fe, ambientIntensity: 1.65, hemiSky: 0xede0ff, hemiGround: 0x563f73, hemiIntensity: 1.0 },
-      green: { name: '綠色房間', floor: '1F', bgHex: 0x081406, ambientColor: 0xbef292, ambientIntensity: 1.65, hemiSky: 0xe2fcd4, hemiGround: 0x456936, hemiIntensity: 1.0 },
-      gold: { name: '金色房間', floor: '1F', bgHex: 0x171005, ambientColor: 0xfde68a, ambientIntensity: 1.65, hemiSky: 0xfff3c4, hemiGround: 0x785c28, hemiIntensity: 1.0 },
-      cyan: { name: '二樓的門廊', floor: '2F', bgHex: 0x0c0907, ambientColor: 0xffecd6, ambientIntensity: 1.60, hemiSky: 0xfff5ea, hemiGround: 0x5c686e, hemiIntensity: 0.95 },
-      cyan_b1: { name: '地下一樓的門廊', floor: 'B1', bgHex: 0x0c0907, ambientColor: 0xffecd6, ambientIntensity: 1.60, hemiSky: 0xfff5ea, hemiGround: 0x5c686e, hemiIntensity: 0.95 },
-      royalblue: { name: '寶藍色大廳', floor: '2F', bgHex: 0x0c0907, ambientColor: 0xffecd6, ambientIntensity: 1.60, hemiSky: 0xfff5ea, hemiGround: 0x52607a, hemiIntensity: 0.95 },
-      brown: { name: '棕色大廳', floor: '2F', bgHex: 0x0c0907, ambientColor: 0xffecd6, ambientIntensity: 1.60, hemiSky: 0xfff5ea, hemiGround: 0x6e5844, hemiIntensity: 0.95 },
+      lobby: { name: '大廳', floor: '1F', bgHex: 0x0c0907, ambientColor: 0xffecd6, ambientIntensity: 0.95, hemiSky: 0xfff5ea, hemiGround: 0x6e5a47, hemiIntensity: 0.60 },
+      purple: { name: '紫色房間', floor: '1F', bgHex: 0x10081c, ambientColor: 0xd8b4fe, ambientIntensity: 1.05, hemiSky: 0xede0ff, hemiGround: 0x563f73, hemiIntensity: 0.65 },
+      green: { name: '綠色房間', floor: '1F', bgHex: 0x081406, ambientColor: 0xbef292, ambientIntensity: 1.05, hemiSky: 0xe2fcd4, hemiGround: 0x456936, hemiIntensity: 0.65 },
+      gold: { name: '金色房間', floor: '1F', bgHex: 0x171005, ambientColor: 0xfde68a, ambientIntensity: 1.05, hemiSky: 0xfff3c4, hemiGround: 0x785c28, hemiIntensity: 0.65 },
+      pink: { name: '粉色房間', floor: 'B1', bgHex: 0x170a12, ambientColor: 0xf0f6ff, ambientIntensity: 1.15, hemiSky: 0xf2f7ff, hemiGround: 0x5b6066, hemiIntensity: 0.75 },
+      cyan: { name: '二樓的門廊', floor: '2F', bgHex: 0x0c0907, ambientColor: 0xffecd6, ambientIntensity: 1.00, hemiSky: 0xfff5ea, hemiGround: 0x5c686e, hemiIntensity: 0.62 },
+      cyan_b1: { name: '地下一樓的門廊', floor: 'B1', bgHex: 0x0c0907, ambientColor: 0xffecd6, ambientIntensity: 1.00, hemiSky: 0xfff5ea, hemiGround: 0x5c686e, hemiIntensity: 0.62 },
+      royalblue: { name: '寶藍色大廳', floor: '2F', bgHex: 0x0c0907, ambientColor: 0xffecd6, ambientIntensity: 1.00, hemiSky: 0xfff5ea, hemiGround: 0x52607a, hemiIntensity: 0.62 },
+      brown: { name: '棕色大廳', floor: '2F', bgHex: 0x0c0907, ambientColor: 0xffecd6, ambientIntensity: 1.00, hemiSky: 0xfff5ea, hemiGround: 0x6e5844, hemiIntensity: 0.62 },
     };
 
     // Switch behind-the-door room seamlessly across 1F, 2F & B1 rooms
@@ -5334,7 +6349,7 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
 
         if (lobbyRoomGroupRef.current) lobbyRoomGroupRef.current.visible = isLobby;
         if (consoleSceneRef.current) consoleSceneRef.current.visible = isLobby;
-        (['purple', 'green', 'gold', 'cyan', 'cyan_b1', 'royalblue', 'brown'] as const).forEach((roomId) => {
+        (['purple', 'green', 'gold', 'pink', 'cyan', 'cyan_b1', 'royalblue', 'brown'] as const).forEach((roomId) => {
           const rg = extraRoomsRef.current[roomId].roomGroup;
           if (rg) rg.visible = targetRoom === roomId;
         });
@@ -5342,7 +6357,7 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
         const atmo = ROOM_ATMOSPHERE[targetRoom];
         if (sceneRef.current) {
           sceneRef.current.background = new THREE.Color(atmo.bgHex);
-          sceneRef.current.fog = new THREE.FogExp2(atmo.bgHex, 0.008);
+          sceneRef.current.fog = new THREE.FogExp2(atmo.bgHex, 0.016);
         }
         if (ambientLightRef.current) {
           ambientLightRef.current.color.setHex(atmo.ambientColor);
@@ -5472,11 +6487,11 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
           return true;
         }
         if (farDoor.doorHitbox && raycasterRef.current.intersectObject(farDoor.doorHitbox, false).length > 0) {
-          // Far door (4m end wall): Top (0)=寶藍色, Right (1)=棕色 -> 複製「大廳邏輯」空大廳; Bottom/Left=黑色
+          // Far door (4m end wall): Top (0)=寶藍色, Right (1)=棕色 -> 複製「大廳邏輯」空大廳(預設面對門); Bottom/Left=黑色
           if (farDoor.colorIdx === 0) {
-            handleEnterPortalRoom('royalblue', 'table');
+            handleEnterPortalRoom('royalblue', 'door');
           } else if (farDoor.colorIdx === 1) {
-            handleEnterPortalRoom('brown', 'table');
+            handleEnterPortalRoom('brown', 'door');
           } else {
             triggerLockedRattle();
           }
@@ -5495,8 +6510,23 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
           return true;
         }
         if (farDoor.doorHitbox && raycasterRef.current.intersectObject(farDoor.doorHitbox, false).length > 0) {
-          // Far door (4m end wall): Top (0)=深湖藍紫色, Right/Bottom/Left=黑色
-          triggerLockedRattle();
+          // Far door (4m end wall): Top (0)=深湖藍紫色, Left (3)=淺粉色 -> 粉色房間, Right/Bottom=黑色
+          if (farDoor.colorIdx === 3) {
+            handleEnterPortalRoom('pink', 'door');
+          } else {
+            triggerLockedRattle();
+          }
+          return true;
+        }
+      } else if (currentRoom === 'pink') {
+        const doorHitbox = extraRoomsRef.current.pink.doorHitbox;
+        if (doorHitbox && raycasterRef.current.intersectObject(doorHitbox, false).length > 0) {
+          // Top (idx 0) is Silver -> returns directly to 地下一樓的門廊 facing Door 2
+          if (extraRoomsRef.current.pink.colorIdx === 0) {
+            handleEnterPortalRoom('cyan_b1', 'door2');
+          } else {
+            triggerLockedRattle();
+          }
           return true;
         }
       } else if (currentRoom === 'royalblue' || currentRoom === 'brown') {
@@ -5964,21 +6994,23 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
                 ? 'bg-[#0f1f0c]/90 border-lime-400/50 text-lime-100 hover:bg-[#193314] hover:border-lime-300/80'
                 : activeRoom === 'gold'
                   ? 'bg-[#241907]/90 border-amber-400/55 text-amber-100 hover:bg-[#38270c] hover:border-amber-300/85'
-                  : isFoyerRoom(activeRoom)
-                    ? 'bg-[#081c24]/90 border-cyan-400/55 text-cyan-100 hover:bg-[#0e2d3a] hover:border-cyan-300/85'
-                    : activeRoom === 'royalblue'
-                      ? 'bg-[#0c1633]/90 border-blue-400/55 text-blue-100 hover:bg-[#14234f] hover:border-blue-300/85'
-                      : activeRoom === 'brown'
-                        ? 'bg-[#21150b]/90 border-amber-600/55 text-amber-100 hover:bg-[#332011] hover:border-amber-500/85'
-                        : 'bg-[#1b1028]/90 border-purple-400/50 text-purple-100 hover:bg-[#29173d] hover:border-purple-300/80'
+                  : activeRoom === 'pink'
+                    ? 'bg-[#29101c]/90 border-pink-300/55 text-pink-100 hover:bg-[#3d1729] hover:border-pink-200/85'
+                    : isFoyerRoom(activeRoom)
+                      ? 'bg-[#081c24]/90 border-cyan-400/55 text-cyan-100 hover:bg-[#0e2d3a] hover:border-cyan-300/85'
+                      : activeRoom === 'royalblue'
+                        ? 'bg-[#0c1633]/90 border-blue-400/55 text-blue-100 hover:bg-[#14234f] hover:border-blue-300/85'
+                        : activeRoom === 'brown'
+                          ? 'bg-[#21150b]/90 border-amber-600/55 text-amber-100 hover:bg-[#332011] hover:border-amber-500/85'
+                          : 'bg-[#1b1028]/90 border-purple-400/50 text-purple-100 hover:bg-[#29173d] hover:border-purple-300/80'
             }`}
           >
             {isFoyerRoom(activeRoom)
               ? '去另一邊的門'
               : activeRoom === 'royalblue' || activeRoom === 'brown'
                 ? viewLocation === 'door'
-                  ? '回到圓桌前面'
-                  : '去門前'
+                  ? '去茶几前面'
+                  : '回去門口'
                 : viewLocation === 'center'
                   ? '去門前'
                   : '去房間正中央'}
