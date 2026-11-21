@@ -51,12 +51,17 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
   const [isLampOn, setIsLampOn] = useState(true);
   const [isConsoleHeld, setIsConsoleHeld] = useState(false);
   const [isScreenActive, setIsScreenActive] = useState(false);
-  const [viewLocation, setViewLocation] = useState<'table' | 'cabinet' | 'door' | 'door2' | 'center'>('table');
-  const viewLocationRef = useRef<'table' | 'cabinet' | 'door' | 'door2' | 'center'>('table');
+  const [viewLocation, setViewLocation] = useState<
+    'table' | 'cabinet' | 'door' | 'door2' | 'center' | 'desk' | 'capsule'
+  >('table');
+  const viewLocationRef = useRef<
+    'table' | 'cabinet' | 'door' | 'door2' | 'center' | 'desk' | 'capsule'
+  >('table');
   const [activeRoom, setActiveRoom] = useState<RoomId>('lobby');
   const activeRoomRef = useRef<RoomId>('lobby');
   const [isCyanFloorDialogOpen, setIsCyanFloorDialogOpen] = useState(false);
   const isCyanFloorDialogOpenRef = useRef(false);
+  const [isPinkNavOpen, setIsPinkNavOpen] = useState(false);
   const enterPortalRoomRef = useRef<
     ((targetRoom: RoomId, spawnView?: 'table' | 'door' | 'door2') => void) | null
   >(null);
@@ -662,70 +667,233 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
       showFloorLabel: boolean;
       floorLabelTexture?: THREE.Texture;
       accentWoodTint?: number;
+      isRusticArchedOak?: boolean;
+      oakDoorTexture?: THREE.Texture;
+      cuteRoomPlaqueTexture?: THREE.Texture;
     }) => {
       const doorContainer = new THREE.Group();
+      const isArched = Boolean(opts.isRusticArchedOak);
       const FD_WIDTH = 0.96;
-      const FD_HEIGHT = 2.14;
+      const ARCH_SPRING_Y = 1.72;
+      const ARCH_RADIUS = FD_WIDTH / 2; // 0.48 -> apex at 2.20m
+      const FD_HEIGHT = isArched ? ARCH_SPRING_Y + ARCH_RADIUS : 2.14;
       const FD_FRAME_W = 0.085;
       const FD_FRAME_D = 0.13;
 
       const frameMat = new THREE.MeshStandardMaterial({
-        color: opts.accentWoodTint ?? 0x1f120a,
-        roughness: 0.48,
-        metalness: 0.12,
+        map: isArched ? opts.oakDoorTexture : undefined,
+        color: isArched ? 0xe5d4bc : (opts.accentWoodTint ?? 0x1f120a),
+        roughness: isArched ? 0.48 : 0.48,
+        metalness: isArched ? 0.03 : 0.12,
       });
       const leafMat = new THREE.MeshStandardMaterial({
-        color: 0x2c170d,
-        roughness: 0.42,
-        metalness: 0.08,
+        map: isArched ? opts.oakDoorTexture : undefined,
+        color: isArched ? 0xf6eee2 : 0x2c170d,
+        roughness: isArched ? 0.44 : 0.42,
+        metalness: isArched ? 0.02 : 0.08,
       });
       const recessMat = new THREE.MeshStandardMaterial({
-        color: 0x221008,
+        color: isArched ? 0xc4ad8f : 0x221008,
         roughness: 0.50,
-        metalness: 0.06,
+        metalness: 0.03,
       });
       const doorBrassMat = new THREE.MeshStandardMaterial({
-        color: 0xdfb15b,
-        roughness: 0.24,
-        metalness: 0.88,
+        color: isArched ? 0x3b332d : 0xdfb15b,
+        roughness: isArched ? 0.42 : 0.24,
+        metalness: isArched ? 0.72 : 0.88,
       });
 
-      // Outer fixed jambs, lintel & floor sill
-      const leftJamb = new THREE.Mesh(
-        new THREE.BoxGeometry(FD_FRAME_W, FD_HEIGHT + FD_FRAME_W, FD_FRAME_D),
-        frameMat
-      );
-      leftJamb.position.set(-FD_WIDTH / 2 - FD_FRAME_W / 2, (FD_HEIGHT + FD_FRAME_W) / 2, FD_FRAME_D * 0.35);
-      leftJamb.castShadow = true;
-      leftJamb.receiveShadow = true;
-      doorContainer.add(leftJamb);
+      if (isArched) {
+        // Arched Rustic Oak Doorway Casing Frame (鄉村圓拱實木門框)
+        const hwOut = FD_WIDTH / 2 + FD_FRAME_W;
+        const hwIn = FD_WIDTH / 2;
+        const archFrameShape = new THREE.Shape();
+        archFrameShape.moveTo(-hwOut, 0);
+        archFrameShape.lineTo(-hwOut, ARCH_SPRING_Y);
+        archFrameShape.absarc(0, ARCH_SPRING_Y, ARCH_RADIUS + FD_FRAME_W, Math.PI, 0, true);
+        archFrameShape.lineTo(hwOut, 0);
+        archFrameShape.closePath();
 
-      const rightJamb = new THREE.Mesh(
-        new THREE.BoxGeometry(FD_FRAME_W, FD_HEIGHT + FD_FRAME_W, FD_FRAME_D),
-        frameMat
-      );
-      rightJamb.position.set(FD_WIDTH / 2 + FD_FRAME_W / 2, (FD_HEIGHT + FD_FRAME_W) / 2, FD_FRAME_D * 0.35);
-      rightJamb.castShadow = true;
-      rightJamb.receiveShadow = true;
-      doorContainer.add(rightJamb);
+        const archHole = new THREE.Path();
+        archHole.moveTo(hwIn, 0);
+        archHole.lineTo(hwIn, ARCH_SPRING_Y);
+        archHole.absarc(0, ARCH_SPRING_Y, ARCH_RADIUS, 0, Math.PI, false);
+        archHole.lineTo(-hwIn, 0);
+        archHole.closePath();
+        archFrameShape.holes.push(archHole);
 
-      const topLintel = new THREE.Mesh(
-        new THREE.BoxGeometry(FD_WIDTH + FD_FRAME_W * 2 + 0.04, FD_FRAME_W + 0.015, FD_FRAME_D + 0.015),
-        frameMat
-      );
-      topLintel.position.set(0, FD_HEIGHT + FD_FRAME_W / 2, FD_FRAME_D * 0.38);
-      topLintel.castShadow = true;
-      doorContainer.add(topLintel);
+        const archFrameGeo = new THREE.ExtrudeGeometry(archFrameShape, {
+          depth: FD_FRAME_D,
+          bevelEnabled: true,
+          bevelThickness: 0.007,
+          bevelSize: 0.006,
+          bevelSegments: 2,
+          curveSegments: 28,
+        });
+        const archFrameMesh = new THREE.Mesh(archFrameGeo, frameMat);
+        archFrameMesh.position.set(0, 0, -0.02);
+        archFrameMesh.castShadow = true;
+        archFrameMesh.receiveShadow = true;
+        doorContainer.add(archFrameMesh);
 
-      const sill = new THREE.Mesh(
-        new THREE.BoxGeometry(FD_WIDTH + FD_FRAME_W * 2, 0.022, FD_FRAME_D + 0.03),
-        baseboardMat
-      );
-      sill.position.set(0, 0.011, FD_FRAME_D * 0.42);
-      doorContainer.add(sill);
+        const oakSill = new THREE.Mesh(
+          new THREE.BoxGeometry(FD_WIDTH + FD_FRAME_W * 2, 0.022, FD_FRAME_D + 0.03),
+          recessMat
+        );
+        oakSill.position.set(0, 0.011, FD_FRAME_D * 0.42);
+        oakSill.receiveShadow = true;
+        doorContainer.add(oakSill);
+      } else {
+        // Outer fixed jambs, lintel & floor sill
+        const leftJamb = new THREE.Mesh(
+          new THREE.BoxGeometry(FD_FRAME_W, FD_HEIGHT + FD_FRAME_W, FD_FRAME_D),
+          frameMat
+        );
+        leftJamb.position.set(-FD_WIDTH / 2 - FD_FRAME_W / 2, (FD_HEIGHT + FD_FRAME_W) / 2, FD_FRAME_D * 0.35);
+        leftJamb.castShadow = true;
+        leftJamb.receiveShadow = true;
+        doorContainer.add(leftJamb);
 
-      // Carved "1F" wooden signboard plaque directly above the door lintel
-      if (opts.showFloorLabel) {
+        const rightJamb = new THREE.Mesh(
+          new THREE.BoxGeometry(FD_FRAME_W, FD_HEIGHT + FD_FRAME_W, FD_FRAME_D),
+          frameMat
+        );
+        rightJamb.position.set(FD_WIDTH / 2 + FD_FRAME_W / 2, (FD_HEIGHT + FD_FRAME_W) / 2, FD_FRAME_D * 0.35);
+        rightJamb.castShadow = true;
+        rightJamb.receiveShadow = true;
+        doorContainer.add(rightJamb);
+
+        const topLintel = new THREE.Mesh(
+          new THREE.BoxGeometry(FD_WIDTH + FD_FRAME_W * 2 + 0.04, FD_FRAME_W + 0.015, FD_FRAME_D + 0.015),
+          frameMat
+        );
+        topLintel.position.set(0, FD_HEIGHT + FD_FRAME_W / 2, FD_FRAME_D * 0.38);
+        topLintel.castShadow = true;
+        doorContainer.add(topLintel);
+
+        const sill = new THREE.Mesh(
+          new THREE.BoxGeometry(FD_WIDTH + FD_FRAME_W * 2, 0.022, FD_FRAME_D + 0.03),
+          baseboardMat
+        );
+        sill.position.set(0, 0.011, FD_FRAME_D * 0.42);
+        doorContainer.add(sill);
+      }
+
+      // Signboard above door: Cute bunny-eared wooden plaque ("阿璃的房間") for arched oak door, or carved floor plaque
+      if (isArched && opts.cuteRoomPlaqueTexture) {
+        const cuteSignGroup = new THREE.Group();
+        cuteSignGroup.position.set(0, ARCH_SPRING_Y + ARCH_RADIUS + FD_FRAME_W + 0.195, 0.042);
+
+        const plaqueOakMat = new THREE.MeshStandardMaterial({
+          map: opts.oakDoorTexture,
+          color: 0xf1e6d5,
+          roughness: 0.45,
+          metalness: 0.02,
+        });
+        const pinkEarInnerMat = new THREE.MeshStandardMaterial({
+          color: 0xf9bfd1,
+          roughness: 0.72,
+          metalness: 0.01,
+        });
+        const ropeMat = new THREE.MeshStandardMaterial({
+          color: 0xdccbb0,
+          roughness: 0.85,
+        });
+
+        // Rounded wooden signboard base (0.56 × 0.21m)
+        const pW = 0.56;
+        const pH = 0.21;
+        const pR = 0.045;
+        const hw = pW / 2;
+        const hh = pH / 2;
+        const plaqueShape = new THREE.Shape();
+        plaqueShape.moveTo(-hw + pR, -hh);
+        plaqueShape.lineTo(hw - pR, -hh);
+        plaqueShape.quadraticCurveTo(hw, -hh, hw, -hh + pR);
+        plaqueShape.lineTo(hw, hh - pR);
+        plaqueShape.quadraticCurveTo(hw, hh, hw - pR, hh);
+        plaqueShape.lineTo(-hw + pR, hh);
+        plaqueShape.quadraticCurveTo(-hw, hh, -hw, hh - pR);
+        plaqueShape.lineTo(-hw, -hh + pR);
+        plaqueShape.quadraticCurveTo(-hw, -hh, -hw + pR, -hh);
+
+        const plaqueBackMesh = new THREE.Mesh(
+          new THREE.ExtrudeGeometry(plaqueShape, {
+            depth: 0.022,
+            bevelEnabled: true,
+            bevelThickness: 0.005,
+            bevelSize: 0.005,
+            bevelSegments: 3,
+            curveSegments: 14,
+          }),
+          plaqueOakMat
+        );
+        plaqueBackMesh.position.z = -0.011;
+        plaqueBackMesh.castShadow = true;
+        plaqueBackMesh.receiveShadow = true;
+        cuteSignGroup.add(plaqueBackMesh);
+
+        // Two cute sculpted wooden bunny ears peeking up from top center of the signboard
+        [-1, 1].forEach((side) => {
+          const bEar = new THREE.Group();
+          bEar.position.set(side * 0.044, hh + 0.036, 0);
+          bEar.rotation.z = -side * 0.14;
+
+          const earOuter = new THREE.Mesh(
+            new THREE.CapsuleGeometry(0.022, 0.056, 8, 14),
+            plaqueOakMat
+          );
+          earOuter.scale.set(1.05, 1.0, 0.45);
+          earOuter.castShadow = true;
+          bEar.add(earOuter);
+
+          const earInner = new THREE.Mesh(
+            new THREE.CapsuleGeometry(0.013, 0.040, 8, 12),
+            pinkEarInnerMat
+          );
+          earInner.scale.set(1.0, 1.0, 0.30);
+          earInner.position.set(0, -0.003, 0.008);
+          bEar.add(earInner);
+
+          cuteSignGroup.add(bEar);
+        });
+
+        // Cute cream & pastel-pink front painted faceplate ("阿璃的房間")
+        const plaqueFront = new THREE.Mesh(
+          new THREE.PlaneGeometry(0.515, 0.172),
+          new THREE.MeshStandardMaterial({
+            map: opts.cuteRoomPlaqueTexture,
+            roughness: 0.56,
+            metalness: 0.02,
+          })
+        );
+        plaqueFront.position.z = 0.0165;
+        cuteSignGroup.add(plaqueFront);
+
+        // Hanging hemp cord + tiny oak wall peg above
+        const hangCurve = new THREE.CatmullRomCurve3([
+          new THREE.Vector3(-0.20, hh - 0.005, -0.002),
+          new THREE.Vector3(-0.10, hh + 0.088, -0.008),
+          new THREE.Vector3(0, hh + 0.142, -0.012),
+          new THREE.Vector3(0.10, hh + 0.088, -0.008),
+          new THREE.Vector3(0.20, hh - 0.005, -0.002),
+        ]);
+        const hangRope = new THREE.Mesh(
+          new THREE.TubeGeometry(hangCurve, 20, 0.0032, 8, false),
+          ropeMat
+        );
+        cuteSignGroup.add(hangRope);
+
+        const wallPeg = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.010, 0.010, 0.028, 12),
+          plaqueOakMat
+        );
+        wallPeg.rotation.x = Math.PI / 2;
+        wallPeg.position.set(0, hh + 0.144, -0.014);
+        cuteSignGroup.add(wallPeg);
+
+        doorContainer.add(cuteSignGroup);
+      } else if (opts.showFloorLabel) {
         const signGroup = new THREE.Group();
         signGroup.position.set(0, FD_HEIGHT + FD_FRAME_W + 0.095, 0.042);
 
@@ -759,38 +927,146 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
       leafOffset.position.set(FD_WIDTH / 2, 0, 0);
       leafPivot.add(leafOffset);
 
-      const leaf = new THREE.Mesh(new THREE.BoxGeometry(FD_WIDTH, FD_HEIGHT, 0.055), leafMat);
-      leaf.position.set(0, FD_HEIGHT / 2 + 0.01, 0.034);
-      leaf.castShadow = true;
-      leaf.receiveShadow = true;
-      leafOffset.add(leaf);
+      if (isArched) {
+        // Arched Solid Oak Country Door Leaf
+        const archLeafShape = new THREE.Shape();
+        archLeafShape.moveTo(-FD_WIDTH / 2, 0.02);
+        archLeafShape.lineTo(-FD_WIDTH / 2, ARCH_SPRING_Y);
+        archLeafShape.absarc(0, ARCH_SPRING_Y, ARCH_RADIUS, Math.PI, 0, true);
+        archLeafShape.lineTo(FD_WIDTH / 2, 0.02);
+        archLeafShape.closePath();
 
-      // Classic 4 recessed wooden panels & perimeter moldings
-      [
-        [-0.20, 1.56, 0.30, 0.72],
-        [0.20, 1.56, 0.30, 0.72],
-        [-0.20, 0.62, 0.30, 0.64],
-        [0.20, 0.62, 0.30, 0.64],
-      ].forEach(([px, py, pw, ph]) => {
-        const trim = new THREE.Mesh(new THREE.BoxGeometry(pw + 0.04, ph + 0.04, 0.016), frameMat);
-        trim.position.set(px, py, 0.062);
-        leafOffset.add(trim);
-        const inset = new THREE.Mesh(new THREE.BoxGeometry(pw, ph, 0.012), recessMat);
-        inset.position.set(px, py, 0.068);
-        leafOffset.add(inset);
-      });
+        const archLeafGeo = new THREE.ExtrudeGeometry(archLeafShape, {
+          depth: 0.055,
+          bevelEnabled: true,
+          bevelThickness: 0.004,
+          bevelSize: 0.004,
+          bevelSegments: 2,
+          curveSegments: 28,
+        });
+        const archLeaf = new THREE.Mesh(archLeafGeo, leafMat);
+        archLeaf.position.set(0, 0, 0.0065);
+        archLeaf.castShadow = true;
+        archLeaf.receiveShadow = true;
+        leafOffset.add(archLeaf);
 
-      // Brass hinge barrels
-      [0.36, 1.08, 1.80].forEach((hy) => {
-        const hinge = new THREE.Mesh(new THREE.CylinderGeometry(0.010, 0.010, 0.075, 10), doorBrassMat);
-        hinge.position.set(-FD_WIDTH / 2 + 0.008, hy, 0.068);
-        leafOffset.add(hinge);
-      });
+        // Vertical rustic V-groove plank seams following the arch top contour
+        [-0.288, -0.096, 0.096, 0.288].forEach((vx) => {
+          const archTopAtX = ARCH_SPRING_Y + Math.sqrt(Math.max(0, ARCH_RADIUS * ARCH_RADIUS - vx * vx));
+          const grooveH = Math.max(0.2, archTopAtX - 0.04);
+          const seam = new THREE.Mesh(
+            new THREE.BoxGeometry(0.007, grooveH, 0.006),
+            recessMat
+          );
+          seam.position.set(vx, 0.025 + grooveH / 2, 0.064);
+          leafOffset.add(seam);
+        });
 
-      // Brass doorknob + keyhole escutcheon
-      const escutcheon = new THREE.Mesh(new THREE.BoxGeometry(0.048, 0.165, 0.012), doorBrassMat);
-      escutcheon.position.set(FD_WIDTH / 2 - 0.095, 1.02, 0.064);
-      leafOffset.add(escutcheon);
+        // Two rustic oak horizontal cross-battens + forged iron strap hinges & rivets
+        [0.34, 1.66].forEach((by) => {
+          const batten = new THREE.Mesh(
+            new THREE.BoxGeometry(0.86, 0.105, 0.016),
+            frameMat
+          );
+          batten.position.set(0, by, 0.068);
+          batten.castShadow = true;
+          batten.receiveShadow = true;
+          leafOffset.add(batten);
+
+          // Decorative forged wrought-iron hinge strap extending right from hinge edge
+          const strap = new THREE.Mesh(
+            new THREE.BoxGeometry(0.42, 0.036, 0.008),
+            doorBrassMat
+          );
+          strap.position.set(-FD_WIDTH / 2 + 0.22, by, 0.078);
+          strap.castShadow = true;
+          leafOffset.add(strap);
+
+          // Pointed diamond tip at end of hinge strap
+          const strapTip = new THREE.Mesh(
+            new THREE.BoxGeometry(0.028, 0.028, 0.008),
+            doorBrassMat
+          );
+          strapTip.rotation.z = Math.PI / 4;
+          strapTip.position.set(-FD_WIDTH / 2 + 0.43, by, 0.078);
+          leafOffset.add(strapTip);
+
+          [-0.39, -0.27, -0.15].forEach((rx) => {
+            const stud = new THREE.Mesh(
+              new THREE.SphereGeometry(0.007, 10, 8),
+              doorBrassMat
+            );
+            stud.scale.set(1, 1, 0.55);
+            stud.position.set(rx, by, 0.083);
+            leafOffset.add(stud);
+          });
+
+          const barrel = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.012, 0.012, 0.085, 10),
+            doorBrassMat
+          );
+          barrel.position.set(-FD_WIDTH / 2 + 0.010, by, 0.074);
+          leafOffset.add(barrel);
+        });
+
+        // Subtle wrought-iron clavos studs along the arch curve
+        for (let a = 32; a <= 148; a += 29) {
+          const rad = (a * Math.PI) / 180;
+          const clavo = new THREE.Mesh(
+            new THREE.SphereGeometry(0.0075, 10, 8),
+            doorBrassMat
+          );
+          clavo.scale.set(1, 1, 0.6);
+          clavo.position.set(
+            Math.cos(rad) * (ARCH_RADIUS - 0.045),
+            ARCH_SPRING_Y + Math.sin(rad) * (ARCH_RADIUS - 0.045),
+            0.066
+          );
+          leafOffset.add(clavo);
+        }
+
+        // Rustic forged-iron rounded escutcheon + antique bronze doorknob
+        const rusticEsc = new THREE.Mesh(
+          new THREE.CapsuleGeometry(0.026, 0.125, 6, 12),
+          doorBrassMat
+        );
+        rusticEsc.scale.set(1, 1, 0.25);
+        rusticEsc.position.set(FD_WIDTH / 2 - 0.095, 1.02, 0.066);
+        leafOffset.add(rusticEsc);
+      } else {
+        const leaf = new THREE.Mesh(new THREE.BoxGeometry(FD_WIDTH, FD_HEIGHT, 0.055), leafMat);
+        leaf.position.set(0, FD_HEIGHT / 2 + 0.01, 0.034);
+        leaf.castShadow = true;
+        leaf.receiveShadow = true;
+        leafOffset.add(leaf);
+
+        // Classic 4 recessed wooden panels & perimeter moldings
+        [
+          [-0.20, 1.56, 0.30, 0.72],
+          [0.20, 1.56, 0.30, 0.72],
+          [-0.20, 0.62, 0.30, 0.64],
+          [0.20, 0.62, 0.30, 0.64],
+        ].forEach(([px, py, pw, ph]) => {
+          const trim = new THREE.Mesh(new THREE.BoxGeometry(pw + 0.04, ph + 0.04, 0.016), frameMat);
+          trim.position.set(px, py, 0.062);
+          leafOffset.add(trim);
+          const inset = new THREE.Mesh(new THREE.BoxGeometry(pw, ph, 0.012), recessMat);
+          inset.position.set(px, py, 0.068);
+          leafOffset.add(inset);
+        });
+
+        // Brass hinge barrels
+        [0.36, 1.08, 1.80].forEach((hy) => {
+          const hinge = new THREE.Mesh(new THREE.CylinderGeometry(0.010, 0.010, 0.075, 10), doorBrassMat);
+          hinge.position.set(-FD_WIDTH / 2 + 0.008, hy, 0.068);
+          leafOffset.add(hinge);
+        });
+
+        // Brass doorknob + keyhole escutcheon
+        const escutcheon = new THREE.Mesh(new THREE.BoxGeometry(0.048, 0.165, 0.012), doorBrassMat);
+        escutcheon.position.set(FD_WIDTH / 2 - 0.095, 1.02, 0.064);
+        leafOffset.add(escutcheon);
+      }
 
       const knobNeck = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.016, 0.036, 12), doorBrassMat);
       knobNeck.rotation.x = Math.PI / 2;
@@ -810,9 +1086,9 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
       doorHitbox.position.set(0, FD_HEIGHT / 2, 0.07);
       leafOffset.add(doorHitbox);
 
-      // Circular Steampunk 4-Sector Dial mounted at Peephole Spot (y = 1.54)
+      // Circular Steampunk 4-Sector Dial mounted at Peephole Spot (y = 1.38 on arched oak door, 1.54 on classic door)
       const dialGroup = new THREE.Group();
-      dialGroup.position.set(0, 1.54, 0.075);
+      dialGroup.position.set(0, isArched ? 1.38 : 1.54, 0.075);
       dialGroup.scale.setScalar(1.30);
 
       const dialIronMat = new THREE.MeshStandardMaterial({ color: 0x1c1714, roughness: 0.46, metalness: 0.78 });
@@ -2966,7 +3242,6 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
     ririmuSideTex.wrapS = THREE.RepeatWrapping;
     ririmuSideTex.wrapT = THREE.ClampToEdgeWrapping;
 
-    const ririmuBagGroup = new THREE.Group();
     const POUCH_W = 0.122; // 12.2 cm wide
     const POUCH_H = 0.170; // 17.0 cm tall
     const POUCH_D = 0.064; // 6.4 cm thick
@@ -3101,467 +3376,272 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
     pouchGeo.setIndex(indices);
     pouchGeo.computeVertexNormals();
 
-    const pouchFrontMat = new THREE.MeshPhysicalMaterial({
+    const pouchBaseMatFrontProps = (interactiveForLobby: boolean) => ({
       map: ririmuFrontTex,
-      roughness: isLampOn ? 0.22 : 0.36,
+      roughness: interactiveForLobby ? (isLampOn ? 0.22 : 0.36) : 0.26,
       metalness: 0.02,
-      clearcoat: isLampOn ? 0.96 : 0.32,
-      clearcoatRoughness: isLampOn ? 0.08 : 0.24,
-      specularIntensity: isLampOn ? 1.0 : 0.42,
+      clearcoat: interactiveForLobby ? (isLampOn ? 0.96 : 0.32) : 0.72,
+      clearcoatRoughness: interactiveForLobby ? (isLampOn ? 0.08 : 0.24) : 0.14,
+      specularIntensity: interactiveForLobby ? (isLampOn ? 1.0 : 0.42) : 0.85,
     });
-    const pouchBackMat = new THREE.MeshPhysicalMaterial({
-      map: ririmuBackTex,
-      roughness: 0.28,
-      metalness: 0.02,
-      clearcoat: 0.65,
-      clearcoatRoughness: 0.16,
-    });
-    const pouchSideMat = new THREE.MeshPhysicalMaterial({
-      map: ririmuSideTex,
-      roughness: isLampOn ? 0.24 : 0.36,
-      metalness: 0.03,
-      clearcoat: isLampOn ? 0.85 : 0.32,
-      clearcoatRoughness: isLampOn ? 0.10 : 0.24,
-      specularIntensity: isLampOn ? 0.95 : 0.42,
-    });
-    pouchFrontMatRef.current = pouchFrontMat;
-    pouchSideMatRef.current = pouchSideMat;
 
-    // Prop up slightly & lean diagonally beside the table lamp (稍微立起來、斜靠在檯燈旁邊)
-    const pouchLeanEuler = new THREE.Euler(-0.92, 0, 0.14, 'XYZ');
-    const pouchLeanQuat = new THREE.Quaternion().setFromEuler(pouchLeanEuler);
-    const tmpVert = new THREE.Vector3();
-    let pouchMinY = Infinity;
-    for (let vi = 0; vi < positions.length; vi += 3) {
-      tmpVert.set(positions[vi], positions[vi + 1], positions[vi + 2]).applyQuaternion(pouchLeanQuat);
-      if (tmpVert.y < pouchMinY) pouchMinY = tmpVert.y;
-    }
+    const createRirimuBagGroup = (interactiveForLobby: boolean) => {
+      const bagGroup = new THREE.Group();
+      const pouchFrontMat = new THREE.MeshPhysicalMaterial(pouchBaseMatFrontProps(interactiveForLobby));
+      const pouchBackMat = new THREE.MeshPhysicalMaterial({
+        map: ririmuBackTex,
+        roughness: 0.28,
+        metalness: 0.02,
+        clearcoat: 0.65,
+        clearcoatRoughness: 0.16,
+      });
+      const pouchSideMat = new THREE.MeshPhysicalMaterial({
+        map: ririmuSideTex,
+        roughness: interactiveForLobby ? (isLampOn ? 0.24 : 0.36) : 0.28,
+        metalness: 0.03,
+        clearcoat: interactiveForLobby ? (isLampOn ? 0.85 : 0.32) : 0.65,
+        clearcoatRoughness: interactiveForLobby ? (isLampOn ? 0.10 : 0.24) : 0.16,
+        specularIntensity: interactiveForLobby ? (isLampOn ? 0.95 : 0.42) : 0.8,
+      });
 
-    const pouchFlatPivot = new THREE.Group();
-    pouchFlatPivot.quaternion.copy(pouchLeanQuat);
-    pouchFlatPivot.position.y = -pouchMinY;
-    ririmuBagGroup.add(pouchFlatPivot);
+      if (interactiveForLobby) {
+        pouchFrontMatRef.current = pouchFrontMat;
+        pouchSideMatRef.current = pouchSideMat;
+      }
 
-    const pouchMesh = new THREE.Mesh(pouchGeo, [pouchFrontMat, pouchBackMat, pouchSideMat]);
-    pouchMesh.castShadow = true;
-    pouchMesh.receiveShadow = true;
-    pouchFlatPivot.add(pouchMesh);
+      const pouchLeanEuler = new THREE.Euler(-0.92, 0, 0.14, 'XYZ');
+      const pouchLeanQuat = new THREE.Quaternion().setFromEuler(pouchLeanEuler);
+      const tmpVert = new THREE.Vector3();
+      let pouchMinY = Infinity;
+      for (let vi = 0; vi < positions.length; vi += 3) {
+        tmpVert.set(positions[vi], positions[vi + 1], positions[vi + 2]).applyQuaternion(pouchLeanQuat);
+        if (tmpVert.y < pouchMinY) pouchMinY = tmpVert.y;
+      }
 
-    // Subtle physical metal D-ring + white spring ring resting naturally at the top edge
-    const dRingMesh = new THREE.Mesh(
-      new THREE.TorusGeometry(0.007, 0.0015, 8, 18),
-      new THREE.MeshStandardMaterial({ color: 0xd0d4dc, roughness: 0.24, metalness: 0.85 })
-    );
-    dRingMesh.position.set(0, POUCH_H / 2 + 0.004, -POUCH_D * 0.22);
-    dRingMesh.rotation.x = 0.2;
-    pouchFlatPivot.add(dRingMesh);
+      const pouchFlatPivot = new THREE.Group();
+      pouchFlatPivot.quaternion.copy(pouchLeanQuat);
+      pouchFlatPivot.position.y = -pouchMinY;
+      bagGroup.add(pouchFlatPivot);
 
-    const claspRingMesh = new THREE.Mesh(
-      new THREE.TorusGeometry(0.009, 0.0020, 8, 20),
-      new THREE.MeshStandardMaterial({ color: 0xf6f5f8, roughness: 0.40, metalness: 0.04 })
-    );
-    claspRingMesh.position.set(-0.008, POUCH_H / 2 + 0.013, -POUCH_D * 0.36);
-    claspRingMesh.rotation.set(0.18, 0.12, 0.25);
-    pouchFlatPivot.add(claspRingMesh);
+      const pouchMesh = new THREE.Mesh(pouchGeo, [pouchFrontMat, pouchBackMat, pouchSideMat]);
+      pouchMesh.castShadow = true;
+      pouchMesh.receiveShadow = true;
+      pouchFlatPivot.add(pouchMesh);
 
+      // Subtle physical metal D-ring + white spring ring resting naturally at the top edge
+      const dRingMesh = new THREE.Mesh(
+        new THREE.TorusGeometry(0.007, 0.0015, 8, 18),
+        new THREE.MeshStandardMaterial({ color: 0xd0d4dc, roughness: 0.24, metalness: 0.85 })
+      );
+      dRingMesh.position.set(0, POUCH_H / 2 + 0.004, -POUCH_D * 0.22);
+      dRingMesh.rotation.x = 0.2;
+      pouchFlatPivot.add(dRingMesh);
+
+      const claspRingMesh = new THREE.Mesh(
+        new THREE.TorusGeometry(0.009, 0.0020, 8, 20),
+        new THREE.MeshStandardMaterial({ color: 0xf6f5f8, roughness: 0.40, metalness: 0.04 })
+      );
+      claspRingMesh.position.set(-0.008, POUCH_H / 2 + 0.013, -POUCH_D * 0.36);
+      claspRingMesh.rotation.set(0.18, 0.12, 0.25);
+      pouchFlatPivot.add(claspRingMesh);
+
+      return bagGroup;
+    };
+
+    const ririmuBagGroup = createRirimuBagGroup(true);
     // Grounded flush on tea table right beside the lamp base, angled toward the seated viewer
     ririmuBagGroup.position.set(-0.195, TEA_TABLE_HEIGHT, -0.080);
     ririmuBagGroup.rotation.y = 0.30;
     centerTeaGroup.add(ririmuBagGroup);
 
-    // --- 4E-2B. 最愛チアモ (もあちあも) PHOTO-TEXTURED 3D VOLUMETRIC RECONSTRUCTION IN FRONT OF FAN ---
-    const loadChiamoTex = (url: string) => {
-      const t = textureLoader.load(url);
-      t.colorSpace = THREE.SRGBColorSpace;
-      t.anisotropy = renderer.capabilities.getMaxAnisotropy();
-      return t;
+    // --- 4E-2B. BOMBERGIRL RAINBOW 「最愛チアモ」 COLOR RETAIL FIGURE BOX (最愛チアモ 彩盒) ---
+    const chiamoBoxFrontTex = textureLoader.load('/assets/chiamo_box_front.png');
+    chiamoBoxFrontTex.colorSpace = THREE.SRGBColorSpace;
+    chiamoBoxFrontTex.wrapS = THREE.ClampToEdgeWrapping;
+    chiamoBoxFrontTex.wrapT = THREE.ClampToEdgeWrapping;
+    chiamoBoxFrontTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+    // Coordinated Konami / Bombergirl Rainbow pink-and-charcoal side & top/back packaging texture
+    const createChiamoBoxPanelTexture = (variant: 'side' | 'top' | 'back') => {
+      const c = document.createElement('canvas');
+      c.width = 512;
+      c.height = variant === 'top' ? 384 : 640;
+      const ctx = c.getContext('2d');
+      if (ctx) {
+        const W = c.width;
+        const H = c.height;
+        // Satin charcoal-black outer border matching front box bezel
+        ctx.fillStyle = '#1b181d';
+        ctx.fillRect(0, 0, W, H);
+
+        // Soft pastel pink/cream inner gradient panel
+        const pad = 22;
+        const grad = ctx.createLinearGradient(0, pad, 0, H - pad);
+        grad.addColorStop(0.0, '#f8c8de');
+        grad.addColorStop(0.5, '#fde9f2');
+        grad.addColorStop(1.0, '#f3b3d2');
+        ctx.fillStyle = grad;
+        ctx.fillRect(pad, pad, W - pad * 2, H - pad * 2);
+
+        // Bubblegum-pink diagonal corner accent bars matching retail box artwork
+        ctx.fillStyle = '#e75f9f';
+        ctx.fillRect(pad, pad, W - pad * 2, 18);
+        ctx.fillRect(pad, H - pad - 18, W - pad * 2, 18);
+
+        if (variant === 'top') {
+          ctx.strokeStyle = 'rgba(40, 28, 36, 0.25)';
+          ctx.lineWidth = 3;
+          ctx.strokeRect(pad + 6, pad + 6, W - (pad + 6) * 2, H - (pad + 6) * 2);
+
+          // Printed title badge centered on top lid
+          ctx.fillStyle = '#e65798';
+          ctx.beginPath();
+          ctx.roundRect(W / 2 - 145, H / 2 - 42, 290, 84, 18);
+          ctx.fill();
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 5;
+          ctx.stroke();
+
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 42px "Noto Sans JP", "PingFang TC", sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('最愛チアモ', W / 2, H / 2);
+        } else {
+          // KONAMI corner badge + Bombergirl vertical/centered branding strip
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 28px sans-serif';
+          ctx.textAlign = 'left';
+          ctx.fillText('KONAMI', pad + 14, pad + 56);
+
+          ctx.save();
+          ctx.translate(W / 2, H / 2);
+          ctx.fillStyle = '#2b2430';
+          ctx.font = 'bold 30px "Noto Sans JP", sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('ボンバーガール', 0, -48);
+          ctx.fillText('レインボー', 0, -10);
+
+          ctx.fillStyle = '#e75f9f';
+          ctx.beginPath();
+          ctx.roundRect(-130, 18, 260, 62, 14);
+          ctx.fill();
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 4;
+          ctx.stroke();
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 38px "Noto Sans JP", sans-serif';
+          ctx.fillText('最愛チアモ', 0, 60);
+          ctx.restore();
+
+          if (variant === 'back') {
+            // Subtle barcode box at bottom-right of rear face
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(W - pad - 130, H - pad - 88, 110, 56);
+            ctx.fillStyle = '#18181b';
+            for (let b = 0; b < 18; b++) {
+              const bw = b % 3 === 0 ? 4 : 2;
+              ctx.fillRect(W - pad - 122 + b * 5.2, H - pad - 82, bw, 44);
+            }
+          }
+        }
+      }
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      return tex;
     };
 
-    const chiamoBaseTex = loadChiamoTex('/assets/chiamo_base.png');
-    const chiamoFrontAlphaTex = loadChiamoTex('/assets/chiamo_front.png');
-    const chiamoBackAlphaTex = loadChiamoTex('/assets/chiamo_back.png');
-    const chiamoFrontRgbTex = loadChiamoTex('/assets/chiamo_front_rgb.jpg');
-    const chiamoBackRgbTex = loadChiamoTex('/assets/chiamo_back_rgb.jpg');
-    const chiamoLeftRgbTex = loadChiamoTex('/assets/chiamo_left_rgb.jpg');
-    const chiamoRightRgbTex = loadChiamoTex('/assets/chiamo_right_rgb.jpg');
+    const chiamoBoxSideTex = createChiamoBoxPanelTexture('side');
+    const chiamoBoxTopTex = createChiamoBoxPanelTexture('top');
+    const chiamoBoxBackTex = createChiamoBoxPanelTexture('back');
 
-    const chiamoNewGroup = new THREE.Group();
-    const CHIAMO_BASE_R = 0.068;
+    const CBOX_W = 0.168; // 16.8 cm wide
+    const CBOX_H = 0.215; // 21.5 cm tall (exact 720:920 portrait box ratio)
+    const CBOX_D = 0.125; // 12.5 cm deep
 
-    // Helper: create 4-view directional photo-projection MeshPhysicalMaterial in unified figure coordinates
-    const makeChiamoProjMaterial = (isHead: boolean) => {
-      const mat = new THREE.MeshPhysicalMaterial({
-        color: 0xffffff,
-        roughness: isHead ? 0.38 : 0.32,
+    const createChiamoColorBoxGroup = () => {
+      const boxGrp = new THREE.Group();
+
+      const glossBoxSideMat = new THREE.MeshPhysicalMaterial({
+        map: chiamoBoxSideTex,
+        roughness: 0.28,
         metalness: 0.02,
-        clearcoat: isHead ? 0.18 : 0.34,
-        clearcoatRoughness: isHead ? 0.42 : 0.24,
+        clearcoat: 0.42,
+        clearcoatRoughness: 0.20,
       });
-      mat.customProgramCacheKey = () => (isHead ? 'chiamo_4view_head_v2' : 'chiamo_4view_body_v2');
-      mat.onBeforeCompile = (shader) => {
-        shader.uniforms.uTexFront = { value: chiamoFrontRgbTex };
-        shader.uniforms.uTexBack = { value: chiamoBackRgbTex };
-        shader.uniforms.uTexLeft = { value: chiamoLeftRgbTex };
-        shader.uniforms.uTexRight = { value: chiamoRightRgbTex };
-        shader.uniforms.uIsHead = { value: isHead ? 1.0 : 0.0 };
+      const glossBoxTopMat = new THREE.MeshPhysicalMaterial({
+        map: chiamoBoxTopTex,
+        roughness: 0.28,
+        metalness: 0.02,
+        clearcoat: 0.42,
+        clearcoatRoughness: 0.20,
+      });
+      const glossBoxFrontMat = new THREE.MeshPhysicalMaterial({
+        map: chiamoBoxFrontTex,
+        roughness: 0.22,
+        metalness: 0.02,
+        clearcoat: 0.52,
+        clearcoatRoughness: 0.16,
+      });
+      const glossBoxBackMat = new THREE.MeshPhysicalMaterial({
+        map: chiamoBoxBackTex,
+        roughness: 0.30,
+        metalness: 0.02,
+        clearcoat: 0.36,
+      });
+      const boxBottomMat = new THREE.MeshStandardMaterial({
+        color: 0x1e1b20,
+        roughness: 0.72,
+      });
 
-        shader.vertexShader = shader.vertexShader
-          .replace(
-            '#include <common>',
-            `#include <common>
-            varying vec3 vFigPos;
-            varying vec3 vFigNorm;`
-          )
-          .replace(
-            '#include <begin_vertex>',
-            `#include <begin_vertex>
-            vFigPos = position;
-            vFigNorm = normalize(normal);`
-          );
-
-        shader.fragmentShader = shader.fragmentShader
-          .replace(
-            '#include <common>',
-            `#include <common>
-            uniform sampler2D uTexFront;
-            uniform sampler2D uTexBack;
-            uniform sampler2D uTexLeft;
-            uniform sampler2D uTexRight;
-            uniform float uIsHead;
-            varying vec3 vFigPos;
-            varying vec3 vFigNorm;`
-          )
-          .replace(
-            '#include <map_fragment>',
-            `#include <map_fragment>
-            vec3 fn = normalize(vFigNorm);
-            float wF = pow(max(fn.z, 0.0), 2.8);
-            float wB = pow(max(-fn.z, 0.0), 2.8);
-            float wL = pow(max(fn.x, 0.0), 2.8);
-            float wR = pow(max(-fn.x, 0.0), 2.8);
-            if (uIsHead < 0.5 && vFigPos.y > 0.136 && vFigPos.y < 0.188 && vFigPos.z > 0.005 && fn.z > 0.02) {
-              wF += 0.35 * smoothstep(0.02, 0.35, fn.z);
-            }
-            float fy = clamp((vFigPos.y - (-0.010)) / 0.280, 0.002, 0.998);
-            vec2 uvF = vec2(clamp(0.5 + vFigPos.x / 0.210, 0.002, 0.998), fy);
-            vec2 uvB = vec2(clamp(0.5 - vFigPos.x / 0.210, 0.002, 0.998), fy);
-            vec2 uvL = vec2(clamp(0.5 - vFigPos.z / 0.210, 0.002, 0.998), fy);
-            vec2 uvR = vec2(clamp(0.5 + vFigPos.z / 0.210, 0.002, 0.998), fy);
-            vec3 colF = texture2D(uTexFront, uvF).rgb;
-            vec3 colB = texture2D(uTexBack, uvB).rgb;
-            vec3 colL = texture2D(uTexLeft, uvL).rgb;
-            vec3 colR = texture2D(uTexRight, uvR).rgb;
-            if (uIsHead > 0.5) {
-              // Suppress projected front finger-claw purple tint on outer cheek side edges
-              float dxH = abs(vFigPos.x - 0.0055);
-              if (dxH > 0.0185 && vFigPos.y < 0.228 && colF.r > colF.g * 1.18 && colF.b > colF.g * 1.08) {
-                colF = vec3(0.91, 0.69, 0.62);
-              }
-            }
-            float wSum = max(wF + wB + wL + wR, 0.0001);
-            diffuseColor.rgb = (colF * wF + colB * wB + colL * wL + colR * wR) / wSum;`
-          );
-      };
-      return mat;
-    };
-
-    const chiamoBodyProjMat = makeChiamoProjMaterial(false);
-    const chiamoHeadProjMat = makeChiamoProjMaterial(true);
-
-    // Helper: bake transform directly into BufferGeometry so shader vFigPos/vFigNorm stay in exact figure coordinates
-    const addBakedProjMesh = (geo: THREE.BufferGeometry, mat: THREE.Material, m?: THREE.Matrix4) => {
-      if (m) geo.applyMatrix4(m);
-      geo.computeVertexNormals();
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      chiamoNewGroup.add(mesh);
-      return mesh;
-    };
-
-    const makeBakedCapsule = (
-      p1: [number, number, number],
-      p2: [number, number, number],
-      rTop: number,
-      rBot: number,
-      sx = 1.0,
-      sz = 1.0
-    ) => {
-      const v1 = new THREE.Vector3(...p1);
-      const v2 = new THREE.Vector3(...p2);
-      const dir = new THREE.Vector3().subVectors(v2, v1);
-      const len = dir.length();
-      const geo = new THREE.CylinderGeometry(rTop, rBot, len, 22, 4);
-      geo.scale(sx, 1, sz);
-      const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
-      const center = new THREE.Vector3().addVectors(v1, v2).multiplyScalar(0.5);
-      const mat4 = new THREE.Matrix4().compose(center, quat, new THREE.Vector3(1, 1, 1));
-      return addBakedProjMesh(geo, chiamoBodyProjMat, mat4);
-    };
-
-    const makeBakedEllipsoid = (
-      cx: number,
-      cy: number,
-      cz: number,
-      rx: number,
-      ry: number,
-      rz: number,
-      rotEuler: [number, number, number] = [0, 0, 0],
-      mat: THREE.Material = chiamoBodyProjMat
-    ) => {
-      const geo = new THREE.SphereGeometry(1, 28, 22);
-      const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(...rotEuler));
-      const mat4 = new THREE.Matrix4().compose(
-        new THREE.Vector3(cx, cy, cz),
-        quat,
-        new THREE.Vector3(rx, ry, rz)
+      const boxMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(CBOX_W, CBOX_H, CBOX_D),
+        [
+          glossBoxSideMat,  // +X
+          glossBoxSideMat,  // -X
+          glossBoxTopMat,   // +Y
+          boxBottomMat,     // -Y
+          glossBoxFrontMat, // +Z front cover art
+          glossBoxBackMat,  // -Z rear
+        ]
       );
-      return addBakedProjMesh(geo, mat, mat4);
+      boxMesh.position.y = CBOX_H / 2;
+      boxMesh.castShadow = true;
+      boxMesh.receiveShadow = true;
+      boxGrp.add(boxMesh);
+
+      // Subtle glossy cardboard top tuck-flap crease strip & clear round retail seal sticker
+      const creaseStrip = new THREE.Mesh(
+        new THREE.BoxGeometry(CBOX_W + 0.001, 0.0015, 0.002),
+        new THREE.MeshStandardMaterial({ color: 0x2f2832, roughness: 0.5 })
+      );
+      creaseStrip.position.set(0, CBOX_H - 0.012, CBOX_D / 2 + 0.0005);
+      boxGrp.add(creaseStrip);
+
+      const sealSticker = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.009, 0.009, 0.001, 16),
+        new THREE.MeshPhysicalMaterial({
+          color: 0xffffff,
+          transparent: true,
+          opacity: 0.46,
+          roughness: 0.12,
+          clearcoat: 0.9,
+        })
+      );
+      sealSticker.position.set(0, CBOX_H + 0.0005, CBOX_D / 2 - 0.008);
+      boxGrp.add(sealSticker);
+
+      return boxGrp;
     };
 
-    // 1. Glossy Hot-Magenta Acrylic Circular Base with Real 「もあちあも」 Photo Texture
-    const chiamoBaseEdgeMat = new THREE.MeshPhysicalMaterial({
-      color: 0xa40b4b,
-      roughness: 0.12,
-      metalness: 0.02,
-      clearcoat: 0.95,
-      clearcoatRoughness: 0.06,
-      transparent: true,
-      opacity: 0.90,
-    });
-    const chiamoBaseTopMat = new THREE.MeshPhysicalMaterial({
-      map: chiamoBaseTex,
-      roughness: 0.14,
-      metalness: 0.02,
-      clearcoat: 0.94,
-      clearcoatRoughness: 0.08,
-      transparent: true,
-      alphaTest: 0.25,
-    });
-    const chiamoBaseCylinder = new THREE.Mesh(
-      new THREE.CylinderGeometry(CHIAMO_BASE_R, CHIAMO_BASE_R + 0.001, 0.008, 64),
-      chiamoBaseEdgeMat
-    );
-    chiamoBaseCylinder.position.y = 0.004;
-    chiamoBaseCylinder.castShadow = true;
-    chiamoBaseCylinder.receiveShadow = true;
-    chiamoNewGroup.add(chiamoBaseCylinder);
-
-    const chiamoBaseTop = new THREE.Mesh(new THREE.CircleGeometry(CHIAMO_BASE_R - 0.0003, 64), chiamoBaseTopMat);
-    chiamoBaseTop.rotation.x = -Math.PI / 2;
-    chiamoBaseTop.position.y = 0.0082;
-    chiamoBaseTop.receiveShadow = true;
-    chiamoNewGroup.add(chiamoBaseTop);
-
-    // 2. Clear Acrylic Rear Heel Support Pillar & Translucent Heart Tail
-    const chiamoAcrylicClearMat = new THREE.MeshPhysicalMaterial({
-      color: 0xf0f4ff,
-      roughness: 0.10,
-      metalness: 0.02,
-      clearcoat: 0.94,
-      transparent: true,
-      opacity: 0.62,
-    });
-    const clearPeg = new THREE.Mesh(new THREE.BoxGeometry(0.011, 0.028, 0.013), chiamoAcrylicClearMat);
-    clearPeg.position.set(0.002, 0.022, -0.025);
-    clearPeg.rotation.x = -0.06;
-    chiamoNewGroup.add(clearPeg);
-
-    const tailCurve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(0.004, 0.114, -0.015),
-      new THREE.Vector3(0.014, 0.106, -0.026),
-      new THREE.Vector3(0.022, 0.098, -0.032),
-      new THREE.Vector3(0.018, 0.091, -0.028),
-    ]);
-    const tailStem = new THREE.Mesh(new THREE.TubeGeometry(tailCurve, 18, 0.0015, 8, false), chiamoAcrylicClearMat);
-    chiamoNewGroup.add(tailStem);
-    const tailHeart = new THREE.Mesh(new THREE.SphereGeometry(0.0038, 10, 10), chiamoAcrylicClearMat);
-    tailHeart.scale.set(1.2, 1.0, 0.65);
-    tailHeart.position.set(0.018, 0.090, -0.028);
-    chiamoNewGroup.add(tailHeart);
-
-    // 3. Signature Large Tilted Glossy Hot-Pink Hoop Ring (looping open-air behind thighs -> front ankles)
-    const chiamoHoopPinkMat = new THREE.MeshPhysicalMaterial({
-      color: 0xdc377e,
-      roughness: 0.22,
-      metalness: 0.04,
-      clearcoat: 0.80,
-    });
-    const hoopRing = new THREE.Mesh(new THREE.TorusGeometry(0.053, 0.0019, 14, 64), chiamoHoopPinkMat);
-    hoopRing.position.set(-0.005, 0.072, -0.002);
-    hoopRing.rotation.set(-0.68, 0.05, -0.06);
-    hoopRing.castShadow = true;
-    chiamoNewGroup.add(hoopRing);
-
-    // 4. Calibrated Sculpted 3D Legs + Sneakers (exact pixel-scanned positions, open air gap preserved)
-    // Standing Right Leg (-X viewer's left)
-    makeBakedEllipsoid(-0.001, 0.016, 0.006, 0.0105, 0.0085, 0.0175, [0, 0.14, 0]); // front sneaker
-    makeBakedCapsule([-0.007, 0.021, 0.004], [-0.010, 0.058, 0.003], 0.0110, 0.0135); // leg warmer
-    makeBakedCapsule([-0.010, 0.056, 0.003], [-0.011, 0.076, 0.008], 0.0102, 0.0094); // knee calf
-    makeBakedEllipsoid(-0.011, 0.076, 0.008, 0.0102, 0.0102, 0.0102); // knee cap
-    makeBakedCapsule([-0.011, 0.076, 0.008], [-0.010, 0.114, 0.001], 0.0138, 0.0105); // thigh
-
-    // Raised Bent Left Leg (+X viewer's right)
-    makeBakedCapsule([0.016, 0.114, 0.002], [0.024, 0.076, 0.014], 0.0138, 0.0105); // thigh
-    makeBakedEllipsoid(0.024, 0.076, 0.014, 0.0106, 0.0106, 0.0106); // bent knee
-    makeBakedCapsule([0.024, 0.076, 0.014], [0.005, 0.044, -0.016], 0.0102, 0.0128); // lower leg & warmer
-    makeBakedEllipsoid(0.002, 0.036, -0.022, 0.0100, 0.0085, 0.0165, [0.82, -0.14, 0]); // raised sneaker
-
-    // 5. Continuous Contoured 3D Torso, Skirt, Waist, Bust & Sailor Collar Loft (mapped to photo silhouettes)
-    const torsoSlices: Array<{ y: number; cx: number; cz: number; rx: number; rz: number }> = [
-      { y: 0.110, cx: 0.004, cz: 0.002, rx: 0.0265, rz: 0.0210 }, // skirt frill hem
-      { y: 0.123, cx: 0.005, cz: 0.002, rx: 0.0255, rz: 0.0215 }, // belt & jacket bottom
-      { y: 0.136, cx: 0.005, cz: 0.002, rx: 0.0230, rz: 0.0205 }, // waist
-      { y: 0.150, cx: 0.005, cz: 0.004, rx: 0.0235, rz: 0.0215 }, // mid torso
-      { y: 0.165, cx: 0.005, cz: 0.010, rx: 0.0250, rz: 0.0232 }, // bust fullness
-      { y: 0.180, cx: 0.005, cz: 0.003, rx: 0.0265, rz: 0.0200 }, // sailor collar
-      { y: 0.190, cx: 0.005, cz: 0.002, rx: 0.0185, rz: 0.0155 }, // shoulders top
-      { y: 0.197, cx: 0.005, cz: 0.002, rx: 0.0085, rz: 0.0085 }, // neck
-    ];
-    const T_SEG = 32;
-    const tPos: number[] = [];
-    const tIdx: number[] = [];
-    const tRings: number[][] = [];
-    torsoSlices.forEach((sl) => {
-      const ring: number[] = [];
-      for (let i = 0; i <= T_SEG; i++) {
-        const a = (i / T_SEG) * Math.PI * 2;
-        const idx = tPos.length / 3;
-        tPos.push(sl.cx + Math.cos(a) * sl.rx, sl.y, sl.cz + Math.sin(a) * sl.rz);
-        ring.push(idx);
-      }
-      tRings.push(ring);
-    });
-    for (let r = 0; r < tRings.length - 1; r++) {
-      for (let i = 0; i < T_SEG; i++) {
-        const a = tRings[r][i], b = tRings[r][i + 1];
-        const c = tRings[r + 1][i + 1], d = tRings[r + 1][i];
-        tIdx.push(a, c, b, a, d, c);
-      }
-    }
-    const botCapIdx = tPos.length / 3;
-    tPos.push(0.004, 0.110, 0.002);
-    for (let i = 0; i < T_SEG; i++) tIdx.push(botCapIdx, tRings[0][i], tRings[0][i + 1]);
-
-    const torsoLoftGeo = new THREE.BufferGeometry();
-    torsoLoftGeo.setAttribute('position', new THREE.Float32BufferAttribute(tPos, 3));
-    torsoLoftGeo.setIndex(tIdx);
-    addBakedProjMesh(torsoLoftGeo, chiamoBodyProjMat);
-
-    // Smoothly contoured 3D bust relief domes so sailor bow & chest silhouette catch authentic light without steep underside shadow seams
-    makeBakedEllipsoid(-0.004, 0.165, 0.0175, 0.0122, 0.0115, 0.0092);
-    makeBakedEllipsoid(0.014, 0.165, 0.0175, 0.0122, 0.0115, 0.0092);
-
-    // 6. Symmetrical Raised Puffy Hoodie Sleeves (calibrated CatmullRomCurve3 tubes)
-    const rightSleeveCurve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(-0.018, 0.181, 0.0),
-      new THREE.Vector3(-0.044, 0.184, 0.002),
-      new THREE.Vector3(-0.049, 0.205, 0.009),
-      new THREE.Vector3(-0.036, 0.214, 0.017),
-    ]);
-    addBakedProjMesh(new THREE.TubeGeometry(rightSleeveCurve, 22, 0.0145, 16, false), chiamoBodyProjMat);
-    makeBakedEllipsoid(-0.047, 0.194, 0.004, 0.0155, 0.0165, 0.0155);
-
-    const leftSleeveCurve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(0.028, 0.182, 0.0),
-      new THREE.Vector3(0.055, 0.187, 0.002),
-      new THREE.Vector3(0.059, 0.207, 0.009),
-      new THREE.Vector3(0.045, 0.215, 0.017),
-    ]);
-    addBakedProjMesh(new THREE.TubeGeometry(leftSleeveCurve, 22, 0.0145, 16, false), chiamoBodyProjMat);
-    makeBakedEllipsoid(0.057, 0.196, 0.004, 0.0155, 0.0165, 0.0155);
-
-    // Left-shoulder butterfly badge + yellow pom-pom subtle 3D projection anchor
-    makeBakedEllipsoid(0.040, 0.173, 0.014, 0.0085, 0.0085, 0.0065, [0, 0.65, 0]);
-
-    // 7. Contoured Head Sphere & Twin High Looped Hair Buns (mapped with 4-view real photos)
-    makeBakedEllipsoid(0.0055, 0.214, 0.003, 0.0255, 0.0245, 0.0245, [0.06, 0, -0.05], chiamoHeadProjMat);
-    makeBakedEllipsoid(-0.032, 0.236, -0.005, 0.0165, 0.0145, 0.0135, [0, 0.15, 0.35], chiamoBodyProjMat);
-    makeBakedEllipsoid(0.038, 0.242, -0.006, 0.0165, 0.0145, 0.0135, [0, -0.15, -0.35], chiamoBodyProjMat);
-
-    // 8. Sculpted Back-Hair Curtain + Flared Spiral Curls (solid back core + thick 3D cutout curl wings)
-    makeBakedEllipsoid(0.005, 0.172, -0.025, 0.0195, 0.042, 0.0105, [0.10, 0, 0], chiamoBodyProjMat);
-
-    // Helper: create curved multi-layer 3D photo-cutout relief with exact unified world UV mapping
-    const chiamoCutoutFrontMat = new THREE.MeshPhysicalMaterial({
-      map: chiamoFrontAlphaTex,
-      roughness: 0.32,
-      metalness: 0.04,
-      clearcoat: 0.36,
-      alphaTest: 0.38,
-      side: THREE.DoubleSide,
-    });
-    const chiamoCutoutBackMat = new THREE.MeshPhysicalMaterial({
-      map: chiamoBackAlphaTex,
-      roughness: 0.32,
-      metalness: 0.04,
-      clearcoat: 0.36,
-      alphaTest: 0.38,
-      side: THREE.DoubleSide,
-    });
-
-    const addCurvedCutoutRelief = (
-      xMin: number,
-      xMax: number,
-      yMin: number,
-      yMax: number,
-      zCenter: number,
-      curveZ: number,
-      thickness: number,
-      yaw: number,
-      useFrontAlpha: boolean
-    ) => {
-      const segX = 12;
-      const segY = 12;
-      const geo = new THREE.PlaneGeometry(xMax - xMin, yMax - yMin, segX, segY);
-      const posAttr = geo.attributes.position as THREE.BufferAttribute;
-      const uvAttr = geo.attributes.uv as THREE.BufferAttribute;
-      const cx = (xMin + xMax) / 2;
-      const cy = (yMin + yMax) / 2;
-      for (let i = 0; i < posAttr.count; i++) {
-        const lx = posAttr.getX(i);
-        const ly = posAttr.getY(i);
-        const nx = lx / ((xMax - xMin) / 2);
-        const wx = cx + lx;
-        const wy = cy + ly;
-        const dz = (1 - nx * nx) * curveZ;
-        posAttr.setXYZ(i, lx, ly, dz);
-        const fy = (wy - -0.010) / 0.280;
-        const u = useFrontAlpha ? 0.5 + wx / 0.210 : 0.5 - wx / 0.210;
-        uvAttr.setXY(i, u, fy);
-      }
-      geo.computeVertexNormals();
-
-      const grp = new THREE.Group();
-      grp.position.set(cx, cy, zCenter);
-      grp.rotation.y = yaw;
-      [-thickness / 2, 0, thickness / 2].forEach((oz, li) => {
-        const mat = li === 0 && !useFrontAlpha ? chiamoCutoutBackMat : useFrontAlpha ? chiamoCutoutFrontMat : chiamoCutoutBackMat;
-        const layer = new THREE.Mesh(geo, mat);
-        layer.position.z = oz;
-        layer.castShadow = li === 1;
-        grp.add(layer);
-      });
-      chiamoNewGroup.add(grp);
-    };
-
-    // Twin Splayed Purple-Claw Hands & Pink Wrist Ribbons framing cheeks (exact hand regions)
-    addCurvedCutoutRelief(-0.044, -0.012, 0.186, 0.234, 0.025, 0.004, 0.0028, 0.22, true);
-    addCurvedCutoutRelief(0.019, 0.050, 0.186, 0.234, 0.025, 0.004, 0.0028, -0.22, true);
-
-    // Dual Dark-Navy Double-Wing Butterfly Hair Clips on Crown
-    addCurvedCutoutRelief(-0.028, -0.006, 0.224, 0.266, 0.002, 0.003, 0.0032, 0.35, true);
-    addCurvedCutoutRelief(0.008, 0.036, 0.224, 0.266, 0.001, 0.003, 0.0032, -0.35, true);
-
-    // Flared Outward-Curled Back Hair Spirals (left & right hip wings from real back hair photo!)
-    addCurvedCutoutRelief(-0.056, -0.014, 0.122, 0.185, -0.026, -0.005, 0.0055, -0.24, false);
-    addCurvedCutoutRelief(0.018, 0.060, 0.122, 0.185, -0.026, -0.005, 0.0055, 0.24, false);
+    const chiamoNewGroup = createChiamoColorBoxGroup();
 
     // Placed on the far-left of the 2nd tier from the top of the right-side cabinet (右邊櫃子第二層最左邊)
     chiamoNewGroup.position.set(
-      cabInnerLeftX + 0.025 + CHIAMO_BASE_R,
+      cabInnerLeftX + 0.025 + CBOX_W / 2,
       secondFromTopFloorY,
-      0.065
+      0.075
     );
     chiamoNewGroup.rotation.y = -0.06;
     cabinetGroup.add(chiamoNewGroup);
@@ -4174,7 +4254,7 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
       const ctx = canvas.getContext('2d');
       if (!ctx) return new THREE.Texture();
 
-      ctx.fillStyle = '#383633';
+      ctx.fillStyle = '#56534e';
       ctx.fillRect(0, 0, 1024, 1024);
 
       const rows = 16;
@@ -4182,8 +4262,8 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
       const plankCols = 4;
       const colWidth = 1024 / plankCols;
       const grayOakPalette = [
-        '#5f5c57', '#56534e', '#66635e', '#4f4c47',
-        '#5a5752', '#625f5a', '#524f4a', '#585550',
+        '#837f79', '#79756f', '#8b8781', '#716d67',
+        '#7e7a74', '#86827c', '#75716b', '#7c7872',
       ];
 
       for (let r = 0; r < rows; r++) {
@@ -4195,16 +4275,16 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
           ctx.fillStyle = grayOakPalette[colorIdx % grayOakPalette.length];
           ctx.fillRect(x + 1, y + 1, colWidth - 2, rowHeight - 2);
 
-          ctx.fillStyle = 'rgba(28, 26, 24, 0.24)';
+          ctx.fillStyle = 'rgba(42, 39, 36, 0.19)';
           for (let g = 3; g < rowHeight - 3; g += 5) {
             ctx.fillRect(x + 2, y + g, colWidth - 4, 1.3);
           }
-          ctx.fillStyle = 'rgba(180, 176, 170, 0.08)';
+          ctx.fillStyle = 'rgba(218, 214, 208, 0.11)';
           for (let g = 6; g < rowHeight - 3; g += 8) {
             ctx.fillRect(x + 2, y + g, colWidth - 4, 1);
           }
 
-          ctx.fillStyle = 'rgba(34, 32, 30, 0.72)';
+          ctx.fillStyle = 'rgba(48, 45, 42, 0.54)';
           ctx.fillRect(x, y + rowHeight - 2, colWidth, 2);
           ctx.fillRect(x + colWidth - 2, y, 2, rowHeight);
         }
@@ -4313,6 +4393,179 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
       texture.colorSpace = THREE.SRGBColorSpace;
       texture.wrapS = THREE.RepeatWrapping;
       texture.wrapT = THREE.RepeatWrapping;
+      return texture;
+    };
+
+    const createWhiteOakWoodTexture = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return new THREE.Texture();
+
+      // Natural warm pale Scandinavian White Oak (白橡木色)
+      const grad = ctx.createLinearGradient(0, 0, 512, 0);
+      grad.addColorStop(0.0, '#dfd0b8');
+      grad.addColorStop(0.32, '#e8dcc8');
+      grad.addColorStop(0.68, '#d8c7ad');
+      grad.addColorStop(1.0, '#e5d8c2');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 512, 512);
+
+      // Subtle vertical oak plank variation & cathedral grain lines
+      for (let i = 0; i < 4; i++) {
+        const px = i * 128;
+        ctx.fillStyle = i % 2 === 0 ? 'rgba(255, 250, 240, 0.14)' : 'rgba(155, 132, 102, 0.08)';
+        ctx.fillRect(px, 0, 128, 512);
+        ctx.fillStyle = 'rgba(130, 108, 82, 0.16)';
+        ctx.fillRect(px, 0, 1.5, 512);
+      }
+
+      for (let x = 0; x < 512; x += 3) {
+        const alpha = 0.05 + (((x * 19) % 7) / 7) * 0.08;
+        ctx.fillStyle = `rgba(138, 114, 86, ${alpha.toFixed(2)})`;
+        ctx.fillRect(x, 0, 1.4, 512);
+      }
+
+      // Delicate white-oak medullary rays / grain flecks
+      ctx.strokeStyle = 'rgba(128, 105, 78, 0.13)';
+      ctx.lineWidth = 1.1;
+      for (let i = 0; i < 26; i++) {
+        const gx = (i * 41 + 17) % 512;
+        ctx.beginPath();
+        ctx.moveTo(gx, 0);
+        ctx.bezierCurveTo(
+          gx + ((i % 3) - 1) * 8,
+          170,
+          gx - ((i % 3) - 1) * 7,
+          340,
+          gx + ((i % 2) === 0 ? 4 : -4),
+          512
+        );
+        ctx.stroke();
+      }
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      extraRoomTexturesToDispose.push(texture);
+      return texture;
+    };
+
+    const createHandwrittenZhaWuTexture = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 600;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return new THREE.Texture();
+
+      // Warm cream memo paper sheet with subtle edge shading
+      ctx.fillStyle = '#fcf9ee';
+      ctx.fillRect(0, 0, 512, 600);
+
+      const paperGrad = ctx.createLinearGradient(0, 0, 512, 600);
+      paperGrad.addColorStop(0, 'rgba(255, 255, 255, 0.35)');
+      paperGrad.addColorStop(1, 'rgba(218, 206, 182, 0.25)');
+      ctx.fillStyle = paperGrad;
+      ctx.fillRect(0, 0, 512, 600);
+
+      // Subtle ruled lines on note paper
+      ctx.strokeStyle = 'rgba(170, 188, 208, 0.32)';
+      ctx.lineWidth = 2;
+      for (let y = 135; y <= 545; y += 68) {
+        ctx.beginPath();
+        ctx.moveTo(42, y);
+        ctx.lineTo(470, y);
+        ctx.stroke();
+      }
+
+      // Soft paper border crease
+      ctx.strokeStyle = 'rgba(180, 168, 146, 0.45)';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(2, 2, 508, 596);
+
+      // Handwritten black marker brush/pen strokes for 「雜物」
+      ctx.save();
+      ctx.strokeStyle = '#1e242c';
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      const strokePath = (
+        pts: [number, number][],
+        width: number,
+        ctrlIdx?: number
+      ) => {
+        ctx.lineWidth = width;
+        ctx.beginPath();
+        ctx.moveTo(pts[0][0], pts[0][1]);
+        if (pts.length === 2) {
+          ctx.lineTo(pts[1][0], pts[1][1]);
+        } else if (pts.length === 3 && ctrlIdx === undefined) {
+          ctx.quadraticCurveTo(pts[1][0], pts[1][1], pts[2][0], pts[2][1]);
+        } else {
+          for (let i = 1; i < pts.length; i++) {
+            ctx.lineTo(pts[i][0], pts[i][1]);
+          }
+        }
+        ctx.stroke();
+      };
+
+      // Slight organic handwritten tilt for both characters
+      ctx.translate(256, 315);
+      ctx.rotate(-0.035);
+      ctx.translate(-256, -315);
+
+      // --- Character 1: 「雜」 (Upper half: y ~ 88..280, x ~ 125..385) ---
+      // Left-top: 亠 + 从 (simplified crisp handwritten rhythm)
+      strokePath([[178, 92], [186, 114]], 10.5); // dot
+      strokePath([[132, 126], [182, 120], [234, 117]], 9.5); // horizontal
+      strokePath([[162, 134], [150, 155], [134, 174]], 8.5); // left person pie
+      strokePath([[157, 152], [176, 171]], 8.5); // left person na
+      strokePath([[210, 131], [198, 154], [182, 172]], 8.5); // right person pie
+      strokePath([[204, 150], [228, 169]], 8.5); // right person na
+
+      // Left-bottom: 木
+      strokePath([[134, 198], [184, 194], [230, 191]], 9.5); // horizontal
+      strokePath([[182, 178], [181, 232], [182, 286]], 10); // vertical
+      strokePath([[180, 199], [158, 235], [130, 266]], 9); // left stroke
+      strokePath([[186, 208], [218, 240]], 8.5); // right dot
+
+      // Right side: 隹
+      strokePath([[284, 96], [266, 146], [244, 184]], 9.5); // pie
+      strokePath([[265, 142], [264, 212], [264, 286]], 10); // vertical
+      strokePath([[326, 98], [336, 122]], 9.5); // top dot
+      strokePath([[268, 135], [326, 130], [374, 127]], 9.5); // top horizontal
+      strokePath([[324, 133], [323, 206], [323, 268]], 9.5); // center vertical
+      strokePath([[268, 178], [322, 174], [364, 171]], 8.5); // mid bar 1
+      strokePath([[268, 222], [322, 218], [364, 215]], 8.5); // mid bar 2
+      strokePath([[266, 272], [328, 268], [382, 266]], 10); // bottom horizontal
+
+      // --- Character 2: 「物」 (Lower half: y ~ 336..540, x ~ 132..384) ---
+      // Left radical: 牜
+      strokePath([[154, 358], [146, 392], [134, 422]], 9.5); // short pie
+      strokePath([[149, 396], [186, 390], [220, 385]], 9.5); // horizontal
+      strokePath([[186, 338], [184, 444], [183, 542]], 10.5); // vertical
+      strokePath([[134, 466], [180, 446], [224, 428]], 9.5); // rising cross stroke
+
+      // Right radical: 勿
+      strokePath([[274, 340], [258, 382], [238, 418]], 9.5); // left pie
+      strokePath([
+        [262, 382],
+        [326, 376],
+        [374, 372],
+        [366, 462],
+        [350, 526],
+        [322, 502],
+      ], 10); // outer hook curve
+      strokePath([[298, 380], [276, 428], [248, 468]], 9); // inner pie 1
+      strokePath([[334, 378], [304, 442], [260, 508]], 9.5); // inner pie 2
+
+      ctx.restore();
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      extraRoomTexturesToDispose.push(texture);
       return texture;
     };
 
@@ -4509,7 +4762,172 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
       });
 
       // Door in exact same relative front-left corner offset (-3.65, 0, -3.50)
-      // Dial has 3 Black sectors (Right/Bottom/Left) and ONLY Top is Bright Silver (亮銀色)
+      // For Pink Room ('pink'): Nordic White Birch Rustic Arched Wooden Door + cute bunny-eared 「阿璃的房間」 wooden plaque
+      let pinkOakDoorTex: THREE.Texture | undefined;
+      let pinkCutePlaqueTex: THREE.Texture | undefined;
+      if (roomId === 'pink') {
+        const oakCanvas = document.createElement('canvas');
+        oakCanvas.width = 512;
+        oakCanvas.height = 512;
+        const oCtx = oakCanvas.getContext('2d');
+        if (oCtx) {
+          const oakGrad = oCtx.createLinearGradient(0, 0, 512, 0);
+          oakGrad.addColorStop(0.0, '#eadbc4');
+          oakGrad.addColorStop(0.25, '#f2e6d3');
+          oakGrad.addColorStop(0.5, '#e8d8bf');
+          oakGrad.addColorStop(0.75, '#f3e8d6');
+          oakGrad.addColorStop(1.0, '#e5d4ba');
+          oCtx.fillStyle = oakGrad;
+          oCtx.fillRect(0, 0, 512, 512);
+
+          for (let p = 0; p < 5; p++) {
+            const px = (p * 512) / 5;
+            oCtx.fillStyle = p % 2 === 0 ? 'rgba(255, 252, 246, 0.16)' : 'rgba(155, 128, 96, 0.06)';
+            oCtx.fillRect(px, 0, 512 / 5, 512);
+          }
+
+          for (let x = 0; x < 512; x += 3) {
+            const alpha = 0.04 + (((x * 17) % 9) / 9) * 0.06;
+            oCtx.fillStyle = `rgba(148, 118, 86, ${alpha.toFixed(2)})`;
+            oCtx.fillRect(x, 0, 1.4, 512);
+          }
+
+          oCtx.strokeStyle = 'rgba(142, 112, 80, 0.15)';
+          oCtx.lineWidth = 1.2;
+          for (let i = 0; i < 24; i++) {
+            const gx = (i * 43 + 11) % 512;
+            oCtx.beginPath();
+            oCtx.moveTo(gx, 0);
+            oCtx.bezierCurveTo(
+              gx + ((i % 3) - 1) * 9,
+              170,
+              gx - ((i % 3) - 1) * 8,
+              340,
+              gx + ((i % 2) === 0 ? 4 : -4),
+              512
+            );
+            oCtx.stroke();
+          }
+
+          // Subtle characteristic tiny pale-tan birch pin knots
+          oCtx.fillStyle = 'rgba(142, 112, 80, 0.18)';
+          [
+            [86, 132, 6, 3.2],
+            [295, 248, 7.5, 3.5],
+            [420, 388, 5.5, 2.8],
+            [178, 412, 6.2, 3.0],
+          ].forEach(([kx, ky, krx, kry]) => {
+            oCtx.beginPath();
+            oCtx.ellipse(kx, ky, krx, kry, 0.25, 0, Math.PI * 2);
+            oCtx.fill();
+          });
+        }
+        pinkOakDoorTex = new THREE.CanvasTexture(oakCanvas);
+        pinkOakDoorTex.colorSpace = THREE.SRGBColorSpace;
+        pinkOakDoorTex.wrapS = THREE.RepeatWrapping;
+        pinkOakDoorTex.wrapT = THREE.RepeatWrapping;
+        pinkOakDoorTex.repeat.set(1.0, 0.46);
+        pinkOakDoorTex.needsUpdate = true;
+        extraRoomTexturesToDispose.push(pinkOakDoorTex);
+
+        const plaqueCanvas = document.createElement('canvas');
+        plaqueCanvas.width = 768;
+        plaqueCanvas.height = 256;
+        const pCtx = plaqueCanvas.getContext('2d');
+        const plaqueTex = new THREE.CanvasTexture(plaqueCanvas);
+        plaqueTex.colorSpace = THREE.SRGBColorSpace;
+        plaqueTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+        const renderCutePlaque = () => {
+          if (!pCtx) return;
+          // Warm pale honey-cream wood plaque background
+          const bg = pCtx.createLinearGradient(0, 0, 768, 256);
+          bg.addColorStop(0.0, '#fbf1df');
+          bg.addColorStop(0.5, '#fdf7eb');
+          bg.addColorStop(1.0, '#f6e7cc');
+          pCtx.fillStyle = bg;
+          pCtx.fillRect(0, 0, 768, 256);
+
+          // Delicate wood grain lines
+          for (let y = 0; y < 256; y += 5) {
+            pCtx.fillStyle = y % 10 === 0 ? 'rgba(160, 118, 72, 0.06)' : 'rgba(255, 255, 255, 0.22)';
+            pCtx.fillRect(0, y, 768, 1.5);
+          }
+
+          // Cute rounded pastel-pink double stitched border
+          const drawRoundRect = (x: number, y: number, w: number, h: number, r: number) => {
+            pCtx.beginPath();
+            pCtx.moveTo(x + r, y);
+            pCtx.lineTo(x + w - r, y);
+            pCtx.quadraticCurveTo(x + w, y, x + w, y + r);
+            pCtx.lineTo(x + w, y + h - r);
+            pCtx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+            pCtx.lineTo(x + r, y + h);
+            pCtx.quadraticCurveTo(x, y + h, x, y + h - r);
+            pCtx.lineTo(x, y + r);
+            pCtx.quadraticCurveTo(x, y, x + r, y);
+            pCtx.closePath();
+          };
+
+          pCtx.strokeStyle = '#f298b6';
+          pCtx.lineWidth = 6;
+          drawRoundRect(16, 16, 736, 224, 34);
+          pCtx.stroke();
+
+          pCtx.save();
+          pCtx.setLineDash([12, 8]);
+          pCtx.strokeStyle = '#f6b8cc';
+          pCtx.lineWidth = 3;
+          drawRoundRect(28, 28, 712, 200, 26);
+          pCtx.stroke();
+          pCtx.restore();
+
+          // Cute tiny pink hearts on left & right corners
+          const drawCuteHeart = (cx: number, cy: number, s: number, fill: string) => {
+            pCtx.save();
+            pCtx.translate(cx, cy);
+            pCtx.scale(s, s);
+            pCtx.fillStyle = fill;
+            pCtx.beginPath();
+            pCtx.moveTo(0, 12);
+            pCtx.bezierCurveTo(-18, -2, -20, -18, -9, -18);
+            pCtx.bezierCurveTo(-2, -18, 0, -10, 0, -10);
+            pCtx.bezierCurveTo(0, -10, 2, -18, 9, -18);
+            pCtx.bezierCurveTo(20, -18, 18, -2, 0, 12);
+            pCtx.fill();
+            pCtx.restore();
+          };
+
+          drawCuteHeart(86, 126, 1.35, '#f497b6');
+          drawCuteHeart(682, 126, 1.35, '#f497b6');
+          drawCuteHeart(116, 86, 0.72, '#9ecae8');
+          drawCuteHeart(652, 166, 0.72, '#9ecae8');
+
+          // Cute rounded lettering 「阿璃的房間」
+          pCtx.textAlign = 'center';
+          pCtx.textBaseline = 'middle';
+          pCtx.font = '900 84px "Zen Maru Gothic", "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", sans-serif';
+
+          pCtx.fillStyle = 'rgba(244, 151, 182, 0.35)';
+          pCtx.fillText('阿璃的房間', 387, 134);
+
+          pCtx.fillStyle = '#5a3826';
+          pCtx.fillText('阿璃的房間', 384, 130);
+
+          plaqueTex.needsUpdate = true;
+        };
+
+        renderCutePlaque();
+        if (typeof document !== 'undefined' && document.fonts) {
+          document.fonts.ready.then(() => {
+            renderCutePlaque();
+          });
+        }
+
+        extraRoomTexturesToDispose.push(plaqueTex);
+        pinkCutePlaqueTex = plaqueTex;
+      }
+
       const cPortalDoor = createPortalDoorAndDial({
         colors: roomState.colors,
         hasColorSlot: roomState.hasColorSlot,
@@ -4518,6 +4936,9 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
         showFloorLabel: roomId === 'pink',
         floorLabelTexture: roomId === 'pink' ? doorB1EngravingTex : undefined,
         accentWoodTint: theme.accentWoodTint,
+        isRusticArchedOak: roomId === 'pink',
+        oakDoorTexture: pinkOakDoorTex,
+        cuteRoomPlaqueTexture: pinkCutePlaqueTex,
       });
       cPortalDoor.doorGroup.position.set(-3.65, 0, -PR_SIZE / 2);
       coloredRoomGroup.add(cPortalDoor.doorGroup);
@@ -4595,130 +5016,958 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
       coloredRoomGroup.add(cDoorAccentLight);
 
       if (roomId === 'pink') {
-        // 120×60 cm Dorm-Style Corner Study Desk (1.20m wide × 0.60m deep × 0.74m tall)
+        // 120×60 cm White-Top Tech Z-Frame White & Blue Gaming Desk (白色桌面＋Z字形科技感白藍色電競腳)
         const DESK_W = 1.20;
         const DESK_D = 0.60;
         const DESK_H = 0.74;
-        const TOP_T = 0.026;
+        const TOP_T = 0.028;
         const LEG_H = DESK_H - TOP_T;
 
         const deskGroup = new THREE.Group();
         deskGroup.position.set(2.0 - 0.04 - DESK_W / 2, 0, -PR_SIZE / 2 + 0.04 + DESK_D / 2);
 
-        const deskWoodTex = lightWoodBaseTex.clone();
-        deskWoodTex.repeat.set(1.6, 0.9);
-        deskWoodTex.needsUpdate = true;
-        extraRoomTexturesToDispose.push(deskWoodTex);
-
-        const deskTopMat = new THREE.MeshStandardMaterial({
-          map: deskWoodTex,
-          color: 0xf0e0cc,
-          roughness: 0.34,
+        const deskWhiteTopMat = new THREE.MeshPhysicalMaterial({
+          color: 0xfafcff,
+          roughness: 0.26,
           metalness: 0.03,
+          clearcoat: 0.35,
+          clearcoatRoughness: 0.28,
         });
-        const dormWhiteMat = new THREE.MeshStandardMaterial({
-          color: 0xf6f4f0,
-          roughness: 0.42,
-          metalness: 0.05,
+        const deskFrameWhiteMat = new THREE.MeshStandardMaterial({
+          color: 0xf4f7fb,
+          roughness: 0.34,
+          metalness: 0.22,
         });
-        const dormDrawerMat = new THREE.MeshStandardMaterial({
-          color: 0xffffff,
-          roughness: 0.36,
-          metalness: 0.04,
-        });
-        const dormSilverMat = new THREE.MeshStandardMaterial({
-          color: 0xd1d5db,
+        const deskTechBlueMat = new THREE.MeshStandardMaterial({
+          color: 0x4db5f5,
+          emissive: 0x2689cf,
+          emissiveIntensity: 0.32,
           roughness: 0.28,
-          metalness: 0.78,
+          metalness: 0.38,
         });
-        const dormFootPadMat = new THREE.MeshStandardMaterial({
-          color: 0x374151,
-          roughness: 0.75,
+        const deskInnerSteelMat = new THREE.MeshStandardMaterial({
+          color: 0xdbe3ec,
+          roughness: 0.30,
+          metalness: 0.65,
+        });
+        const deskDarkTrimMat = new THREE.MeshStandardMaterial({
+          color: 0x2a3342,
+          roughness: 0.65,
+          metalness: 0.20,
         });
 
-        // Tabletop slab (120×60 cm light oak dorm desktop)
-        const desktop = new THREE.Mesh(new THREE.BoxGeometry(DESK_W, TOP_T, DESK_D), deskTopMat);
+        // Clean Matte-White Gaming Tabletop Slab + Subtle Front-Side Sky-Blue Tech Trim Line
+        const desktop = new THREE.Mesh(
+          new THREE.BoxGeometry(DESK_W, TOP_T, DESK_D),
+          deskWhiteTopMat
+        );
         desktop.position.y = DESK_H - TOP_T / 2;
         desktop.castShadow = true;
         desktop.receiveShadow = true;
         deskGroup.add(desktop);
 
-        // Slim under-desk dorm drawer box & dual flat-front drawers facing +Z
-        const apronH = 0.088;
-        const apronD = DESK_D - 0.07;
-        const apron = new THREE.Mesh(
-          new THREE.BoxGeometry(DESK_W - 0.08, apronH, apronD),
-          dormWhiteMat
-        );
-        apron.position.y = LEG_H - apronH / 2;
-        apron.castShadow = true;
-        apron.receiveShadow = true;
-        deskGroup.add(apron);
-
-        [-0.275, 0.275].forEach((dx) => {
-          const drawerFace = new THREE.Mesh(
-            new THREE.BoxGeometry(0.51, 0.068, 0.014),
-            dormDrawerMat
+        // Sleek chamfered white & sky-blue side edge accents along tabletop perimeter
+        [-1, 1].forEach((side) => {
+          const sideEdgeStrip = new THREE.Mesh(
+            new THREE.BoxGeometry(0.008, 0.009, DESK_D - 0.04),
+            deskTechBlueMat
           );
-          drawerFace.position.set(dx, LEG_H - apronH / 2, apronD / 2 + 0.007);
-          drawerFace.castShadow = true;
-          deskGroup.add(drawerFace);
-
-          const barPull = new THREE.Mesh(
-            new THREE.BoxGeometry(0.11, 0.009, 0.012),
-            dormSilverMat
-          );
-          barPull.position.set(dx, LEG_H - apronH / 2, apronD / 2 + 0.018);
-          deskGroup.add(barPull);
+          sideEdgeStrip.position.set(side * (DESK_W / 2 + 0.002), DESK_H - TOP_T / 2, 0);
+          deskGroup.add(sideEdgeStrip);
         });
 
-        // 4 Clean White Dorm Frame Legs + Glides + Side/Rear Crossbars
-        const legOffX = DESK_W / 2 - 0.055;
-        const legOffZ = DESK_D / 2 - 0.055;
-        [
-          [-legOffX, -legOffZ],
-          [legOffX, -legOffZ],
-          [-legOffX, legOffZ],
-          [legOffX, legOffZ],
-        ].forEach(([lx, lz]) => {
-          const leg = new THREE.Mesh(new THREE.BoxGeometry(0.038, LEG_H, 0.038), dormWhiteMat);
-          leg.position.set(lx, LEG_H / 2, lz);
-          leg.castShadow = true;
-          leg.receiveShadow = true;
-          deskGroup.add(leg);
-
-          const footPad = new THREE.Mesh(new THREE.BoxGeometry(0.040, 0.012, 0.040), dormFootPadMat);
-          footPad.position.set(lx, 0.006, lz);
-          deskGroup.add(footPad);
-        });
-
-        [-legOffX, legOffX].forEach((lx) => {
-          const sideRail = new THREE.Mesh(
-            new THREE.BoxGeometry(0.024, 0.026, DESK_D - 0.12),
-            dormWhiteMat
+        // Twin rear cable grommet ports on white desktop
+        [-0.36, 0.36].forEach((gx) => {
+          const grommetRing = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.025, 0.025, 0.004, 18),
+            deskDarkTrimMat
           );
-          sideRail.position.set(lx, 0.18, 0);
-          sideRail.castShadow = true;
-          deskGroup.add(sideRail);
+          grommetRing.position.set(gx, DESK_H + 0.001, -DESK_D / 2 + 0.065);
+          deskGroup.add(grommetRing);
+
+          const grommetInnerBlue = new THREE.Mesh(
+            new THREE.TorusGeometry(0.023, 0.0022, 8, 20),
+            deskTechBlueMat
+          );
+          grommetInnerBlue.rotation.x = Math.PI / 2;
+          grommetInnerBlue.position.set(gx, DESK_H + 0.0025, -DESK_D / 2 + 0.065);
+          deskGroup.add(grommetInnerBlue);
         });
 
-        const backRail = new THREE.Mesh(
-          new THREE.BoxGeometry(DESK_W - 0.12, 0.028, 0.024),
-          dormWhiteMat
-        );
-        backRail.position.set(0, 0.18, -legOffZ);
-        backRail.castShadow = true;
-        deskGroup.add(backRail);
+        // Left & Right Z-Shaped Tech White & Blue Gaming Desk Legs
+        const zLegOffX = DESK_W / 2 - 0.075;
+        const SLED_Z_SPAN = 0.52;
+        const TOP_ARM_Y = LEG_H - 0.022;
+        const BOT_SLED_Y = 0.024;
 
-        const modestyBar = new THREE.Mesh(
-          new THREE.BoxGeometry(DESK_W - 0.12, 0.055, 0.018),
-          dormWhiteMat
+        [-1, 1].forEach((side) => {
+          const zLeg = new THREE.Group();
+          zLeg.position.set(side * zLegOffX, 0, 0);
+
+          // 1. Bottom horizontal sled runner (with chamfered ends + sky-blue armor stripe + leveling feet)
+          const sledCore = new THREE.Mesh(
+            new THREE.BoxGeometry(0.048, 0.032, SLED_Z_SPAN),
+            deskFrameWhiteMat
+          );
+          sledCore.position.set(0, BOT_SLED_Y, 0);
+          sledCore.castShadow = true;
+          sledCore.receiveShadow = true;
+          zLeg.add(sledCore);
+
+          [-SLED_Z_SPAN / 2, SLED_Z_SPAN / 2].forEach((capZ) => {
+            const sledNose = new THREE.Mesh(
+              new THREE.BoxGeometry(0.048, 0.024, 0.026),
+              deskInnerSteelMat
+            );
+            sledNose.position.set(0, BOT_SLED_Y - 0.004, capZ + Math.sign(capZ) * 0.010);
+            sledNose.rotation.x = Math.sign(capZ) * 0.35;
+            zLeg.add(sledNose);
+          });
+
+          // Side sky-blue tech stripe on sled runner
+          const sledBlueInlay = new THREE.Mesh(
+            new THREE.BoxGeometry(0.052, 0.010, SLED_Z_SPAN - 0.09),
+            deskTechBlueMat
+          );
+          sledBlueInlay.position.set(0, BOT_SLED_Y, 0);
+          zLeg.add(sledBlueInlay);
+
+          // Rubber floor leveling glides at front & back of sled
+          [-0.22, 0.22].forEach((fz) => {
+            const glide = new THREE.Mesh(
+              new THREE.CylinderGeometry(0.018, 0.021, 0.012, 14),
+              deskDarkTrimMat
+            );
+            glide.position.set(0, 0.006, fz);
+            zLeg.add(glide);
+          });
+
+          // 2. Top under-desk horizontal mounting arm
+          const topArm = new THREE.Mesh(
+            new THREE.BoxGeometry(0.048, 0.030, SLED_Z_SPAN - 0.02),
+            deskFrameWhiteMat
+          );
+          topArm.position.set(0, TOP_ARM_Y, 0);
+          topArm.castShadow = true;
+          zLeg.add(topArm);
+
+          const topFlangePlate = new THREE.Mesh(
+            new THREE.BoxGeometry(0.095, 0.010, SLED_Z_SPAN - 0.04),
+            deskInnerSteelMat
+          );
+          topFlangePlate.position.set(0, LEG_H - 0.005, 0);
+          zLeg.add(topFlangePlate);
+
+          const topBlueAccent = new THREE.Mesh(
+            new THREE.BoxGeometry(0.052, 0.009, SLED_Z_SPAN - 0.10),
+            deskTechBlueMat
+          );
+          topBlueAccent.position.set(0, TOP_ARM_Y, 0);
+          zLeg.add(topBlueAccent);
+
+          // 3. Diagonal Z-Spine running from upper front (+Z) down to lower rear (-Z)
+          const zTopFrontPt = new THREE.Vector3(0, TOP_ARM_Y - 0.005, 0.185);
+          const zBotBackPt = new THREE.Vector3(0, BOT_SLED_Y + 0.005, -0.190);
+          const zDiagVec = new THREE.Vector3().subVectors(zTopFrontPt, zBotBackPt);
+          const zDiagLen = zDiagVec.length();
+          const zDiagQuat = new THREE.Quaternion().setFromUnitVectors(
+            new THREE.Vector3(0, 1, 0),
+            zDiagVec.clone().normalize()
+          );
+
+          const zDiagBeam = new THREE.Mesh(
+            new THREE.BoxGeometry(0.046, zDiagLen, 0.068),
+            deskFrameWhiteMat
+          );
+          zDiagBeam.position.addVectors(zTopFrontPt, zBotBackPt).multiplyScalar(0.5);
+          zDiagBeam.quaternion.copy(zDiagQuat);
+          zDiagBeam.castShadow = true;
+          zDiagBeam.receiveShadow = true;
+          zLeg.add(zDiagBeam);
+
+          // Outer & inner tech armor plate + glowing ice-blue accent ridge on diagonal Z-beam
+          const zArmorOuter = new THREE.Mesh(
+            new THREE.BoxGeometry(0.054, zDiagLen * 0.72, 0.044),
+            deskInnerSteelMat
+          );
+          zArmorOuter.position.copy(zDiagBeam.position);
+          zArmorOuter.quaternion.copy(zDiagQuat);
+          zLeg.add(zArmorOuter);
+
+          const zBlueChannel = new THREE.Mesh(
+            new THREE.BoxGeometry(0.057, zDiagLen * 0.64, 0.016),
+            deskTechBlueMat
+          );
+          zBlueChannel.position.copy(zDiagBeam.position);
+          zBlueChannel.quaternion.copy(zDiagQuat);
+          zLeg.add(zBlueChannel);
+
+          // Mechanical vertex gusset brackets at upper-front & lower-rear Z corners
+          [zTopFrontPt, zBotBackPt].forEach((vPt) => {
+            const gusset = new THREE.Mesh(
+              new THREE.BoxGeometry(0.054, 0.046, 0.082),
+              deskDarkTrimMat
+            );
+            gusset.position.copy(vPt);
+            zLeg.add(gusset);
+          });
+
+          deskGroup.add(zLeg);
+        });
+
+        // Under-desk steel frame crossbeams & rear white+blue structural crossbar
+        [-0.17, 0.16].forEach((rz) => {
+          const underBeam = new THREE.Mesh(
+            new THREE.BoxGeometry(DESK_W - 0.15, 0.024, 0.028),
+            deskFrameWhiteMat
+          );
+          underBeam.position.set(0, LEG_H - 0.014, rz);
+          underBeam.castShadow = true;
+          deskGroup.add(underBeam);
+        });
+
+        const rearCrossbar = new THREE.Mesh(
+          new THREE.BoxGeometry(DESK_W - 0.16, 0.042, 0.022),
+          deskFrameWhiteMat
         );
-        modestyBar.position.set(0, LEG_H - apronH - 0.035, -legOffZ);
-        modestyBar.castShadow = true;
-        deskGroup.add(modestyBar);
+        rearCrossbar.position.set(0, 0.35, -0.19);
+        rearCrossbar.castShadow = true;
+        deskGroup.add(rearCrossbar);
+
+        const rearBlueStripe = new THREE.Mesh(
+          new THREE.BoxGeometry(DESK_W - 0.24, 0.012, 0.025),
+          deskTechBlueMat
+        );
+        rearBlueStripe.position.set(0, 0.35, -0.19);
+        deskGroup.add(rearBlueStripe);
+
+        // Under-desk rear cable management tray
+        const cableTray = new THREE.Mesh(
+          new THREE.BoxGeometry(DESK_W - 0.32, 0.036, 0.085),
+          deskInnerSteelMat
+        );
+        cableTray.position.set(0, LEG_H - 0.065, -0.18);
+        deskGroup.add(cableTray);
 
         coloredRoomGroup.add(deskGroup);
+
+        // Slightly Larger Identical Makai Ririmu Plushie Pouch on Left Corner of Study Desk (書桌左邊角落的稍大版莉莉姆娃包)
+        const pinkRirimuBag = createRirimuBagGroup(false);
+        pinkRirimuBag.scale.setScalar(1.28);
+        pinkRirimuBag.position.set(-DESK_W / 2 + 0.15, DESK_H, -DESK_D / 2 + 0.17);
+        pinkRirimuBag.rotation.y = 0.34;
+        deskGroup.add(pinkRirimuBag);
+
+        // Jumbo Support Uchiwa Fan in Clear Zippered Cover hanging on Wall Right of Room Door (門右側牆面吊掛之「Happy Valentine's Day♡」應援推扇)
+        const uchiwaFrontTex = textureLoader.load('/assets/uchiwa_fan_front.png');
+        uchiwaFrontTex.colorSpace = THREE.SRGBColorSpace;
+        uchiwaFrontTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+        extraRoomTexturesToDispose.push(uchiwaFrontTex);
+
+        const uchiwaFanGroup = new THREE.Group();
+        const UW_R = 0.148;
+        const UW_SCALE_Y = 0.875;
+
+        const uchiwaBackCardMat = new THREE.MeshStandardMaterial({
+          color: 0xfaf7f2,
+          roughness: 0.72,
+          metalness: 0.01,
+        });
+        const uchiwaArtMat = new THREE.MeshPhysicalMaterial({
+          map: uchiwaFrontTex,
+          transparent: true,
+          alphaTest: 0.15,
+          roughness: 0.24,
+          metalness: 0.01,
+          clearcoat: 0.68,
+          clearcoatRoughness: 0.12,
+        });
+        const uchiwaSkyRimMat = new THREE.MeshStandardMaterial({
+          color: 0x74bbe6,
+          roughness: 0.44,
+          metalness: 0.04,
+        });
+        const uchiwaHandleMat = new THREE.MeshStandardMaterial({
+          color: 0xf4f6f8,
+          roughness: 0.36,
+          metalness: 0.04,
+        });
+        const uchiwaVinylCoverMat = new THREE.MeshPhysicalMaterial({
+          color: 0xffffff,
+          roughness: 0.08,
+          metalness: 0.02,
+          clearcoat: 0.95,
+          clearcoatRoughness: 0.05,
+          transparent: true,
+          opacity: 0.22,
+          depthWrite: false,
+        });
+        const uchiwaZipRimMat = new THREE.MeshStandardMaterial({
+          color: 0xe6edf5,
+          roughness: 0.34,
+          metalness: 0.22,
+          transparent: true,
+          opacity: 0.85,
+        });
+
+        // 1. Cardboard paddle body & sky-blue printed frame border
+        const uchiwaDisc = new THREE.Mesh(
+          new THREE.CylinderGeometry(UW_R - 0.002, UW_R - 0.002, 0.003, 48),
+          uchiwaBackCardMat
+        );
+        uchiwaDisc.rotation.x = Math.PI / 2;
+        uchiwaDisc.scale.set(1.0, 1.0, UW_SCALE_Y);
+        uchiwaDisc.castShadow = true;
+        uchiwaDisc.receiveShadow = true;
+        uchiwaFanGroup.add(uchiwaDisc);
+
+        const uchiwaBlueRimRing = new THREE.Mesh(
+          new THREE.RingGeometry(UW_R - 0.012, UW_R - 0.001, 56),
+          uchiwaSkyRimMat
+        );
+        uchiwaBlueRimRing.scale.set(1.0, UW_SCALE_Y, 1.0);
+        uchiwaBlueRimRing.position.z = 0.0020;
+        uchiwaFanGroup.add(uchiwaBlueRimRing);
+
+        // Front idol art panel
+        const uchiwaFrontMesh = new THREE.Mesh(
+          new THREE.CircleGeometry(UW_R - 0.010, 56),
+          uchiwaArtMat
+        );
+        uchiwaFrontMesh.scale.set(1.0, UW_SCALE_Y, 1.0);
+        uchiwaFrontMesh.position.z = 0.0024;
+        uchiwaFanGroup.add(uchiwaFrontMesh);
+
+        // 2. Clear Protective Zippered PVC Cover Sleeve + Top Hanging Grommet Tab & Wall Hook
+        const vinylOverlay = new THREE.Mesh(
+          new THREE.CircleGeometry(UW_R + 0.004, 56),
+          uchiwaVinylCoverMat
+        );
+        vinylOverlay.scale.set(1.0, UW_SCALE_Y, 1.0);
+        vinylOverlay.position.z = 0.0042;
+        uchiwaFanGroup.add(vinylOverlay);
+
+        const zipperTrackArc = new THREE.Mesh(
+          new THREE.TorusGeometry(UW_R + 0.003, 0.0022, 8, 56),
+          uchiwaZipRimMat
+        );
+        zipperTrackArc.scale.set(1.0, UW_SCALE_Y, 1.0);
+        zipperTrackArc.position.z = 0.0025;
+        uchiwaFanGroup.add(zipperTrackArc);
+
+        const zipPull = new THREE.Mesh(
+          new THREE.BoxGeometry(0.011, 0.006, 0.005),
+          new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.25, metalness: 0.72 })
+        );
+        zipPull.position.set(-0.020, -UW_R * UW_SCALE_Y - 0.002, 0.005);
+        zipPull.rotation.z = 0.35;
+        uchiwaFanGroup.add(zipPull);
+
+        // Clear top hanging grommet tab + wall hook at 12 o'clock
+        const topHookTab = new THREE.Mesh(
+          new THREE.BoxGeometry(0.026, 0.020, 0.003),
+          uchiwaZipRimMat
+        );
+        topHookTab.position.set(0.008, UW_R * UW_SCALE_Y + 0.009, 0.002);
+        uchiwaFanGroup.add(topHookTab);
+
+        const wallHookPin = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.0038, 0.0038, 0.014, 12),
+          new THREE.MeshStandardMaterial({ color: 0xcbd5e1, roughness: 0.24, metalness: 0.85 })
+        );
+        wallHookPin.rotation.x = Math.PI / 2;
+        wallHookPin.position.set(0.008, UW_R * UW_SCALE_Y + 0.011, -0.001);
+        uchiwaFanGroup.add(wallHookPin);
+
+        // 3. Ridged White Plastic Uchiwa Handle extending cleanly down at 6 o'clock
+        const uHandleNeck = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.013, 0.012, 0.022, 16),
+          uchiwaHandleMat
+        );
+        uHandleNeck.scale.set(1.0, 1.0, 0.36);
+        uHandleNeck.position.set(0, -UW_R * UW_SCALE_Y - 0.002, 0.001);
+        uchiwaFanGroup.add(uHandleNeck);
+
+        const uHandleStem = new THREE.Mesh(
+          new THREE.BoxGeometry(0.021, 0.132, 0.005),
+          uchiwaHandleMat
+        );
+        uHandleStem.position.set(0, -UW_R * UW_SCALE_Y - 0.068, 0.001);
+        uHandleStem.castShadow = true;
+        uchiwaFanGroup.add(uHandleStem);
+
+        [-0.005, 0, 0.005].forEach((rx) => {
+          const spineRib = new THREE.Mesh(
+            new THREE.BoxGeometry(0.0018, 0.118, 0.0068),
+            uchiwaHandleMat
+          );
+          spineRib.position.set(rx, -UW_R * UW_SCALE_Y - 0.066, 0.001);
+          uchiwaFanGroup.add(spineRib);
+        });
+
+        const handleSlot = new THREE.Mesh(
+          new THREE.BoxGeometry(0.0065, 0.0085, 0.006),
+          new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.6 })
+        );
+        handleSlot.position.set(0, -UW_R * UW_SCALE_Y - 0.123, 0.0015);
+        uchiwaFanGroup.add(handleSlot);
+
+        uchiwaFanGroup.scale.setScalar(1.32);
+        uchiwaFanGroup.position.set(-2.66, 1.40, -PR_SIZE / 2 + 0.008);
+        coloredRoomGroup.add(uchiwaFanGroup);
+
+        // 2-Tier Shoe Rack + 4 Pairs of Light-Blue Plush Slippers directly below Hanging Uchiwa Fan (門右側推扇下方的雙層鞋架＋四雙淺藍色毛絨拖鞋)
+        const shoeRackGroup = new THREE.Group();
+        const RACK_W = 0.84;
+        const RACK_D = 0.28;
+        const RACK_H = 0.36;
+        shoeRackGroup.position.set(-2.66, 0, -PR_SIZE / 2 + 0.04 + RACK_D / 2);
+
+        const rackFrameMat = new THREE.MeshStandardMaterial({
+          color: 0xf8fafc,
+          roughness: 0.38,
+          metalness: 0.05,
+        });
+        const rackBirchWoodTex = createWhiteOakWoodTexture();
+        rackBirchWoodTex.repeat.set(1.2, 0.6);
+        rackBirchWoodTex.needsUpdate = true;
+        extraRoomTexturesToDispose.push(rackBirchWoodTex);
+
+        const rackShelfSlatMat = new THREE.MeshStandardMaterial({
+          map: rackBirchWoodTex,
+          color: 0xf4ede3,
+          roughness: 0.46,
+          metalness: 0.02,
+        });
+
+        // 4 Clean White Frame Posts + Side Crossbars
+        const postOffX = RACK_W / 2 - 0.016;
+        const postOffZ = RACK_D / 2 - 0.016;
+        [
+          [-postOffX, -postOffZ],
+          [postOffX, -postOffZ],
+          [-postOffX, postOffZ],
+          [postOffX, postOffZ],
+        ].forEach(([px, pz]) => {
+          const post = new THREE.Mesh(new THREE.BoxGeometry(0.024, RACK_H, 0.024), rackFrameMat);
+          post.position.set(px, RACK_H / 2, pz);
+          post.castShadow = true;
+          post.receiveShadow = true;
+          shoeRackGroup.add(post);
+        });
+
+        const TIER_Y = [0.088, 0.288] as const;
+        TIER_Y.forEach((ty) => {
+          [-postOffX, postOffX].forEach((px) => {
+            const sideRail = new THREE.Mesh(
+              new THREE.BoxGeometry(0.018, 0.022, RACK_D - 0.02),
+              rackFrameMat
+            );
+            sideRail.position.set(px, ty - 0.008, 0);
+            shoeRackGroup.add(sideRail);
+          });
+          [-postOffZ, postOffZ].forEach((pz) => {
+            const frontBackRail = new THREE.Mesh(
+              new THREE.BoxGeometry(RACK_W - 0.02, 0.020, 0.018),
+              rackFrameMat
+            );
+            frontBackRail.position.set(0, ty - 0.008, pz);
+            frontBackRail.castShadow = true;
+            shoeRackGroup.add(frontBackRail);
+          });
+
+          // 4 ventilated wooden slats forming each shoe shelf level
+          [-0.088, -0.029, 0.029, 0.088].forEach((sz) => {
+            const slat = new THREE.Mesh(
+              new THREE.BoxGeometry(RACK_W - 0.036, 0.014, 0.042),
+              rackShelfSlatMat
+            );
+            slat.position.set(0, ty, sz);
+            slat.castShadow = true;
+            slat.receiveShadow = true;
+            shoeRackGroup.add(slat);
+          });
+        });
+
+        // Plush fur material for 4 pairs of soft light-blue house slippers
+        const slipFurCanvas = document.createElement('canvas');
+        slipFurCanvas.width = 128;
+        slipFurCanvas.height = 128;
+        const sfCtx = slipFurCanvas.getContext('2d');
+        if (sfCtx) {
+          sfCtx.fillStyle = '#cbe9fa';
+          sfCtx.fillRect(0, 0, 128, 128);
+          for (let i = 0; i < 650; i++) {
+            const sx = (i * 53) % 128;
+            const sy = (i * 97) % 128;
+            sfCtx.strokeStyle = i % 2 === 0 ? 'rgba(255,255,255,0.45)' : 'rgba(130,192,230,0.42)';
+            sfCtx.lineWidth = 1.4;
+            sfCtx.beginPath();
+            sfCtx.moveTo(sx, sy);
+            sfCtx.lineTo(sx + ((i % 5) - 2) * 2.2, sy - 6);
+            sfCtx.stroke();
+          }
+        }
+        const slipFurTex = new THREE.CanvasTexture(slipFurCanvas);
+        slipFurTex.colorSpace = THREE.SRGBColorSpace;
+        slipFurTex.wrapS = THREE.RepeatWrapping;
+        slipFurTex.wrapT = THREE.RepeatWrapping;
+        slipFurTex.repeat.set(2.4, 2.4);
+        extraRoomTexturesToDispose.push(slipFurTex);
+
+        const slipperBlueFurMat = new THREE.MeshPhysicalMaterial({
+          map: slipFurTex,
+          color: 0x9bd6f5,
+          roughness: 0.94,
+          metalness: 0.0,
+          sheen: 1.0,
+          sheenRoughness: 0.62,
+          sheenColor: new THREE.Color(0xe6f7ff),
+        });
+        const slipperInnerFleeceMat = new THREE.MeshPhysicalMaterial({
+          map: slipFurTex,
+          color: 0xbde4fa,
+          roughness: 0.95,
+          metalness: 0.0,
+          sheen: 0.85,
+          sheenColor: new THREE.Color(0xffffff),
+        });
+        const slipperSoleMat = new THREE.MeshStandardMaterial({
+          color: 0xe6edf2,
+          roughness: 0.82,
+          metalness: 0.02,
+        });
+
+        const createLightBluePlushSlipper = (footSign: -1 | 1) => {
+          const slGrp = new THREE.Group();
+
+          // Rounded slipper footprint sole (21.5cm long × 9.2cm wide)
+          const soleShape = new THREE.Shape();
+          soleShape.moveTo(0, -0.105);
+          soleShape.bezierCurveTo(footSign * 0.042, -0.105, footSign * 0.044, -0.040, footSign * 0.044, 0.015);
+          soleShape.bezierCurveTo(footSign * 0.048, 0.068, footSign * 0.036, 0.106, 0, 0.108);
+          soleShape.bezierCurveTo(-footSign * 0.036, 0.106, -footSign * 0.042, 0.065, -footSign * 0.038, 0.010);
+          soleShape.bezierCurveTo(-footSign * 0.038, -0.045, -footSign * 0.036, -0.105, 0, -0.105);
+
+          const soleMesh = new THREE.Mesh(
+            new THREE.ExtrudeGeometry(soleShape, {
+              depth: 0.014,
+              bevelEnabled: true,
+              bevelThickness: 0.004,
+              bevelSize: 0.003,
+              bevelSegments: 3,
+              curveSegments: 14,
+            }),
+            slipperSoleMat
+          );
+          soleMesh.rotation.x = -Math.PI / 2;
+          soleMesh.position.y = 0.004;
+          soleMesh.castShadow = true;
+          soleMesh.receiveShadow = true;
+          slGrp.add(soleMesh);
+
+          // Soft plush cushioned insole top pad
+          const insoleMesh = new THREE.Mesh(
+            new THREE.ExtrudeGeometry(soleShape, {
+              depth: 0.005,
+              bevelEnabled: true,
+              bevelThickness: 0.003,
+              bevelSize: 0.002,
+              bevelSegments: 2,
+              curveSegments: 12,
+            }),
+            slipperInnerFleeceMat
+          );
+          insoleMesh.rotation.x = -Math.PI / 2;
+          insoleMesh.scale.set(0.92, 0.94, 1.0);
+          insoleMesh.position.y = 0.020;
+          insoleMesh.receiveShadow = true;
+          slGrp.add(insoleMesh);
+
+          // Fluffy domed closed-front/plush upper muff + soft fleece collar roll (毛絨鞋頭與絨毛領口)
+          const vampDome = new THREE.Mesh(
+            new THREE.SphereGeometry(0.046, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.52),
+            slipperBlueFurMat
+          );
+          vampDome.scale.set(0.95, 0.85, 1.48);
+          vampDome.position.set(footSign * 0.002, 0.022, 0.036);
+          vampDome.castShadow = true;
+          vampDome.receiveShadow = true;
+          slGrp.add(vampDome);
+
+          // Plump plush fur collar cuff across top opening of slipper
+          const furCuff = new THREE.Mesh(
+            new THREE.TorusGeometry(0.038, 0.013, 10, 20),
+            slipperBlueFurMat
+          );
+          furCuff.rotation.x = Math.PI / 2 + 0.35;
+          furCuff.scale.set(1.06, 0.85, 1.0);
+          furCuff.position.set(footSign * 0.002, 0.044, -0.005);
+          furCuff.castShadow = true;
+          slGrp.add(furCuff);
+
+          // Subtle small fur tufts around cuff rim for authentic fluffy finish
+          for (let ti = 0; ti < 10; ti++) {
+            const ang = (ti / 10) * Math.PI * 2;
+            const tMesh = new THREE.Mesh(new THREE.ConeGeometry(0.005, 0.011, 5), slipperBlueFurMat);
+            tMesh.position.set(
+              footSign * 0.002 + Math.cos(ang) * 0.042,
+              0.046 + (ti % 2) * 0.004,
+              -0.005 + Math.sin(ang) * 0.030
+            );
+            tMesh.rotation.set(Math.sin(ang) * 0.6, 0, -Math.cos(ang) * 0.6);
+            slGrp.add(tMesh);
+          }
+
+          return slGrp;
+        };
+
+        // 4 Pairs arranged neatly across both tiers (2 pairs lower tier, 2 pairs upper tier)
+        TIER_Y.forEach((ty, tierIdx) => {
+          [-0.20, 0.20].forEach((pairX, pairIdx) => {
+            const pairGroup = new THREE.Group();
+            pairGroup.position.set(pairX, ty + 0.007, 0.012);
+            pairGroup.rotation.y = (tierIdx === 0 ? 1 : -1) * (pairIdx === 0 ? 0.04 : -0.05);
+
+            const leftSlip = createLightBluePlushSlipper(-1);
+            leftSlip.position.set(-0.049, 0, 0);
+            leftSlip.rotation.y = 0.03;
+            pairGroup.add(leftSlip);
+
+            const rightSlip = createLightBluePlushSlipper(1);
+            rightSlip.position.set(0.049, 0, 0.004);
+            rightSlip.rotation.y = -0.04;
+            pairGroup.add(rightSlip);
+
+            shoeRackGroup.add(pairGroup);
+          });
+        });
+
+        coloredRoomGroup.add(shoeRackGroup);
+
+        // Umbrella Stand & Translucent Aqua-Blue Vinyl Umbrella at Left Wall Corner beside Room Door (門左側牆角的雨傘桶與淡藍漸層透明雨傘)
+        const umbrellaCornerGroup = new THREE.Group();
+        umbrellaCornerGroup.position.set(-4.76, 0, -3.26);
+
+        const standOuterMat = new THREE.MeshPhysicalMaterial({
+          color: 0xf4f5f7,
+          roughness: 0.32,
+          metalness: 0.06,
+          clearcoat: 0.38,
+          clearcoatRoughness: 0.24,
+        });
+        const standInnerMat = new THREE.MeshStandardMaterial({
+          color: 0xcbd2da,
+          roughness: 0.62,
+          metalness: 0.05,
+          side: THREE.BackSide,
+        });
+        const standBaseMat = new THREE.MeshStandardMaterial({
+          color: 0x475569,
+          roughness: 0.65,
+          metalness: 0.18,
+        });
+        const standChromeMat = new THREE.MeshStandardMaterial({
+          color: 0xe2e8f0,
+          roughness: 0.22,
+          metalness: 0.84,
+        });
+
+        const STAND_R = 0.112;
+        const STAND_H = 0.450;
+
+        // Weighted rubber/slate base collar & recessed drip tray at Y = 0
+        const standFoot = new THREE.Mesh(
+          new THREE.CylinderGeometry(STAND_R + 0.005, STAND_R + 0.007, 0.026, 32),
+          standBaseMat
+        );
+        standFoot.position.y = 0.013;
+        standFoot.castShadow = true;
+        standFoot.receiveShadow = true;
+        umbrellaCornerGroup.add(standFoot);
+
+        const standTrayFloor = new THREE.Mesh(
+          new THREE.CylinderGeometry(STAND_R - 0.006, STAND_R - 0.006, 0.012, 28),
+          standBaseMat
+        );
+        standTrayFloor.position.y = 0.024;
+        standTrayFloor.receiveShadow = true;
+        umbrellaCornerGroup.add(standTrayFloor);
+
+        // Hollow open-top cylindrical stand body (outer wall + inner wall + brushed metal rim)
+        const standWallOuter = new THREE.Mesh(
+          new THREE.CylinderGeometry(STAND_R, STAND_R - 0.004, STAND_H - 0.024, 36, 1, true),
+          standOuterMat
+        );
+        standWallOuter.position.y = 0.024 + (STAND_H - 0.024) / 2;
+        standWallOuter.castShadow = true;
+        standWallOuter.receiveShadow = true;
+        umbrellaCornerGroup.add(standWallOuter);
+
+        const standWallInner = new THREE.Mesh(
+          new THREE.CylinderGeometry(STAND_R - 0.005, STAND_R - 0.008, STAND_H - 0.026, 32, 1, true),
+          standInnerMat
+        );
+        standWallInner.position.y = 0.025 + (STAND_H - 0.026) / 2;
+        standWallInner.receiveShadow = true;
+        umbrellaCornerGroup.add(standWallInner);
+
+        const standTopRim = new THREE.Mesh(
+          new THREE.TorusGeometry(STAND_R - 0.002, 0.007, 12, 36),
+          standChromeMat
+        );
+        standTopRim.rotation.x = Math.PI / 2;
+        standTopRim.position.y = STAND_H;
+        standTopRim.castShadow = true;
+        umbrellaCornerGroup.add(standTopRim);
+
+        // Subtle mid metallic trim band for realistic household stand finish
+        const standMidBand = new THREE.Mesh(
+          new THREE.TorusGeometry(STAND_R - 0.001, 0.0032, 10, 36),
+          standChromeMat
+        );
+        standMidBand.rotation.x = Math.PI / 2;
+        standMidBand.position.y = 0.14;
+        umbrellaCornerGroup.add(standMidBand);
+
+        // Procedural Translucent Frosted Aqua-Blue Vinyl Canopy CanvasTexture matching reference umbrella
+        const createUmbrellaCanopyTexture = () => {
+          const uc = document.createElement('canvas');
+          uc.width = 512;
+          uc.height = 512;
+          const uctx = uc.getContext('2d');
+          if (uctx) {
+            uctx.clearRect(0, 0, 512, 512);
+
+            // Base vertical alpha + aqua watercolor gradient (top y=0 clear crown -> bottom y=512 misty aqua skirt)
+            const bodyGrad = uctx.createLinearGradient(0, 0, 0, 512);
+            bodyGrad.addColorStop(0.00, 'rgba(220, 246, 252, 0.34)');
+            bodyGrad.addColorStop(0.32, 'rgba(182, 234, 246, 0.42)');
+            bodyGrad.addColorStop(0.58, 'rgba(98, 194, 220, 0.72)');
+            bodyGrad.addColorStop(0.84, 'rgba(122, 206, 228, 0.80)');
+            bodyGrad.addColorStop(1.00, 'rgba(210, 240, 248, 0.84)');
+            uctx.fillStyle = bodyGrad;
+            uctx.fillRect(0, 0, 512, 512);
+
+            // Delicate white sweeping arc line near upper vinyl panels (seen in both open & closed reference photos)
+            uctx.strokeStyle = 'rgba(248, 252, 255, 0.78)';
+            uctx.lineWidth = 9;
+            uctx.beginPath();
+            uctx.moveTo(0, 128);
+            uctx.bezierCurveTo(170, 92, 340, 156, 512, 122);
+            uctx.stroke();
+
+            // Subtle icy-aqua vertical rain-streak highlights along lower half
+            for (let i = 0; i < 42; i++) {
+              const rx = (i * 47 + 19) % 512;
+              const ry = 230 + ((i * 31) % 90);
+              const rg = uctx.createLinearGradient(rx, ry, rx, 512);
+              rg.addColorStop(0, 'rgba(255, 255, 255, 0)');
+              rg.addColorStop(0.45, 'rgba(235, 250, 255, 0.28)');
+              rg.addColorStop(1, 'rgba(255, 255, 255, 0.42)');
+              uctx.fillStyle = rg;
+              uctx.fillRect(rx, ry, 5 + (i % 4) * 2, 512 - ry);
+            }
+          }
+          const tex = new THREE.CanvasTexture(uc);
+          tex.colorSpace = THREE.SRGBColorSpace;
+          tex.wrapS = THREE.RepeatWrapping;
+          tex.wrapT = THREE.ClampToEdgeWrapping;
+          tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+          extraRoomTexturesToDispose.push(tex);
+          return tex;
+        };
+
+        const umbrellaCanopyTex = createUmbrellaCanopyTexture();
+
+        // Folded 8-Pleated Vinyl Umbrella leaning ferrule-down inside the Umbrella Stand
+        const umbrellaGroup = new THREE.Group();
+        const umbAquaPlasticMat = new THREE.MeshPhysicalMaterial({
+          color: 0x74bcc9,
+          roughness: 0.24,
+          metalness: 0.04,
+          clearcoat: 0.72,
+        });
+        const umbPaleAquaMat = new THREE.MeshPhysicalMaterial({
+          color: 0xbde4ed,
+          roughness: 0.28,
+          metalness: 0.02,
+          clearcoat: 0.65,
+        });
+        const umbDarkRibMat = new THREE.MeshStandardMaterial({
+          color: 0x262e38,
+          roughness: 0.35,
+          metalness: 0.72,
+        });
+        const umbShaftSilverMat = new THREE.MeshStandardMaterial({
+          color: 0xdce2e8,
+          roughness: 0.22,
+          metalness: 0.86,
+        });
+        const umbClearHandleMat = new THREE.MeshPhysicalMaterial({
+          color: 0xf0faff,
+          roughness: 0.06,
+          metalness: 0.02,
+          clearcoat: 1.0,
+          clearcoatRoughness: 0.05,
+          transparent: true,
+          opacity: 0.58,
+          depthWrite: false,
+        });
+        const umbCanopyVinylMat = new THREE.MeshPhysicalMaterial({
+          map: umbrellaCanopyTex,
+          transparent: true,
+          roughness: 0.14,
+          metalness: 0.02,
+          clearcoat: 0.92,
+          clearcoatRoughness: 0.08,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        });
+
+        // 1. Mint-aqua ferrule tip resting inside stand drip tray (y = 0 .. 0.075m)
+        const ferruleCone = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.0085, 0.0052, 0.072, 16),
+          umbAquaPlasticMat
+        );
+        ferruleCone.position.y = 0.036;
+        ferruleCone.castShadow = true;
+        umbrellaGroup.add(ferruleCone);
+
+        const ferruleTipSphere = new THREE.Mesh(
+          new THREE.SphereGeometry(0.0052, 12, 10),
+          umbAquaPlasticMat
+        );
+        ferruleTipSphere.position.y = 0.004;
+        umbrellaGroup.add(ferruleTipSphere);
+
+        // 2. Central metallic shaft + dark runner notch visible beneath clear vinyl
+        const umbShaft = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.0046, 0.0046, 0.665, 14),
+          umbShaftSilverMat
+        );
+        umbShaft.position.y = 0.40;
+        umbShaft.castShadow = true;
+        umbrellaGroup.add(umbShaft);
+
+        const runnerCollar = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.011, 0.011, 0.024, 14),
+          umbDarkRibMat
+        );
+        runnerCollar.position.y = 0.61;
+        umbrellaGroup.add(runnerCollar);
+
+        // 3. 8 Internal folded dark ribs + protruding pale-aqua rib tips poking below canopy hem
+        const CANOPY_START_Y = 0.072;
+        const CANOPY_END_Y = 0.575;
+        const CANOPY_LEN = CANOPY_END_Y - CANOPY_START_Y;
+
+        for (let r = 0; r < 8; r++) {
+          const ang = (r / 8) * Math.PI * 2;
+          const topR = 0.044;
+          const p0 = new THREE.Vector3(Math.cos(ang) * 0.008, CANOPY_START_Y + 0.01, Math.sin(ang) * 0.008);
+          const p1 = new THREE.Vector3(Math.cos(ang + 0.25) * topR, CANOPY_END_Y + 0.015, Math.sin(ang + 0.25) * topR);
+          const dir = new THREE.Vector3().subVectors(p1, p0);
+          const rib = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.0018, 0.0018, dir.length(), 6),
+            umbDarkRibMat
+          );
+          rib.position.addVectors(p0, p1).multiplyScalar(0.5);
+          rib.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+          umbrellaGroup.add(rib);
+
+          const ribTip = new THREE.Mesh(
+            new THREE.CapsuleGeometry(0.0032, 0.014, 6, 8),
+            umbPaleAquaMat
+          );
+          ribTip.position.copy(p1).add(new THREE.Vector3(0, 0.007, 0));
+          ribTip.rotation.z = -Math.cos(ang + 0.25) * 0.14;
+          ribTip.rotation.x = Math.sin(ang + 0.25) * 0.14;
+          umbrellaGroup.add(ribTip);
+        }
+
+        // 4. Sculpted 8-Pleated Translucent Fluted Canopy Cone
+        const uSeg = 64;
+        const vSeg = 16;
+        const uPos: number[] = [];
+        const uUv: number[] = [];
+        const uIdx: number[] = [];
+
+        for (let vi = 0; vi <= vSeg; vi++) {
+          const t = vi / vSeg; // 0 = tip (bottom), 1 = hem (top opening above rim)
+          const py = CANOPY_START_Y + t * CANOPY_LEN;
+          const baseR = THREE.MathUtils.lerp(0.0095, 0.052, Math.pow(t, 0.86));
+          const pleatAmp = Math.sin(t * Math.PI * 0.82) * 0.0095 + (t > 0.7 ? (t - 0.7) * 0.014 : 0);
+          const spiralTwist = t * 0.28;
+          for (let ui = 0; ui <= uSeg; ui++) {
+            const u = ui / uSeg;
+            const theta = u * Math.PI * 2 + spiralTwist;
+            const rr = baseR + Math.cos(u * Math.PI * 16) * pleatAmp;
+            uPos.push(Math.cos(theta) * rr, py, Math.sin(theta) * rr);
+            // Map texture v = 1 (top of texture = clear vinyl) at tip (t=0), v = 0 (aqua bottom hem) at t = 1
+            uUv.push(u * 2.0, 1.0 - t);
+          }
+        }
+        for (let vi = 0; vi < vSeg; vi++) {
+          for (let ui = 0; ui < uSeg; ui++) {
+            const a = vi * (uSeg + 1) + ui;
+            const b = a + 1;
+            const c = a + uSeg + 2;
+            const d = a + uSeg + 1;
+            uIdx.push(a, b, c, a, c, d);
+          }
+        }
+        const canopyGeo = new THREE.BufferGeometry();
+        canopyGeo.setAttribute('position', new THREE.Float32BufferAttribute(uPos, 3));
+        canopyGeo.setAttribute('uv', new THREE.Float32BufferAttribute(uUv, 2));
+        canopyGeo.setIndex(uIdx);
+        canopyGeo.computeVertexNormals();
+        const canopyMesh = new THREE.Mesh(canopyGeo, umbCanopyVinylMat);
+        canopyMesh.castShadow = true;
+        umbrellaGroup.add(canopyMesh);
+
+        // Fastening clear/aqua strap wrapping upper fold
+        const strapRing = new THREE.Mesh(
+          new THREE.TorusGeometry(0.025, 0.0028, 8, 24),
+          umbAquaPlasticMat
+        );
+        strapRing.rotation.x = Math.PI / 2;
+        strapRing.position.y = 0.26;
+        umbrellaGroup.add(strapRing);
+
+        // 5. Aqua-teal neck collar + Clear Transparent Acrylic J-Hook Handle at Top (透明塑膠彎鉤握把)
+        const handleCollar = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.0095, 0.0085, 0.036, 16),
+          umbAquaPlasticMat
+        );
+        handleCollar.position.y = 0.725;
+        umbrellaGroup.add(handleCollar);
+
+        const jCurve = new THREE.CatmullRomCurve3([
+          new THREE.Vector3(0, 0.740, 0),
+          new THREE.Vector3(0, 0.805, 0),
+          new THREE.Vector3(0.014, 0.842, 0),
+          new THREE.Vector3(0.042, 0.846, 0),
+          new THREE.Vector3(0.064, 0.822, 0),
+          new THREE.Vector3(0.062, 0.785, 0),
+        ]);
+        const jHandleMesh = new THREE.Mesh(
+          new THREE.TubeGeometry(jCurve, 28, 0.0096, 14, false),
+          umbClearHandleMat
+        );
+        jHandleMesh.castShadow = true;
+        umbrellaGroup.add(jHandleMesh);
+
+        const jEndCap = new THREE.Mesh(new THREE.SphereGeometry(0.0096, 12, 10), umbClearHandleMat);
+        jEndCap.position.set(0.062, 0.785, 0);
+        umbrellaGroup.add(jEndCap);
+
+        // Ground tip cleanly in stand drip tray & lean handle gracefully toward room center
+        umbrellaGroup.position.set(-0.028, 0.028, -0.020);
+        umbrellaGroup.rotation.set(0.11, -0.52, -0.15);
+        umbrellaCornerGroup.add(umbrellaGroup);
+
+        coloredRoomGroup.add(umbrellaCornerGroup);
 
         // 4-Column × 3-Row Cube Shelf (四排×高三格、每格40×30公分的長方格子櫃) placed beside the desk
         const CUBE_INNER_W = 0.40;
@@ -4944,13 +6193,123 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
           cubeShelfGroup.add(binGroup);
         }
 
+        // Takane no Nadeshiko Black Woven Pouch on Top-Left of Cube Shelf (格子櫃最上層最左邊的黑色拉鍊小包)
+        const takanePouchTex = textureLoader.load('/assets/takane_pouch_front.png');
+        takanePouchTex.colorSpace = THREE.SRGBColorSpace;
+        takanePouchTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+        extraRoomTexturesToDispose.push(takanePouchTex);
+
+        const takanePouchGroup = new THREE.Group();
+        const TP_W = 0.245;
+        const TP_H = 0.184;
+        const TP_D = 0.024;
+
+        const tpBlackNylonMat = new THREE.MeshStandardMaterial({
+          color: 0x1e2025,
+          roughness: 0.88,
+          metalness: 0.04,
+        });
+        const tpFrontPrintMat = new THREE.MeshStandardMaterial({
+          map: takanePouchTex,
+          color: 0xffffff,
+          roughness: 0.86,
+          metalness: 0.03,
+        });
+        const tpZipMetalMat = new THREE.MeshStandardMaterial({
+          color: 0x2c303a,
+          roughness: 0.34,
+          metalness: 0.82,
+        });
+
+        // Soft cushioned rectangular body
+        const tpBodyShape = new THREE.Shape();
+        const tpR = 0.008;
+        const tpHW = TP_W / 2 - tpR;
+        const tpHH = TP_H / 2 - tpR;
+        tpBodyShape.moveTo(-tpHW, -TP_H / 2);
+        tpBodyShape.lineTo(tpHW, -TP_H / 2);
+        tpBodyShape.quadraticCurveTo(TP_W / 2, -TP_H / 2, TP_W / 2, -tpHH);
+        tpBodyShape.lineTo(TP_W / 2, tpHH);
+        tpBodyShape.quadraticCurveTo(TP_W / 2, TP_H / 2, tpHW, TP_H / 2);
+        tpBodyShape.lineTo(-tpHW, TP_H / 2);
+        tpBodyShape.quadraticCurveTo(-TP_W / 2, TP_H / 2, -TP_W / 2, tpHH);
+        tpBodyShape.lineTo(-TP_W / 2, -tpHH);
+        tpBodyShape.quadraticCurveTo(-TP_W / 2, -TP_H / 2, -tpHW, -TP_H / 2);
+
+        const tpBodyGeo = new THREE.ExtrudeGeometry(tpBodyShape, {
+          depth: TP_D - 0.008,
+          bevelEnabled: true,
+          bevelThickness: 0.004,
+          bevelSize: 0.004,
+          bevelSegments: 3,
+          curveSegments: 8,
+        });
+        const tpBodyMesh = new THREE.Mesh(tpBodyGeo, tpBlackNylonMat);
+        tpBodyMesh.position.z = -(TP_D - 0.008) / 2;
+        tpBodyMesh.castShadow = true;
+        tpBodyMesh.receiveShadow = true;
+        takanePouchGroup.add(tpBodyMesh);
+
+        // Front woven print panel ("TAKANE NO NADESHIKO") flush on +Z front face
+        const tpFrontPlane = new THREE.Mesh(
+          new THREE.PlaneGeometry(TP_W - 0.006, TP_H - 0.006),
+          tpFrontPrintMat
+        );
+        tpFrontPlane.position.z = TP_D / 2 + 0.0008;
+        tpFrontPlane.receiveShadow = true;
+        takanePouchGroup.add(tpFrontPlane);
+
+        // Upper zipper track, brushed dark metal pull slider & twin top-corner webbing D-rings
+        const tpZipTrack = new THREE.Mesh(
+          new THREE.BoxGeometry(TP_W - 0.010, 0.006, 0.008),
+          tpZipMetalMat
+        );
+        tpZipTrack.position.set(0, TP_H / 2 + 0.002, 0);
+        takanePouchGroup.add(tpZipTrack);
+
+        const tpZipPull = new THREE.Mesh(
+          new THREE.BoxGeometry(0.016, 0.007, 0.005),
+          tpZipMetalMat
+        );
+        tpZipPull.position.set(TP_W / 2 - 0.022, TP_H / 2 + 0.004, 0.007);
+        tpZipPull.rotation.z = -0.35;
+        takanePouchGroup.add(tpZipPull);
+
+        [-1, 1].forEach((side) => {
+          const webTab = new THREE.Mesh(
+            new THREE.BoxGeometry(0.014, 0.016, 0.008),
+            tpBlackNylonMat
+          );
+          webTab.position.set(side * (TP_W / 2 - 0.012), TP_H / 2 + 0.007, 0);
+          takanePouchGroup.add(webTab);
+
+          const cornerDRing = new THREE.Mesh(
+            new THREE.TorusGeometry(0.0085, 0.0018, 8, 16),
+            tpZipMetalMat
+          );
+          cornerDRing.position.set(side * (TP_W / 2 - 0.012), TP_H / 2 + 0.015, 0);
+          takanePouchGroup.add(cornerDRing);
+        });
+
+        // Lay flat face-up on top-right surface of cube shelf (面朝上平躺在格子櫃最右側上方)
+        const tpLean = new THREE.Group();
+        tpLean.rotation.x = -Math.PI / 2;
+        tpLean.position.y = TP_D / 2 + 0.001;
+        tpLean.add(takanePouchGroup);
+
+        const tpRoot = new THREE.Group();
+        tpRoot.add(tpLean);
+        tpRoot.position.set(SHELF_W / 2 - 0.18, SHELF_H, 0.015);
+        tpRoot.rotation.y = -0.10;
+        cubeShelfGroup.add(tpRoot);
+
         coloredRoomGroup.add(cubeShelfGroup);
 
-        // 3 Floating Horizontal Wood Shelves (三層橫木片橫架) above the cube shelf at 40cm vertical intervals
+        // 3 Floating Horizontal Wood Shelves (三層橫木片橫架) above the cube shelf at 45cm vertical intervals
         const WALL_SHELF_W = SHELF_W;
         const WALL_SHELF_D = 0.24;
         const WALL_SHELF_T = 0.026;
-        const WALL_SHELF_STEP = 0.40;
+        const WALL_SHELF_STEP = 0.45;
         const wallShelfBracketMat = new THREE.MeshStandardMaterial({
           color: 0xd6d3cd,
           roughness: 0.38,
@@ -4994,8 +6353,111 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
           coloredRoomGroup.add(ledgeGroup);
         }
 
-        // Light Blue-Gray Curtain on the Right Wall beside the Desk (書桌側面牆面、離天花板下30cm至桌面高74cm、寬120cm的淺藍灰色窗簾)
-        const CURTAIN_W = 1.20;
+        // Light-Blue Suzumi Su Hanging Scroll Tapestry near Display Shelf & Door (展示架旁靠近房門處的「高嶺のなでしこ 涼海すう」立體掛軸)
+        const pinkScrollTexture = textureLoader.load('/assets/pink_scroll_tex.png');
+        pinkScrollTexture.colorSpace = THREE.SRGBColorSpace;
+        pinkScrollTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+        extraRoomTexturesToDispose.push(pinkScrollTexture);
+
+        const pinkScrollGroup = new THREE.Group();
+        const P_SCROLL_W = 0.45;
+        const P_SCROLL_H = 1.30; // Exact 500 : 1440 ratio matching pink_scroll_tex.png
+
+        const pScrollClothGeo = new THREE.PlaneGeometry(P_SCROLL_W, P_SCROLL_H, 12, 24);
+        const psPos = pScrollClothGeo.attributes.position;
+        for (let i = 0; i < psPos.count; i++) {
+          const sx = psPos.getX(i);
+          const sy = psPos.getY(i);
+          const ny = (sy + P_SCROLL_H / 2) / P_SCROLL_H;
+          const nx = sx / (P_SCROLL_W / 2);
+          const drapeZ =
+            Math.sin(ny * Math.PI) * 0.0045 +
+            Math.cos(nx * Math.PI) * 0.0025 * Math.sin(ny * Math.PI);
+          psPos.setY(i, sy - P_SCROLL_H / 2);
+          psPos.setZ(i, 0.010 + drapeZ);
+        }
+        pScrollClothGeo.computeVertexNormals();
+
+        const pScrollFrontMesh = new THREE.Mesh(
+          pScrollClothGeo,
+          new THREE.MeshStandardMaterial({
+            map: pinkScrollTexture,
+            color: 0xffffff,
+            roughness: 0.78,
+            metalness: 0.02,
+          })
+        );
+        pScrollFrontMesh.castShadow = true;
+        pScrollFrontMesh.receiveShadow = true;
+        pinkScrollGroup.add(pScrollFrontMesh);
+
+        const pScrollBackMesh = new THREE.Mesh(
+          new THREE.PlaneGeometry(P_SCROLL_W, P_SCROLL_H),
+          new THREE.MeshStandardMaterial({
+            color: 0x3b6c94,
+            roughness: 0.9,
+            side: THREE.FrontSide,
+          })
+        );
+        pScrollBackMesh.position.set(0, -P_SCROLL_H / 2, 0.0085);
+        pScrollBackMesh.rotation.y = Math.PI;
+        pinkScrollGroup.add(pScrollBackMesh);
+
+        const pScrollRodMat = new THREE.MeshStandardMaterial({
+          color: 0xf1f5f9,
+          roughness: 0.36,
+          metalness: 0.12,
+        });
+        const pScrollRodGeo = new THREE.CylinderGeometry(0.0085, 0.0085, P_SCROLL_W + 0.024, 16);
+        pScrollRodGeo.rotateZ(Math.PI / 2);
+
+        const pTopRod = new THREE.Mesh(pScrollRodGeo, pScrollRodMat);
+        pTopRod.position.set(0, 0.004, 0.011);
+        pTopRod.castShadow = true;
+        pinkScrollGroup.add(pTopRod);
+
+        const pBotRod = new THREE.Mesh(pScrollRodGeo, pScrollRodMat);
+        pBotRod.position.set(0, -P_SCROLL_H - 0.004, 0.011);
+        pBotRod.castShadow = true;
+        pinkScrollGroup.add(pBotRod);
+
+        const pCordCurve = new THREE.CatmullRomCurve3([
+          new THREE.Vector3(-P_SCROLL_W / 2 + 0.016, 0.008, 0.011),
+          new THREE.Vector3(-P_SCROLL_W / 4 + 0.008, 0.078, 0.007),
+          new THREE.Vector3(0, 0.146, 0.004),
+          new THREE.Vector3(P_SCROLL_W / 4 - 0.008, 0.078, 0.007),
+          new THREE.Vector3(P_SCROLL_W / 2 - 0.016, 0.008, 0.011),
+        ]);
+        const pCordMesh = new THREE.Mesh(
+          new THREE.TubeGeometry(pCordCurve, 24, 0.0024, 8, false),
+          new THREE.MeshStandardMaterial({
+            color: 0xf4f6f8,
+            roughness: 0.72,
+            metalness: 0.02,
+          })
+        );
+        pCordMesh.castShadow = true;
+        pinkScrollGroup.add(pCordMesh);
+
+        const pScrollPin = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.0032, 0.0032, 0.016, 10),
+          new THREE.MeshStandardMaterial({ color: 0xbac0c8, roughness: 0.3, metalness: 0.8 })
+        );
+        pScrollPin.rotation.x = Math.PI / 2;
+        pScrollPin.position.set(0, 0.148, 0.005);
+        pinkScrollGroup.add(pScrollPin);
+
+        // Mounted on Right Wall directly beside the exposed side of the 1st Cabinet (第一個櫃子側面牆面)
+        pinkScrollGroup.position.set(2.0 - 0.008, 2.22, 2.74);
+        pinkScrollGroup.rotation.y = -Math.PI / 2;
+        coloredRoomGroup.add(pinkScrollGroup);
+
+        const pinkScrollSpot = new THREE.PointLight(0xeef6ff, 0.85, 2.8, 1.2);
+        pinkScrollSpot.position.set(1.35, 2.05, 2.74);
+        coloredRoomGroup.add(pinkScrollSpot);
+
+        // Light Blue-Gray Curtain on the Right Wall beside the Desk (書桌側面牆面、離天花板下30cm至桌面高74cm、寬160cm的淺藍灰色窗簾)
+        const CURTAIN_W = 1.60;
         const CURTAIN_TOP_Y = PR_HEIGHT - 0.30; // 2.70m (30cm below ceiling)
         const CURTAIN_BOT_Y = DESK_H;           // 0.74m (desk top height)
         const CURTAIN_H = CURTAIN_TOP_Y - CURTAIN_BOT_Y; // 1.96m hanging drop
@@ -5003,19 +6465,19 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
         curtainGroup.position.set(2.0 - 0.044, CURTAIN_BOT_Y + CURTAIN_H / 2, -PR_SIZE / 2 + 0.08 + CURTAIN_W / 2);
 
         const curtainFabTex = curtainFabricBaseTex.clone();
-        curtainFabTex.repeat.set(3.2, 2.4);
+        curtainFabTex.repeat.set(4.2, 2.4);
         curtainFabTex.needsUpdate = true;
         extraRoomTexturesToDispose.push(curtainFabTex);
 
-        const curtainGeo = new THREE.PlaneGeometry(CURTAIN_W, CURTAIN_H, 56, 10);
+        const curtainGeo = new THREE.PlaneGeometry(CURTAIN_W, CURTAIN_H, 72, 10);
         const cPos = curtainGeo.attributes.position;
         for (let i = 0; i < cPos.count; i++) {
-          const px = cPos.getX(i); // along curtain width [-0.60, +0.60]
+          const px = cPos.getX(i); // along curtain width [-0.80, +0.80]
           const py = cPos.getY(i); // along height [-0.98, +0.98]
           const u = Math.max(0, Math.min(1, (px + CURTAIN_W / 2) / CURTAIN_W));
           const vFromTop = Math.max(0, Math.min(1, (CURTAIN_H / 2 - py) / CURTAIN_H)); // 0 at top rod, 1 at bottom hem
           const foldAmp = 0.011 + 0.015 * Math.pow(vFromTop, 0.7);
-          const pleatZ = Math.sin(u * Math.PI * 13.0) * foldAmp + Math.sin(u * Math.PI * 5.0) * 0.005;
+          const pleatZ = Math.sin(u * Math.PI * 17.0) * foldAmp + Math.sin(u * Math.PI * 6.0) * 0.005;
           cPos.setZ(i, pleatZ);
         }
         cPos.needsUpdate = true;
@@ -5071,127 +6533,1201 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
 
         coloredRoomGroup.add(curtainGroup);
 
-        // Dorm Bed directly opposite the door (門的對側: Back Wall Z = +3.5, X = -3.65, facing -Z)
-        const BED_W = 1.20;
-        const BED_L = 2.00;
-        const bedGroup = new THREE.Group();
-        bedGroup.position.set(-3.65, 0, PR_SIZE / 2 - 0.04 - BED_L / 2);
+        // White Gaming Chair (Rounded & Plush) with 6 Caster Wheels + Light-Blue Neck & Lumbar Pillows beside the Desk
+        const gamingChairGroup = new THREE.Group();
+        gamingChairGroup.position.set(1.32, 0, -2.28);
+        gamingChairGroup.rotation.y = -2.28; // Angled beside/toward the desk while showcasing seat & pillows to the room
 
-        const bedWoodTex = lightWoodBaseTex.clone();
-        bedWoodTex.repeat.set(1.4, 1.4);
-        bedWoodTex.needsUpdate = true;
-        extraRoomTexturesToDispose.push(bedWoodTex);
-
-        const bedWoodMat = new THREE.MeshStandardMaterial({
-          map: bedWoodTex,
-          color: 0xfbf7f1,
-          roughness: 0.42,
+        const chairLeatherWhiteMat = new THREE.MeshStandardMaterial({
+          color: 0xf9fafb,
+          roughness: 0.44,
           metalness: 0.03,
         });
-        const mattressMat = new THREE.MeshStandardMaterial({
-          color: 0xfaf8f5,
-          roughness: 0.78,
+        const chairBolsterWhiteMat = new THREE.MeshStandardMaterial({
+          color: 0xf1f5f9,
+          roughness: 0.48,
+          metalness: 0.03,
+        });
+        const chairTrimGrayMat = new THREE.MeshStandardMaterial({
+          color: 0xdbe2ea,
+          roughness: 0.52,
+          metalness: 0.06,
+        });
+        const chairChromeMat = new THREE.MeshStandardMaterial({
+          color: 0xd8dee6,
+          roughness: 0.22,
+          metalness: 0.85,
+        });
+        const chairMechanismMat = new THREE.MeshStandardMaterial({
+          color: 0x374151,
+          roughness: 0.55,
+          metalness: 0.45,
+        });
+        const chairWheelTireMat = new THREE.MeshStandardMaterial({
+          color: 0x26292e,
+          roughness: 0.72,
+          metalness: 0.12,
+        });
+        const chairPillowBlueMat = new THREE.MeshStandardMaterial({
+          color: 0x9ecae8,
+          roughness: 0.84,
           metalness: 0.02,
         });
-        const duvetMat = new THREE.MeshStandardMaterial({
-          color: 0xf5d0dc,
-          roughness: 0.85,
-          metalness: 0.01,
-        });
-        const sheetCuffMat = new THREE.MeshStandardMaterial({
-          color: 0xffffff,
+        const chairStrapMat = new THREE.MeshStandardMaterial({
+          color: 0xcbd5e1,
           roughness: 0.75,
         });
-        const pillowRoseMat = new THREE.MeshStandardMaterial({
-          color: 0xf8d7e3,
-          roughness: 0.82,
+
+        // Helper to trace a rounded rectangle Shape
+        const makeRoundedShape = (w: number, h: number, r: number) => {
+          const shape = new THREE.Shape();
+          const hw = w / 2;
+          const hh = h / 2;
+          const rad = Math.min(r, hw * 0.95, hh * 0.95);
+          shape.moveTo(-hw + rad, -hh);
+          shape.lineTo(hw - rad, -hh);
+          shape.quadraticCurveTo(hw, -hh, hw, -hh + rad);
+          shape.lineTo(hw, hh - rad);
+          shape.quadraticCurveTo(hw, hh, hw - rad, hh);
+          shape.lineTo(-hw + rad, hh);
+          shape.quadraticCurveTo(-hw, hh, -hw, hh - rad);
+          shape.lineTo(-hw, -hh + rad);
+          shape.quadraticCurveTo(-hw, -hh, -hw + rad, -hh);
+          return shape;
+        };
+
+        // 1. Smooth Six-Spoke Star Wheelbase + 6 Rounded Swivel Caster Wheels (圓潤六爪星形底座＋六個滾輪)
+        const baseHub = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.052, 0.062, 0.052, 24),
+          chairLeatherWhiteMat
+        );
+        baseHub.position.y = 0.130;
+        baseHub.castShadow = true;
+        gamingChairGroup.add(baseHub);
+
+        const baseHubDome = new THREE.Mesh(
+          new THREE.SphereGeometry(0.052, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2),
+          chairLeatherWhiteMat
+        );
+        baseHubDome.scale.set(1, 0.45, 1);
+        baseHubDome.position.y = 0.156;
+        gamingChairGroup.add(baseHubDome);
+
+        const WHEEL_RADIUS = 0.028;
+        const LEG_RADIUS = 0.30;
+        for (let i = 0; i < 6; i++) {
+          const theta = (i * Math.PI * 2) / 6;
+          const spokePivot = new THREE.Group();
+          spokePivot.rotation.y = theta;
+
+          // Smooth rounded capsule star leg sweeping down from center hub to wheel socket
+          const legMesh = new THREE.Mesh(
+            new THREE.CapsuleGeometry(0.017, LEG_RADIUS - 0.06, 8, 16),
+            chairLeatherWhiteMat
+          );
+          legMesh.position.set(0, 0.102, LEG_RADIUS * 0.50);
+          legMesh.rotation.x = Math.PI / 2 + 0.19;
+          legMesh.scale.set(1.15, 1.0, 0.85);
+          legMesh.castShadow = true;
+          legMesh.receiveShadow = true;
+          spokePivot.add(legMesh);
+
+          // Caster socket stem
+          const stem = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.011, 0.013, 0.040, 14),
+            chairChromeMat
+          );
+          stem.position.set(0, 0.058, LEG_RADIUS - 0.008);
+          spokePivot.add(stem);
+
+          // Rounded hooded caster dome + twin rolling discs resting flush on Y = 0
+          const casterHood = new THREE.Mesh(
+            new THREE.SphereGeometry(0.026, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.58),
+            chairLeatherWhiteMat
+          );
+          casterHood.scale.set(0.88, 0.85, 1.12);
+          casterHood.position.set(0, WHEEL_RADIUS + 0.008, LEG_RADIUS - 0.008);
+          spokePivot.add(casterHood);
+
+          [-0.012, 0.012].forEach((wx) => {
+            const wheelDisc = new THREE.Mesh(
+              new THREE.CylinderGeometry(WHEEL_RADIUS, WHEEL_RADIUS, 0.012, 20),
+              chairWheelTireMat
+            );
+            wheelDisc.rotation.z = Math.PI / 2;
+            wheelDisc.position.set(wx, WHEEL_RADIUS, LEG_RADIUS - 0.008);
+            wheelDisc.castShadow = true;
+            spokePivot.add(wheelDisc);
+
+            const hubCap = new THREE.Mesh(
+              new THREE.SphereGeometry(0.014, 14, 10),
+              chairTrimGrayMat
+            );
+            hubCap.scale.set(0.45, 1, 1);
+            hubCap.position.set(wx + (wx > 0 ? 0.004 : -0.004), WHEEL_RADIUS, LEG_RADIUS - 0.008);
+            spokePivot.add(hubCap);
+          });
+
+          gamingChairGroup.add(spokePivot);
+        }
+
+        // Pneumatic gas-lift cylinder + telescopic shroud + rounded under-seat housing
+        const gasRod = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.024, 0.026, 0.22, 18),
+          chairChromeMat
+        );
+        gasRod.position.y = 0.25;
+        gasRod.castShadow = true;
+        gamingChairGroup.add(gasRod);
+
+        const gasSleeve = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.034, 0.040, 0.12, 18),
+          chairBolsterWhiteMat
+        );
+        gasSleeve.position.y = 0.205;
+        gamingChairGroup.add(gasSleeve);
+
+        const mechPlate = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.115, 0.105, 0.040, 20),
+          chairMechanismMat
+        );
+        mechPlate.scale.set(1.0, 1.0, 1.12);
+        mechPlate.position.set(0, 0.374, -0.01);
+        mechPlate.castShadow = true;
+        gamingChairGroup.add(mechPlate);
+
+        // 2. Plush Rounded White Seat Cushion + Soft Capsule Side Bolsters
+        const seatShape = makeRoundedShape(0.35, 0.44, 0.11);
+        const seatGeo = new THREE.ExtrudeGeometry(seatShape, {
+          depth: 0.044,
+          bevelEnabled: true,
+          bevelThickness: 0.032,
+          bevelSize: 0.036,
+          bevelSegments: 6,
+          curveSegments: 20,
+        });
+        const seatCushion = new THREE.Mesh(seatGeo, chairLeatherWhiteMat);
+        seatCushion.rotation.x = Math.PI / 2;
+        seatCushion.position.set(0, 0.458, 0.02);
+        seatCushion.castShadow = true;
+        seatCushion.receiveShadow = true;
+        gamingChairGroup.add(seatCushion);
+
+        // Light-Blue Center Color Block extending from backrest crease onto rear half of seat cushion (椅面一半處)
+        const seatPatchShape = makeRoundedShape(0.21, 0.235, 0.014);
+        const seatPatchGeo = new THREE.ExtrudeGeometry(seatPatchShape, {
+          depth: 0.005,
+          bevelEnabled: true,
+          bevelThickness: 0.002,
+          bevelSize: 0.003,
+          bevelSegments: 3,
+          curveSegments: 12,
+        });
+        const seatPatchMesh = new THREE.Mesh(seatPatchGeo, chairPillowBlueMat);
+        seatPatchMesh.rotation.x = Math.PI / 2;
+        seatPatchMesh.position.set(0, 0.493, -0.0925);
+        seatPatchMesh.receiveShadow = true;
+        gamingChairGroup.add(seatPatchMesh);
+
+        [-1, 1].forEach((side) => {
+          // Plush rounded capsule bolsters framing left & right edges of seat
+          const seatBolster = new THREE.Mesh(
+            new THREE.CapsuleGeometry(0.052, 0.34, 10, 18),
+            chairBolsterWhiteMat
+          );
+          seatBolster.rotation.x = Math.PI / 2;
+          seatBolster.rotation.y = side * 0.05;
+          seatBolster.scale.set(1.05, 1.0, 0.92);
+          seatBolster.position.set(side * 0.212, 0.455, 0.018);
+          seatBolster.castShadow = true;
+          seatBolster.receiveShadow = true;
+          gamingChairGroup.add(seatBolster);
+
+          // 3. Smooth Cylindrical Support + Rounded Pill-Shaped Armrests
+          const armStem = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.015, 0.018, 0.20, 16),
+            chairChromeMat
+          );
+          armStem.position.set(side * 0.268, 0.51, -0.01);
+          armStem.castShadow = true;
+          gamingChairGroup.add(armStem);
+
+          const armPad = new THREE.Mesh(
+            new THREE.CapsuleGeometry(0.025, 0.195, 10, 18),
+            chairBolsterWhiteMat
+          );
+          armPad.rotation.x = Math.PI / 2;
+          armPad.scale.set(1.42, 1.0, 0.62);
+          armPad.position.set(side * 0.270, 0.616, 0.025);
+          armPad.castShadow = true;
+          armPad.receiveShadow = true;
+          gamingChairGroup.add(armPad);
         });
 
-        // White-wood headboard against Back Wall (+Z side of bedGroup)
-        const headboard = new THREE.Mesh(new THREE.BoxGeometry(BED_W, 0.88, 0.045), bedWoodMat);
-        headboard.position.set(0, 0.44, BED_L / 2 - 0.0225);
-        headboard.castShadow = true;
-        headboard.receiveShadow = true;
-        bedGroup.add(headboard);
+        // Curved cylindrical spine bracket connecting seat to reclined backrest
+        const spineBracket = new THREE.Mesh(
+          new THREE.CapsuleGeometry(0.026, 0.14, 8, 14),
+          chairMechanismMat
+        );
+        spineBracket.position.set(0, 0.455, -0.232);
+        spineBracket.rotation.x = -0.18;
+        gamingChairGroup.add(spineBracket);
 
-        const headboardCap = new THREE.Mesh(new THREE.BoxGeometry(BED_W + 0.03, 0.032, 0.060), bedWoodMat);
-        headboardCap.position.set(0, 0.896, BED_L / 2 - 0.0225);
-        headboardCap.castShadow = true;
-        bedGroup.add(headboardCap);
+        // 4. Sculpted Smoothly Curved White Backrest Silhouette + Soft Wing Bolsters + Plump Light-Blue Pillows
+        const backrestPivot = new THREE.Group();
+        backrestPivot.position.set(0, 0.475, -0.218);
+        backrestPivot.rotation.x = -0.11; // ~6.3 deg natural recline
 
-        // Footboard, side rails & 4 square white-wood legs
-        const footboard = new THREE.Mesh(new THREE.BoxGeometry(BED_W, 0.34, 0.038), bedWoodMat);
-        footboard.position.set(0, 0.17, -BED_L / 2 + 0.019);
-        footboard.castShadow = true;
-        footboard.receiveShadow = true;
-        bedGroup.add(footboard);
+        // Continuous curvy racing-chair backrest outline with smooth Bézier shoulders & domed headrest
+        const backShape = new THREE.Shape();
+        backShape.moveTo(-0.16, 0.02);
+        backShape.quadraticCurveTo(-0.21, 0.18, -0.205, 0.38);
+        backShape.bezierCurveTo(-0.205, 0.52, -0.215, 0.60, -0.165, 0.67);
+        backShape.quadraticCurveTo(-0.145, 0.79, 0.0, 0.805);
+        backShape.quadraticCurveTo(0.145, 0.79, 0.165, 0.67);
+        backShape.bezierCurveTo(0.215, 0.60, 0.205, 0.52, 0.205, 0.38);
+        backShape.quadraticCurveTo(0.21, 0.18, 0.16, 0.02);
+        backShape.quadraticCurveTo(0.0, -0.015, -0.16, 0.02);
 
-        [-BED_W / 2 + 0.016, BED_W / 2 - 0.016].forEach((rx) => {
-          const rail = new THREE.Mesh(new THREE.BoxGeometry(0.032, 0.16, BED_L - 0.08), bedWoodMat);
-          rail.position.set(rx, 0.25, 0);
+        const backGeo = new THREE.ExtrudeGeometry(backShape, {
+          depth: 0.044,
+          bevelEnabled: true,
+          bevelThickness: 0.032,
+          bevelSize: 0.028,
+          bevelSegments: 6,
+          curveSegments: 24,
+        });
+        const backSculptMesh = new THREE.Mesh(backGeo, chairLeatherWhiteMat);
+        backSculptMesh.position.set(0, 0.02, -0.022);
+        backSculptMesh.castShadow = true;
+        backSculptMesh.receiveShadow = true;
+        backrestPivot.add(backSculptMesh);
+
+        // Rounded pill-shaped harness accent slots on upper chest area
+        [-0.072, 0.072].forEach((hx) => {
+          const harnessSlot = new THREE.Mesh(
+            new THREE.CapsuleGeometry(0.015, 0.032, 8, 12),
+            chairTrimGrayMat
+          );
+          harnessSlot.rotation.z = Math.PI / 2;
+          harnessSlot.scale.set(1.0, 1.0, 2.2);
+          harnessSlot.position.set(hx, 0.615, 0.002);
+          backrestPivot.add(harnessSlot);
+        });
+
+        // Soft capsule backrest wing bolsters curving smoothly up waist & shoulders
+        [-1, 1].forEach((side) => {
+          const lowerWing = new THREE.Mesh(
+            new THREE.CapsuleGeometry(0.046, 0.36, 10, 18),
+            chairBolsterWhiteMat
+          );
+          lowerWing.position.set(side * 0.202, 0.25, 0.022);
+          lowerWing.rotation.z = side * 0.04;
+          lowerWing.rotation.y = -side * 0.24;
+          lowerWing.scale.set(0.95, 1.0, 1.15);
+          lowerWing.castShadow = true;
+          backrestPivot.add(lowerWing);
+
+          const shoulderWing = new THREE.Mesh(
+            new THREE.CapsuleGeometry(0.045, 0.16, 10, 18),
+            chairBolsterWhiteMat
+          );
+          shoulderWing.position.set(side * 0.195, 0.56, 0.020);
+          shoulderWing.rotation.z = side * 0.22;
+          shoulderWing.rotation.y = -side * 0.20;
+          shoulderWing.scale.set(1.05, 1.0, 1.10);
+          shoulderWing.castShadow = true;
+          backrestPivot.add(shoulderWing);
+        });
+
+        // Light-Blue Rectangular Center Color Block extending from below neck down to the seat (頸部往下一點延伸至座墊的淺藍色色塊)
+        const centerPatchShape = makeRoundedShape(0.21, 0.59, 0.014);
+        const centerPatchGeo = new THREE.ExtrudeGeometry(centerPatchShape, {
+          depth: 0.005,
+          bevelEnabled: true,
+          bevelThickness: 0.002,
+          bevelSize: 0.003,
+          bevelSegments: 3,
+          curveSegments: 12,
+        });
+        const centerPatchMesh = new THREE.Mesh(centerPatchGeo, chairPillowBlueMat);
+        centerPatchMesh.position.set(0, 0.310, 0.051);
+        centerPatchMesh.receiveShadow = true;
+        backrestPivot.add(centerPatchMesh);
+
+        // White trim material for the bold straight vertical edge stripes on both pillows
+        const pillowWhiteEdgeMat = new THREE.MeshStandardMaterial({
+          color: 0xffffff,
+          roughness: 0.62,
+          metalness: 0.02,
+        });
+
+        // Rectangular Light-Blue Lumbar Pillow with White Sides & Wider Straight White Vertical Stripes (側面全白＋加粗白直條紋長方形靠枕)
+        const lumbarGroup = new THREE.Group();
+        lumbarGroup.position.set(0, 0.165, 0.090);
+
+        const lumbarShape = makeRoundedShape(0.275, 0.145, 0.022);
+        const lumbarGeo = new THREE.ExtrudeGeometry(lumbarShape, {
+          depth: 0.028,
+          bevelEnabled: true,
+          bevelThickness: 0.020,
+          bevelSize: 0.016,
+          bevelSegments: 5,
+          curveSegments: 16,
+        });
+        const lumbarMain = new THREE.Mesh(lumbarGeo, chairPillowBlueMat);
+        lumbarMain.position.set(0, 0, -0.014);
+        lumbarMain.castShadow = true;
+        lumbarMain.receiveShadow = true;
+        lumbarGroup.add(lumbarMain);
+
+        // Wrap-around white side caps + wider straight vertical stripes along left & right edges
+        const lumbarStripeGeo = new THREE.ExtrudeGeometry(makeRoundedShape(0.026, 0.146, 0.010), {
+          depth: 0.031,
+          bevelEnabled: true,
+          bevelThickness: 0.0205,
+          bevelSize: 0.0165,
+          bevelSegments: 5,
+          curveSegments: 12,
+        });
+        [-0.1255, 0.1255].forEach((ex) => {
+          const whiteSideStripe = new THREE.Mesh(lumbarStripeGeo, pillowWhiteEdgeMat);
+          whiteSideStripe.position.set(ex, 0, -0.0155);
+          whiteSideStripe.castShadow = true;
+          lumbarGroup.add(whiteSideStripe);
+        });
+
+        [-0.105, 0.105].forEach((sx) => {
+          const lStrap = new THREE.Mesh(
+            new THREE.CapsuleGeometry(0.009, 0.09, 6, 10),
+            chairStrapMat
+          );
+          lStrap.rotation.x = Math.PI / 2;
+          lStrap.position.set(sx, 0, -0.068);
+          lumbarGroup.add(lStrap);
+        });
+        backrestPivot.add(lumbarGroup);
+
+        // Rectangular Light-Blue Neck Pillow with White Sides & Wider Straight White Vertical Stripes (稍微往下移一丁點的頸枕)
+        const neckGroup = new THREE.Group();
+        neckGroup.position.set(0, 0.658, 0.082);
+
+        const neckShape = makeRoundedShape(0.215, 0.102, 0.018);
+        const neckGeo = new THREE.ExtrudeGeometry(neckShape, {
+          depth: 0.022,
+          bevelEnabled: true,
+          bevelThickness: 0.016,
+          bevelSize: 0.012,
+          bevelSegments: 5,
+          curveSegments: 16,
+        });
+        const neckMain = new THREE.Mesh(neckGeo, chairPillowBlueMat);
+        neckMain.position.set(0, 0, -0.011);
+        neckMain.castShadow = true;
+        neckMain.receiveShadow = true;
+        neckGroup.add(neckMain);
+
+        // Wrap-around white side caps + wider straight vertical stripes along left & right edges
+        const neckStripeGeo = new THREE.ExtrudeGeometry(makeRoundedShape(0.022, 0.103, 0.008), {
+          depth: 0.024,
+          bevelEnabled: true,
+          bevelThickness: 0.0165,
+          bevelSize: 0.0125,
+          bevelSegments: 5,
+          curveSegments: 12,
+        });
+        [-0.0975, 0.0975].forEach((ex) => {
+          const neckWhiteStripe = new THREE.Mesh(neckStripeGeo, pillowWhiteEdgeMat);
+          neckWhiteStripe.position.set(ex, 0, -0.012);
+          neckWhiteStripe.castShadow = true;
+          neckGroup.add(neckWhiteStripe);
+        });
+
+        const neckStrap = new THREE.Mesh(
+          new THREE.CapsuleGeometry(0.012, 0.09, 6, 10),
+          chairStrapMat
+        );
+        neckStrap.rotation.x = Math.PI / 2;
+        neckStrap.position.set(0, 0.005, -0.064);
+        neckGroup.add(neckStrap);
+
+        backrestPivot.add(neckGroup);
+
+        // Fluffy Petal-Shaped Faux-Fur Rabbit Ears Headband on Chair Backrest (參照實物形狀與毛茸茸質感之白色外耳＋淺藍色內耳髮箍兔耳)
+        const createPlushFurTextures = () => {
+          const cCol = document.createElement('canvas');
+          cCol.width = 256;
+          cCol.height = 256;
+          const ctxCol = cCol.getContext('2d');
+
+          const cBump = document.createElement('canvas');
+          cBump.width = 256;
+          cBump.height = 256;
+          const ctxBump = cBump.getContext('2d');
+
+          if (ctxCol && ctxBump) {
+            ctxCol.fillStyle = '#f8f9fc';
+            ctxCol.fillRect(0, 0, 256, 256);
+            ctxBump.fillStyle = '#808080';
+            ctxBump.fillRect(0, 0, 256, 256);
+
+            // Multi-directional fine silky plush faux-fur fibers
+            for (let i = 0; i < 2400; i++) {
+              const x = (i * 73) % 256;
+              const y = (i * 139) % 256;
+              const ang = ((i * 29) % 360) * (Math.PI / 180) * 0.25 - 0.4;
+              const len = 7 + (i % 7);
+              const bright = i % 2 === 0;
+
+              ctxCol.strokeStyle = bright ? 'rgba(255,255,255,0.55)' : 'rgba(218,226,238,0.42)';
+              ctxCol.lineWidth = 1.4;
+              ctxCol.beginPath();
+              ctxCol.moveTo(x, y);
+              ctxCol.lineTo(x + Math.sin(ang) * len, y - Math.cos(ang) * len);
+              ctxCol.stroke();
+
+              ctxBump.strokeStyle = bright ? 'rgba(245,245,245,0.65)' : 'rgba(55,55,55,0.55)';
+              ctxBump.lineWidth = 1.6;
+              ctxBump.beginPath();
+              ctxBump.moveTo(x, y);
+              ctxBump.lineTo(x + Math.sin(ang) * len, y - Math.cos(ang) * len);
+              ctxBump.stroke();
+            }
+          }
+
+          const furColorTex = new THREE.CanvasTexture(cCol);
+          furColorTex.colorSpace = THREE.SRGBColorSpace;
+          furColorTex.wrapS = THREE.RepeatWrapping;
+          furColorTex.wrapT = THREE.RepeatWrapping;
+          furColorTex.repeat.set(3.2, 3.2);
+
+          const furBumpTex = new THREE.CanvasTexture(cBump);
+          furBumpTex.wrapS = THREE.RepeatWrapping;
+          furBumpTex.wrapT = THREE.RepeatWrapping;
+          furBumpTex.repeat.set(3.2, 3.2);
+
+          extraRoomTexturesToDispose.push(furColorTex, furBumpTex);
+          return { furColorTex, furBumpTex };
+        };
+
+        const { furColorTex, furBumpTex } = createPlushFurTextures();
+        const plushWhiteFurMat = new THREE.MeshPhysicalMaterial({
+          map: furColorTex,
+          bumpMap: furBumpTex,
+          bumpScale: 0.0068,
+          color: 0xffffff,
+          roughness: 0.94,
+          metalness: 0.0,
+          sheen: 1.0,
+          sheenRoughness: 0.65,
+          sheenColor: new THREE.Color(0xffffff),
+        });
+        const plushBlueFurMat = new THREE.MeshPhysicalMaterial({
+          map: furColorTex,
+          bumpMap: furBumpTex,
+          bumpScale: 0.0058,
+          color: 0x7fd4f7,
+          roughness: 0.94,
+          metalness: 0.0,
+          sheen: 1.0,
+          sheenRoughness: 0.68,
+          sheenColor: new THREE.Color(0xdcf4ff),
+        });
+
+        const rabbitEarsGroup = new THREE.Group();
+        rabbitEarsGroup.position.set(0, 0.808, -0.004);
+
+        // Fluffy white fur headband arching gently over the top crest of the chair backrest
+        const headbandCurve = new THREE.CatmullRomCurve3([
+          new THREE.Vector3(-0.145, -0.058, 0.002),
+          new THREE.Vector3(-0.105, -0.008, 0.002),
+          new THREE.Vector3(0.0, 0.012, 0.002),
+          new THREE.Vector3(0.105, -0.008, 0.002),
+          new THREE.Vector3(0.145, -0.058, 0.002),
+        ]);
+        const headbandMesh = new THREE.Mesh(
+          new THREE.TubeGeometry(headbandCurve, 28, 0.014, 12, false),
+          plushWhiteFurMat
+        );
+        headbandMesh.castShadow = true;
+        headbandMesh.receiveShadow = true;
+        rabbitEarsGroup.add(headbandMesh);
+
+        // Petal/paddle outer & inner ear silhouettes matching ears.jpg (narrow pinched base widening into soft plump oval tip)
+        const makePetalEarShape = (scaleW: number, scaleH: number) => {
+          const s = new THREE.Shape();
+          s.moveTo(-0.016 * scaleW, 0);
+          s.bezierCurveTo(
+            -0.022 * scaleW, 0.048 * scaleH,
+            -0.054 * scaleW, 0.115 * scaleH,
+            -0.042 * scaleW, 0.185 * scaleH
+          );
+          s.bezierCurveTo(
+            -0.032 * scaleW, 0.228 * scaleH,
+            -0.012 * scaleW, 0.238 * scaleH,
+            0, 0.238 * scaleH
+          );
+          s.bezierCurveTo(
+            0.012 * scaleW, 0.238 * scaleH,
+            0.032 * scaleW, 0.228 * scaleH,
+            0.042 * scaleW, 0.185 * scaleH
+          );
+          s.bezierCurveTo(
+            0.054 * scaleW, 0.115 * scaleH,
+            0.022 * scaleW, 0.048 * scaleH,
+            0.016 * scaleW, 0
+          );
+          s.quadraticCurveTo(0, -0.008 * scaleH, -0.016 * scaleW, 0);
+          return s;
+        };
+
+        const outerPetalShape = makePetalEarShape(1.0, 1.0);
+        const outerPetalGeo = new THREE.ExtrudeGeometry(outerPetalShape, {
+          depth: 0.010,
+          bevelEnabled: true,
+          bevelThickness: 0.011,
+          bevelSize: 0.0085,
+          bevelSegments: 5,
+          curveSegments: 24,
+        });
+        outerPetalGeo.translate(0, 0, -0.005);
+
+        const innerPetalShape = makePetalEarShape(0.75, 0.87);
+        const innerPetalGeo = new THREE.ExtrudeGeometry(innerPetalShape, {
+          depth: 0.007,
+          bevelEnabled: true,
+          bevelThickness: 0.006,
+          bevelSize: 0.0055,
+          bevelSegments: 4,
+          curveSegments: 22,
+        });
+        innerPetalGeo.translate(0, 0.016, 0.0075);
+
+        // Perimeter fur tuft instances to give genuine soft fluffy rim silhouette ("毛毛的感覺")
+        const whiteTuftMats: THREE.Matrix4[] = [];
+        const blueTuftMats: THREE.Matrix4[] = [];
+        const tuftGeo = new THREE.ConeGeometry(0.0052, 0.016, 5);
+        tuftGeo.translate(0, 0.008, 0);
+
+        const samplePetalTufts = (
+          parentMatrix: THREE.Matrix4,
+          targetArr: THREE.Matrix4[],
+          scaleW: number,
+          scaleH: number,
+          zOff: number,
+          steps: number
+        ) => {
+          const pts = makePetalEarShape(scaleW, scaleH).getSpacedPoints(steps);
+          const upAxis = new THREE.Vector3(0, 1, 0);
+          const localMat = new THREE.Matrix4();
+          const tmpPos = new THREE.Vector3();
+          const tmpQuat = new THREE.Quaternion();
+          const tmpScale = new THREE.Vector3(1, 1, 1);
+
+          for (let i = 1; i < pts.length - 1; i++) {
+            const p = pts[i];
+            const prev = pts[i - 1];
+            const next = pts[i + 1];
+            const tx = next.x - prev.x;
+            const ty = next.y - prev.y;
+            const outDir = new THREE.Vector3(ty, -tx, (i % 2 === 0 ? 0.25 : -0.25)).normalize();
+            tmpPos.set(p.x, p.y, zOff + (i % 3 === 0 ? 0.002 : -0.002));
+            tmpQuat.setFromUnitVectors(upAxis, outDir);
+            const lenS = 0.78 + ((i * 17) % 10) * 0.048;
+            tmpScale.set(0.95, lenS, 0.95);
+            localMat.compose(tmpPos, tmpQuat, tmpScale);
+            targetArr.push(new THREE.Matrix4().multiplyMatrices(parentMatrix, localMat));
+          }
+        };
+
+        [-1, 1].forEach((side) => {
+          const earHolder = new THREE.Group();
+          earHolder.position.set(side * 0.068, 0.002, 0.002);
+          earHolder.rotation.z = -side * 0.22;
+          earHolder.rotation.x = 0.08;
+          earHolder.updateMatrix();
+
+          // Pinch-wrapped fur base cuff blending ear smoothly onto headband
+          const baseCuff = new THREE.Mesh(
+            new THREE.SphereGeometry(0.022, 14, 12),
+            plushWhiteFurMat
+          );
+          baseCuff.scale.set(1.05, 0.95, 0.72);
+          baseCuff.position.y = 0.004;
+          baseCuff.castShadow = true;
+          earHolder.add(baseCuff);
+
+          const outerEarMesh = new THREE.Mesh(outerPetalGeo, plushWhiteFurMat);
+          outerEarMesh.castShadow = true;
+          outerEarMesh.receiveShadow = true;
+          earHolder.add(outerEarMesh);
+
+          const innerEarMesh = new THREE.Mesh(innerPetalGeo, plushBlueFurMat);
+          innerEarMesh.receiveShadow = true;
+          earHolder.add(innerEarMesh);
+
+          samplePetalTufts(earHolder.matrix, whiteTuftMats, 1.07, 1.02, 0.0, 52);
+          samplePetalTufts(earHolder.matrix, blueTuftMats, 0.74, 0.87, 0.011, 30);
+
+          rabbitEarsGroup.add(earHolder);
+        });
+
+        // Subtle fluffy headband halo tufts along top arch
+        const hbAxis = new THREE.Vector3(0, 1, 0);
+        const hbMat4 = new THREE.Matrix4();
+        const hbPos = new THREE.Vector3();
+        const hbQuat = new THREE.Quaternion();
+        const hbScale = new THREE.Vector3();
+        for (let hi = 1; hi <= 18; hi++) {
+          const ht = hi / 19;
+          const pt = headbandCurve.getPointAt(ht);
+          const dir = new THREE.Vector3((ht - 0.5) * 0.6, 1.0, (hi % 2 === 0 ? 0.35 : -0.35)).normalize();
+          hbPos.copy(pt).addScaledVector(dir, 0.011);
+          hbQuat.setFromUnitVectors(hbAxis, dir);
+          hbScale.set(1.0, 0.82, 1.0);
+          hbMat4.compose(hbPos, hbQuat, hbScale);
+          whiteTuftMats.push(hbMat4.clone());
+        }
+
+        const whiteTuftInst = new THREE.InstancedMesh(tuftGeo, plushWhiteFurMat, whiteTuftMats.length);
+        whiteTuftMats.forEach((m, idx) => whiteTuftInst.setMatrixAt(idx, m));
+        whiteTuftInst.instanceMatrix.needsUpdate = true;
+        rabbitEarsGroup.add(whiteTuftInst);
+
+        const blueTuftInst = new THREE.InstancedMesh(tuftGeo, plushBlueFurMat, blueTuftMats.length);
+        blueTuftMats.forEach((m, idx) => blueTuftInst.setMatrixAt(idx, m));
+        blueTuftInst.instanceMatrix.needsUpdate = true;
+        rabbitEarsGroup.add(blueTuftInst);
+
+        backrestPivot.add(rabbitEarsGroup);
+        gamingChairGroup.add(backrestPivot);
+        coloredRoomGroup.add(gamingChairGroup);
+
+        // Double-Deck Capsule Hotel Space Pods (靠在房間角落的上下兩座 120×120×300cm 正方形膠囊旅館太空艙，艙門面向房門 -Z，側面為整塊白橡木色木板，上艙打開、下艙貼手寫「雜物」紙條、樓梯位於艙門側)
+        const POD_W = 1.20;
+        const POD_H = 1.20;
+        const POD_L = 3.00;
+        const capsuleStackGroup = new THREE.Group();
+        capsuleStackGroup.position.set(
+          -5.0 + 0.04 + POD_W / 2,
+          0,
+          PR_SIZE / 2 - 0.04 - POD_L / 2
+        );
+
+        const capShellMat = new THREE.MeshStandardMaterial({
+          color: 0xf4f6f9,
+          roughness: 0.34,
+          metalness: 0.08,
+        });
+        const capBezelMat = new THREE.MeshStandardMaterial({
+          color: 0xffffff,
+          roughness: 0.28,
+          metalness: 0.10,
+        });
+        const capDoorMat = new THREE.MeshStandardMaterial({
+          color: 0xebeff5,
+          roughness: 0.32,
+          metalness: 0.12,
+        });
+        const capDarkTrimMat = new THREE.MeshStandardMaterial({
+          color: 0x334155,
+          roughness: 0.50,
+          metalness: 0.28,
+        });
+        const capMetalMat = new THREE.MeshStandardMaterial({
+          color: 0xcbd5e1,
+          roughness: 0.25,
+          metalness: 0.82,
+        });
+        const capLedMat = new THREE.MeshBasicMaterial({
+          color: 0x9ad8fa,
+        });
+        const capInteriorLedMat = new THREE.MeshBasicMaterial({
+          color: 0xf0f7ff,
+        });
+        const capWindowMat = new THREE.MeshStandardMaterial({
+          color: 0xbae6fd,
+          emissive: 0x38bdf8,
+          emissiveIntensity: 0.38,
+          roughness: 0.18,
+          metalness: 0.15,
+        });
+
+        const whiteOakTex = createWhiteOakWoodTexture();
+        whiteOakTex.repeat.set(1.2, 1.4);
+        whiteOakTex.needsUpdate = true;
+        const capWhiteOakMat = new THREE.MeshStandardMaterial({
+          map: whiteOakTex,
+          color: 0xf5efe6,
+          roughness: 0.46,
+          metalness: 0.02,
+        });
+
+        const capInteriorWallMat = new THREE.MeshStandardMaterial({
+          color: 0xf1f5f9,
+          roughness: 0.62,
+          metalness: 0.02,
+        });
+        const capFutonMat = new THREE.MeshStandardMaterial({
+          color: 0xfafbfc,
+          roughness: 0.88,
+          metalness: 0.01,
+        });
+        const capSheetMat = new THREE.MeshStandardMaterial({
+          color: 0xb7c7d6,
+          roughness: 0.86,
+          metalness: 0.01,
+        });
+
+        // Crisp illuminated berth number badges ("01" lower / "02" upper)
+        const createCapsuleBadgeTex = (code: string) => {
+          const c = document.createElement('canvas');
+          c.width = 128;
+          c.height = 64;
+          const ctx = c.getContext('2d');
+          if (ctx) {
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(0, 0, 128, 64);
+            ctx.strokeStyle = '#7dd3fc';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(4, 4, 120, 56);
+            ctx.fillStyle = '#bae6fd';
+            ctx.font = 'bold 34px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(code, 64, 34);
+          }
+          const tex = new THREE.CanvasTexture(c);
+          tex.colorSpace = THREE.SRGBColorSpace;
+          extraRoomTexturesToDispose.push(tex);
+          return tex;
+        };
+
+        const createRoundedRingShape = (
+          outerW: number,
+          outerH: number,
+          outerR: number,
+          innerW: number,
+          innerH: number,
+          innerR: number
+        ) => {
+          const shape = makeRoundedShape(outerW, outerH, outerR);
+          const hole = new THREE.Path();
+          const ihw = innerW / 2;
+          const ihh = innerH / 2;
+          const ir = Math.min(innerR, ihw * 0.9, ihh * 0.9);
+          hole.moveTo(-ihw + ir, -ihh);
+          hole.lineTo(-ihw, -ihh + ir);
+          hole.lineTo(-ihw, ihh - ir);
+          hole.quadraticCurveTo(-ihw, ihh, -ihw + ir, ihh);
+          hole.lineTo(ihw - ir, ihh);
+          hole.quadraticCurveTo(ihw, ihh, ihw, ihh - ir);
+          hole.lineTo(ihw, -ihh + ir);
+          hole.quadraticCurveTo(ihw, -ihh, ihw - ir, -ihh);
+          hole.lineTo(-ihw + ir, -ihh);
+          shape.holes.push(hole);
+          return shape;
+        };
+
+        const podBezelGeo = new THREE.ExtrudeGeometry(
+          createRoundedRingShape(POD_W - 0.012, POD_H - 0.012, 0.06, 0.90, 0.88, 0.14),
+          {
+            depth: 0.055,
+            bevelEnabled: true,
+            bevelThickness: 0.012,
+            bevelSize: 0.010,
+            bevelSegments: 4,
+            curveSegments: 16,
+          }
+        );
+
+        const podLedGeo = new THREE.ExtrudeGeometry(
+          createRoundedRingShape(0.925, 0.905, 0.15, 0.895, 0.875, 0.135),
+          {
+            depth: 0.010,
+            bevelEnabled: false,
+            curveSegments: 16,
+          }
+        );
+
+        const podDoorGeo = new THREE.ExtrudeGeometry(
+          makeRoundedShape(0.87, 0.85, 0.125),
+          {
+            depth: 0.024,
+            bevelEnabled: true,
+            bevelThickness: 0.008,
+            bevelSize: 0.006,
+            bevelSegments: 3,
+            curveSegments: 16,
+          }
+        );
+
+        const podOpenDoorGeo = new THREE.ExtrudeGeometry(
+          makeRoundedShape(0.24, 0.85, 0.045),
+          {
+            depth: 0.024,
+            bevelEnabled: true,
+            bevelThickness: 0.007,
+            bevelSize: 0.005,
+            bevelSegments: 3,
+            curveSegments: 12,
+          }
+        );
+
+        const zhaWuNoteTex = createHandwrittenZhaWuTexture();
+        const zhaWuNoteMat = new THREE.MeshStandardMaterial({
+          map: zhaWuNoteTex,
+          roughness: 0.86,
+          metalness: 0.01,
+        });
+        const maskingTapeMat = new THREE.MeshStandardMaterial({
+          color: 0xebd9b0,
+          transparent: true,
+          opacity: 0.86,
+          roughness: 0.65,
+        });
+
+        (['01', '02'] as const).forEach((podCode, tierIdx) => {
+          const podGroup = new THREE.Group();
+          podGroup.position.y = tierIdx * POD_H;
+          const isUpperOpen = tierIdx === 1;
+
+          // 1. Main 120×120×200 cm Capsule Body Housing
+          if (!isUpperOpen) {
+            const bodyShell = new THREE.Mesh(
+              new THREE.BoxGeometry(POD_W - 0.01, POD_H - 0.016, POD_L - 0.04),
+              capShellMat
+            );
+            bodyShell.position.set(-0.005, POD_H / 2, 0.02);
+            bodyShell.castShadow = true;
+            bodyShell.receiveShadow = true;
+            podGroup.add(bodyShell);
+          } else {
+            // Hollowed Upper Capsule ('02') so the hatch opens cleanly into a furnished cozy sleeping cabin
+            const wallT = 0.045;
+            const shellDepth = POD_L - 0.04;
+            const shellZ = 0.02;
+
+            const podFloor = new THREE.Mesh(
+              new THREE.BoxGeometry(POD_W - 0.01, wallT, shellDepth),
+              capInteriorWallMat
+            );
+            podFloor.position.set(-0.005, wallT / 2 + 0.008, shellZ);
+            podFloor.receiveShadow = true;
+            podGroup.add(podFloor);
+
+            const podCeiling = new THREE.Mesh(
+              new THREE.BoxGeometry(POD_W - 0.01, wallT, shellDepth),
+              capShellMat
+            );
+            podCeiling.position.set(-0.005, POD_H - wallT / 2 - 0.008, shellZ);
+            podCeiling.castShadow = true;
+            podGroup.add(podCeiling);
+
+            const podLeftWall = new THREE.Mesh(
+              new THREE.BoxGeometry(wallT, POD_H - 0.016, shellDepth),
+              capInteriorWallMat
+            );
+            podLeftWall.position.set(-POD_W / 2 + wallT / 2, POD_H / 2, shellZ);
+            podLeftWall.receiveShadow = true;
+            podGroup.add(podLeftWall);
+
+            const podRightWall = new THREE.Mesh(
+              new THREE.BoxGeometry(wallT, POD_H - 0.016, shellDepth),
+              capInteriorWallMat
+            );
+            podRightWall.position.set(POD_W / 2 - wallT / 2 - 0.01, POD_H / 2, shellZ);
+            podRightWall.receiveShadow = true;
+            podGroup.add(podRightWall);
+
+            const podBackWall = new THREE.Mesh(
+              new THREE.BoxGeometry(POD_W - 0.01, POD_H - 0.016, 0.05),
+              capWhiteOakMat
+            );
+            podBackWall.position.set(-0.005, POD_H / 2, POD_L / 2 - 0.025);
+            podBackWall.receiveShadow = true;
+            podGroup.add(podBackWall);
+
+            // Cozy capsule interior: white futon mattress, light blue-gray blanket, fluffy pillow, oak shelf & ceiling LED light (sized for 300cm capsule depth)
+            const futon = new THREE.Mesh(
+              new THREE.BoxGeometry(1.06, 0.095, 2.78),
+              capFutonMat
+            );
+            futon.position.set(0, wallT + 0.055, 0.05);
+            futon.receiveShadow = true;
+            futon.castShadow = true;
+            podGroup.add(futon);
+
+            const blanket = new THREE.Mesh(
+              new THREE.BoxGeometry(1.03, 0.065, 1.56),
+              capSheetMat
+            );
+            blanket.position.set(0, wallT + 0.115, 0.56);
+            blanket.castShadow = true;
+            blanket.receiveShadow = true;
+            podGroup.add(blanket);
+
+            const podPillow = new THREE.Mesh(
+              new THREE.CapsuleGeometry(0.085, 0.44, 8, 14),
+              capBezelMat
+            );
+            podPillow.rotation.z = Math.PI / 2;
+            podPillow.scale.set(0.75, 1.0, 1.35);
+            podPillow.position.set(0, wallT + 0.145, 1.18);
+            podPillow.castShadow = true;
+            podGroup.add(podPillow);
+
+            // Inner oak bedside ledge along left wall
+            const innerShelf = new THREE.Mesh(
+              new THREE.BoxGeometry(0.14, 0.024, 0.72),
+              capWhiteOakMat
+            );
+            innerShelf.position.set(-POD_W / 2 + wallT + 0.07, 0.42, 0.90);
+            innerShelf.castShadow = true;
+            podGroup.add(innerShelf);
+
+            // Movie Poster taped cleanly on leftmost capsule wall directly beside/above innerShelf (膠囊艙架子最左邊牆面海報)
+            const kamenPosterTex = textureLoader.load('/assets/capsule_kamen_poster.png');
+            kamenPosterTex.colorSpace = THREE.SRGBColorSpace;
+            kamenPosterTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+            extraRoomTexturesToDispose.push(kamenPosterTex);
+
+            const KP_W = 0.36;
+            const KP_H = 0.508;
+            const kamenPosterGroup = new THREE.Group();
+            kamenPosterGroup.position.set(-POD_W / 2 + wallT + 0.0025, 0.75, 1.04);
+            kamenPosterGroup.rotation.y = Math.PI / 2;
+
+            const kamenPosterMesh = new THREE.Mesh(
+              new THREE.PlaneGeometry(KP_W, KP_H),
+              new THREE.MeshStandardMaterial({
+                map: kamenPosterTex,
+                roughness: 0.48,
+                metalness: 0.02,
+              })
+            );
+            kamenPosterMesh.receiveShadow = true;
+            kamenPosterGroup.add(kamenPosterMesh);
+
+            // Tiny corner masking-tape strips holding poster onto capsule wall
+            [
+              [-KP_W / 2 + 0.022, KP_H / 2 - 0.004, 0.38],
+              [KP_W / 2 - 0.022, KP_H / 2 - 0.004, -0.38],
+              [-KP_W / 2 + 0.022, -KP_H / 2 + 0.004, -0.34],
+              [KP_W / 2 - 0.022, -KP_H / 2 + 0.004, 0.34],
+            ].forEach(([tx, ty, rotZ]) => {
+              const tapeBit = new THREE.Mesh(new THREE.PlaneGeometry(0.044, 0.015), maskingTapeMat);
+              tapeBit.position.set(tx, ty, 0.0008);
+              tapeBit.rotation.z = rotZ;
+              kamenPosterGroup.add(tapeBit);
+            });
+
+            podGroup.add(kamenPosterGroup);
+
+            // Ceiling cool-white LED strip + local capsule lights
+            const ceilingLedBar = new THREE.Mesh(
+              new THREE.BoxGeometry(0.54, 0.014, 2.24),
+              capInteriorLedMat
+            );
+            ceilingLedBar.position.set(0, POD_H - wallT - 0.012, 0.06);
+            podGroup.add(ceilingLedBar);
+
+            const interiorPodLightBack = new THREE.PointLight(0xe6f2ff, 1.05, 4.2, 1.15);
+            interiorPodLightBack.position.set(0, POD_H - 0.22, 0.55);
+            podGroup.add(interiorPodLightBack);
+
+            const interiorPodLightFront = new THREE.PointLight(0xe6f2ff, 0.85, 3.8, 1.2);
+            interiorPodLightFront.position.set(0, POD_H - 0.22, -0.55);
+            podGroup.add(interiorPodLightFront);
+          }
+
+          // Horizontal separation reveal band (recessed behind the continuous +X oak board)
+          if (tierIdx === 1) {
+            const dividerReveal = new THREE.Mesh(
+              new THREE.BoxGeometry(POD_W - 0.04, 0.022, POD_L - 0.04),
+              capDarkTrimMat
+            );
+            dividerReveal.position.set(-0.01, 0, 0.015);
+            podGroup.add(dividerReveal);
+          }
+
+          // 2. Square Front Capsule Facade & Hatch Facing Room Door (-Z)
+          const facadeZ = -POD_L / 2;
+
+          const frontBezel = new THREE.Mesh(podBezelGeo, capBezelMat);
+          frontBezel.rotation.y = Math.PI; // Faces -Z toward the room door
+          frontBezel.position.set(0, POD_H / 2, facadeZ + 0.048);
+          frontBezel.castShadow = true;
+          frontBezel.receiveShadow = true;
+          podGroup.add(frontBezel);
+
+          // Ice-blue LED perimeter ring framing the capsule hatch
+          const ledFrame = new THREE.Mesh(podLedGeo, capLedMat);
+          ledFrame.rotation.y = Math.PI;
+          ledFrame.position.set(0, POD_H / 2, facadeZ + 0.010);
+          podGroup.add(ledFrame);
+
+          if (!isUpperOpen) {
+            // Lower Capsule ('01'): Closed hatch door + frosted window + grab handle + handwritten 「雜物」 note
+            const doorLeaf = new THREE.Mesh(podDoorGeo, capDoorMat);
+            doorLeaf.rotation.y = Math.PI;
+            doorLeaf.position.set(0, POD_H / 2, facadeZ + 0.036);
+            doorLeaf.castShadow = true;
+            doorLeaf.receiveShadow = true;
+            podGroup.add(doorLeaf);
+
+            const viewFrame = new THREE.Mesh(
+              new THREE.CapsuleGeometry(0.072, 0.42, 8, 14),
+              capDarkTrimMat
+            );
+            viewFrame.scale.set(1.0, 1.0, 0.25);
+            viewFrame.position.set(-0.18, POD_H / 2 + 0.02, facadeZ + 0.004);
+            podGroup.add(viewFrame);
+
+            const viewGlass = new THREE.Mesh(
+              new THREE.CapsuleGeometry(0.058, 0.39, 8, 14),
+              capWindowMat
+            );
+            viewGlass.scale.set(1.0, 1.0, 0.22);
+            viewGlass.position.set(-0.18, POD_H / 2 + 0.02, facadeZ + 0.001);
+            podGroup.add(viewGlass);
+
+            const doorHandle = new THREE.Mesh(
+              new THREE.CapsuleGeometry(0.011, 0.24, 6, 12),
+              capMetalMat
+            );
+            doorHandle.position.set(0.28, POD_H / 2, facadeZ - 0.006);
+            doorHandle.castShadow = true;
+            podGroup.add(doorHandle);
+
+            // Handwritten paper note 「雜物」 taped flat on lower pod door
+            const zhaWuNoteMesh = new THREE.Mesh(
+              new THREE.PlaneGeometry(0.25, 0.29),
+              zhaWuNoteMat
+            );
+            zhaWuNoteMesh.rotation.y = Math.PI;
+            zhaWuNoteMesh.rotation.z = 0.042;
+            zhaWuNoteMesh.position.set(0.06, POD_H / 2 + 0.02, facadeZ + 0.0015);
+            podGroup.add(zhaWuNoteMesh);
+
+            const noteTape = new THREE.Mesh(
+              new THREE.PlaneGeometry(0.085, 0.024),
+              maskingTapeMat
+            );
+            noteTape.rotation.y = Math.PI;
+            noteTape.rotation.z = -0.05;
+            noteTape.position.set(0.054, POD_H / 2 + 0.165, facadeZ + 0.0005);
+            podGroup.add(noteTape);
+          } else {
+            // Upper Capsule ('02'): Slid-open hatch pocket door panel tucked neatly on left edge, opening clearly into interior
+            const openDoorPanel = new THREE.Mesh(podOpenDoorGeo, capDoorMat);
+            openDoorPanel.rotation.y = Math.PI;
+            openDoorPanel.position.set(-0.33, POD_H / 2, facadeZ + 0.036);
+            openDoorPanel.castShadow = true;
+            openDoorPanel.receiveShadow = true;
+            podGroup.add(openDoorPanel);
+
+            const openDoorHandle = new THREE.Mesh(
+              new THREE.CapsuleGeometry(0.011, 0.24, 6, 12),
+              capMetalMat
+            );
+            openDoorHandle.position.set(-0.235, POD_H / 2, facadeZ - 0.004);
+            openDoorHandle.castShadow = true;
+            podGroup.add(openDoorHandle);
+
+            // Sleek brushed-aluminum upper/lower sliding door track rails
+            [-0.43, 0.43].forEach((ty) => {
+              const trackBar = new THREE.Mesh(
+                new THREE.BoxGeometry(0.86, 0.012, 0.016),
+                capMetalMat
+              );
+              trackBar.position.set(0, POD_H / 2 + ty, facadeZ + 0.022);
+              podGroup.add(trackBar);
+            });
+          }
+
+          // Digital keypad & glowing berth badge ("01" / "02") on front header & pillar
+          const badgeMat = new THREE.MeshBasicMaterial({
+            map: createCapsuleBadgeTex(podCode),
+          });
+          const berthBadge = new THREE.Mesh(new THREE.PlaneGeometry(0.11, 0.055), badgeMat);
+          berthBadge.rotation.y = Math.PI;
+          berthBadge.position.set(0, POD_H - 0.088, facadeZ - 0.019);
+          podGroup.add(berthBadge);
+
+          const controlPad = new THREE.Mesh(
+            new THREE.BoxGeometry(0.048, 0.085, 0.010),
+            capDarkTrimMat
+          );
+          controlPad.position.set(0.51, POD_H / 2 + 0.05, facadeZ - 0.016);
+          podGroup.add(controlPad);
+
+          const padStatusDot = new THREE.Mesh(
+            new THREE.SphereGeometry(0.007, 10, 8),
+            capLedMat
+          );
+          padStatusDot.position.set(0.51, POD_H / 2 + 0.072, facadeZ - 0.022);
+          podGroup.add(padStatusDot);
+
+          // Lower ventilation grille louver strip
+          const ventStrip = new THREE.Mesh(
+            new THREE.BoxGeometry(0.42, 0.026, 0.012),
+            capDarkTrimMat
+          );
+          ventStrip.position.set(0, 0.082, facadeZ - 0.014);
+          podGroup.add(ventStrip);
+
+          capsuleStackGroup.add(podGroup);
+        });
+
+        // Exposed +X Side Wall: One Continuous White-Oak Wooden Board (側面的整塊白橡木色木板)
+        const oakSideBoard = new THREE.Mesh(
+          new THREE.BoxGeometry(0.026, POD_H * 2 - 0.008, POD_L - 0.004),
+          capWhiteOakMat
+        );
+        oakSideBoard.position.set(POD_W / 2 - 0.002, POD_H, 0.012);
+        oakSideBoard.castShadow = true;
+        oakSideBoard.receiveShadow = true;
+        capsuleStackGroup.add(oakSideBoard);
+
+        // 3. Brushed-Aluminum Front Hatch-Side Access Ladder to Upper Pod (位於艙門側的爬梯)
+        const ladderGroup = new THREE.Group();
+        ladderGroup.position.set(-0.45, 0, -POD_L / 2 - 0.072);
+
+        [-0.11, 0.11].forEach((lx) => {
+          const rail = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.013, 0.013, 1.66, 12),
+            capMetalMat
+          );
+          rail.position.set(lx, 0.85, 0);
           rail.castShadow = true;
-          rail.receiveShadow = true;
-          bedGroup.add(rail);
+          ladderGroup.add(rail);
+
+          // Horizontal standoffs bolting front ladder rails cleanly onto the capsule front frame
+          [0.34, 1.18, 1.62].forEach((sy) => {
+            const standoff = new THREE.Mesh(
+              new THREE.CylinderGeometry(0.010, 0.010, 0.072, 10),
+              capDarkTrimMat
+            );
+            standoff.rotation.x = Math.PI / 2;
+            standoff.position.set(lx, sy, 0.036);
+            ladderGroup.add(standoff);
+          });
         });
 
-        [
-          [-BED_W / 2 + 0.028, -BED_L / 2 + 0.028],
-          [BED_W / 2 - 0.028, -BED_L / 2 + 0.028],
-          [-BED_W / 2 + 0.028, BED_L / 2 - 0.028],
-          [BED_W / 2 - 0.028, BED_L / 2 - 0.028],
-        ].forEach(([lx, lz]) => {
-          const bLeg = new THREE.Mesh(new THREE.BoxGeometry(0.056, 0.34, 0.056), bedWoodMat);
-          bLeg.position.set(lx, 0.17, lz);
-          bLeg.castShadow = true;
-          bLeg.receiveShadow = true;
-          bedGroup.add(bLeg);
+        [0.28, 0.56, 0.84, 1.12, 1.40].forEach((ry) => {
+          const rung = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.012, 0.012, 0.22, 12),
+            capDarkTrimMat
+          );
+          rung.rotation.z = Math.PI / 2;
+          rung.position.set(0, ry, 0);
+          rung.castShadow = true;
+          ladderGroup.add(rung);
         });
 
-        // Plush Mattress
-        const mattress = new THREE.Mesh(new THREE.BoxGeometry(1.13, 0.20, 1.91), mattressMat);
-        mattress.position.set(0, 0.36, 0);
-        mattress.castShadow = true;
-        mattress.receiveShadow = true;
-        bedGroup.add(mattress);
-
-        // Cozy Duvet/Blanket + Side Drapes + Folded White Sheet Cuff
-        const duvetTop = new THREE.Mesh(new THREE.BoxGeometry(1.17, 0.065, 1.34), duvetMat);
-        duvetTop.position.set(0, 0.475, -0.26);
-        duvetTop.castShadow = true;
-        duvetTop.receiveShadow = true;
-        bedGroup.add(duvetTop);
-
-        [-0.585, 0.585].forEach((sx) => {
-          const sideDrape = new THREE.Mesh(new THREE.BoxGeometry(0.024, 0.14, 1.34), duvetMat);
-          sideDrape.position.set(sx, 0.415, -0.26);
-          sideDrape.castShadow = true;
-          bedGroup.add(sideDrape);
-        });
-
-        const footDrape = new THREE.Mesh(new THREE.BoxGeometry(1.17, 0.14, 0.024), duvetMat);
-        footDrape.position.set(0, 0.415, -0.928);
-        footDrape.castShadow = true;
-        bedGroup.add(footDrape);
-
-        const sheetCuff = new THREE.Mesh(new THREE.BoxGeometry(1.16, 0.048, 0.17), sheetCuffMat);
-        sheetCuff.position.set(0, 0.472, 0.42);
-        sheetCuff.castShadow = true;
-        bedGroup.add(sheetCuff);
-
-        // Two Plump Dorm Pillows propped against the headboard
-        const leftPillow = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.11, 0.31), sheetCuffMat);
-        leftPillow.position.set(-0.26, 0.535, 0.74);
-        leftPillow.rotation.x = -0.26;
-        leftPillow.castShadow = true;
-        bedGroup.add(leftPillow);
-
-        const rightPillow = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.11, 0.31), pillowRoseMat);
-        rightPillow.position.set(0.26, 0.535, 0.74);
-        rightPillow.rotation.x = -0.22;
-        rightPillow.castShadow = true;
-        bedGroup.add(rightPillow);
-
-        coloredRoomGroup.add(bedGroup);
+        capsuleStackGroup.add(ladderGroup);
+        coloredRoomGroup.add(capsuleStackGroup);
 
         // Four Lobby-style Six-Tier Cool White-Wood Cabinets (與格子櫃同色之冷白木色六層櫃×4) along Back Wall next to the bed
         const P_CAB_W = 1.12;
@@ -5326,8 +7862,482 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
           const wallCab = createLightWhiteSixTierCabinet();
           wallCab.position.set(P_CAB_FIRST_X - idx * P_CAB_STEP, 0, P_CAB_Z);
           wallCab.rotation.y = Math.PI;
+
+          // On the 4th cabinet (closest to capsule pods), place the identical "涼海すう" illustrated cardboard box on bottom-tier rightmost
+          if (idx === 3) {
+            const pWhiteBoxGroup = new THREE.Group();
+            const pBoxCoreMesh = new THREE.Mesh(
+              new THREE.BoxGeometry(BOX_W, BOX_H - 0.012, BOX_D),
+              boxCardboardMat
+            );
+            pBoxCoreMesh.position.set(0, (BOX_H - 0.012) / 2, 0);
+            pBoxCoreMesh.castShadow = true;
+            pBoxCoreMesh.receiveShadow = true;
+            pWhiteBoxGroup.add(pBoxCoreMesh);
+
+            const pBoxFrontPlane = new THREE.Mesh(
+              new THREE.PlaneGeometry(BOX_W - 0.004, BOX_H - 0.014),
+              boxFrontPrintMat
+            );
+            pBoxFrontPlane.position.set(0, (BOX_H - 0.012) / 2, BOX_D / 2 + 0.0008);
+            pBoxFrontPlane.receiveShadow = true;
+            pWhiteBoxGroup.add(pBoxFrontPlane);
+
+            const pBoxLidSlab = new THREE.Mesh(
+              new THREE.BoxGeometry(BOX_W + 0.004, 0.012, BOX_D + 0.004),
+              boxCardboardMat
+            );
+            pBoxLidSlab.position.set(0, BOX_H - 0.006, 0);
+            pBoxLidSlab.castShadow = true;
+            pBoxLidSlab.receiveShadow = true;
+            pWhiteBoxGroup.add(pBoxLidSlab);
+
+            const pBoxTopPlane = new THREE.Mesh(
+              new THREE.PlaneGeometry(BOX_W + 0.002, BOX_D + 0.002),
+              boxTopPrintMat
+            );
+            pBoxTopPlane.rotation.x = -Math.PI / 2;
+            pBoxTopPlane.position.set(0, BOX_H + 0.0006, 0);
+            pBoxTopPlane.receiveShadow = true;
+            pWhiteBoxGroup.add(pBoxTopPlane);
+
+            const pLidCreaseBar = new THREE.Mesh(
+              new THREE.BoxGeometry(BOX_W + 0.005, 0.0025, 0.003),
+              boxSeamEdgeMat
+            );
+            pLidCreaseBar.position.set(0, BOX_H - 0.012, BOX_D / 2 + 0.0015);
+            pWhiteBoxGroup.add(pLidCreaseBar);
+
+            const pCabInnerRightX = (P_CAB_W - P_SIDE_THICK * 2) / 2;
+            const pBottomShelfFloorY = P_PLINTH_H + P_SHELF_THICK;
+            pWhiteBoxGroup.position.set(
+              pCabInnerRightX - 0.02 - BOX_W / 2,
+              pBottomShelfFloorY,
+              0.045
+            );
+            pWhiteBoxGroup.rotation.y = -0.025;
+            wallCab.add(pWhiteBoxGroup);
+          }
+
+          // On the 2nd cabinet (idx === 1), replace figurine with 「最愛チアモ」 retail color box on 2nd tier from top leftmost
+          if (idx === 1) {
+            const pCabInnerLeftX = -(P_CAB_W - P_SIDE_THICK * 2) / 2;
+            const pBodyHeight = P_CAB_H - P_PLINTH_H - P_CROWN_H;
+            const pTierPitch = (pBodyHeight - P_SHELF_THICK) / 6;
+            const pSecondFromTopFloorY = P_PLINTH_H + P_SHELF_THICK + 4 * pTierPitch;
+
+            const pinkShelfChiamoGroup = createChiamoColorBoxGroup();
+            pinkShelfChiamoGroup.position.set(
+              pCabInnerLeftX + 0.025 + CBOX_W / 2,
+              pSecondFromTopFloorY,
+              0.075
+            );
+            pinkShelfChiamoGroup.rotation.y = -0.06;
+            wallCab.add(pinkShelfChiamoGroup);
+          }
+
           coloredRoomGroup.add(wallCab);
         }
+
+        // Light-Blue Studio Softbox Light on Tripod Stand positioned between 4th Cabinet and Capsule Pods, turned toward the Desk (朝向書桌方向)
+        const studioLightGroup = new THREE.Group();
+        studioLightGroup.position.set(-3.295, 0, P_CAB_Z - 0.19);
+        studioLightGroup.rotation.y = Math.PI - 0.56;
+
+        const studioBlueMat = new THREE.MeshStandardMaterial({
+          color: 0x90ccf2,
+          roughness: 0.40,
+          metalness: 0.14,
+        });
+        const studioBlueDeepMat = new THREE.MeshStandardMaterial({
+          color: 0x6fb4e3,
+          roughness: 0.44,
+          metalness: 0.18,
+        });
+        const studioChromeMat = new THREE.MeshStandardMaterial({
+          color: 0xe2e8f0,
+          roughness: 0.24,
+          metalness: 0.78,
+        });
+        const studioDarkMat = new THREE.MeshStandardMaterial({
+          color: 0x334155,
+          roughness: 0.52,
+          metalness: 0.26,
+        });
+        const studioDiffuserMat = new THREE.MeshStandardMaterial({
+          color: 0xffffff,
+          emissive: 0xeef8ff,
+          emissiveIntensity: 0.92,
+          roughness: 0.42,
+          metalness: 0.0,
+        });
+
+        // 3 Splayed Tripod Legs with Spider Braces & Floor Rubber Feet
+        const LEG_HUB_Y = 0.54;
+        const LEG_SPREAD_R = 0.29;
+        for (let li = 0; li < 3; li++) {
+          const ang = (li * Math.PI * 2) / 3 + Math.PI / 6;
+          const fx = Math.cos(ang) * LEG_SPREAD_R;
+          const fz = Math.sin(ang) * LEG_SPREAD_R;
+
+          const startPt = new THREE.Vector3(Math.cos(ang) * 0.026, LEG_HUB_Y, Math.sin(ang) * 0.026);
+          const endPt = new THREE.Vector3(fx, 0.016, fz);
+          const legDir = new THREE.Vector3().subVectors(endPt, startPt);
+          const legLen = legDir.length();
+          const legQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), legDir.clone().normalize());
+          const legTube = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.010, legLen, 12), studioBlueMat);
+          legTube.position.addVectors(startPt, endPt).multiplyScalar(0.5);
+          legTube.quaternion.copy(legQuat);
+          legTube.castShadow = true;
+          studioLightGroup.add(legTube);
+
+          // Rubber floor tip grounded cleanly at Y = 0
+          const footCap = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.017, 0.028, 12), studioDarkMat);
+          footCap.position.set(fx, 0.014, fz);
+          footCap.castShadow = true;
+          studioLightGroup.add(footCap);
+
+          // Central diagonal spider brace
+          const braceStart = new THREE.Vector3(0, 0.23, 0);
+          const braceEnd = new THREE.Vector3().lerpVectors(startPt, endPt, 0.48);
+          const braceDir = new THREE.Vector3().subVectors(braceEnd, braceStart);
+          const braceMesh = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.006, 0.006, braceDir.length(), 8),
+            studioChromeMat
+          );
+          braceMesh.position.addVectors(braceStart, braceEnd).multiplyScalar(0.5);
+          braceMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), braceDir.normalize());
+          studioLightGroup.add(braceMesh);
+        }
+
+        // Central Telescoping Stand Pole & Collars
+        const lowerHub = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.045, 16), studioBlueDeepMat);
+        lowerHub.position.y = 0.23;
+        studioLightGroup.add(lowerHub);
+
+        const upperLegCollar = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.030, 0.056, 16), studioBlueDeepMat);
+        upperLegCollar.position.y = LEG_HUB_Y;
+        upperLegCollar.castShadow = true;
+        studioLightGroup.add(upperLegCollar);
+
+        const lowerPole = new THREE.Mesh(new THREE.CylinderGeometry(0.017, 0.017, 0.80, 14), studioBlueMat);
+        lowerPole.position.y = 0.62;
+        lowerPole.castShadow = true;
+        studioLightGroup.add(lowerPole);
+
+        const midClutch = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, 0.046, 14), studioBlueDeepMat);
+        midClutch.position.y = 1.02;
+        studioLightGroup.add(midClutch);
+
+        const midKnob = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.028, 12), studioChromeMat);
+        midKnob.rotation.z = Math.PI / 2;
+        midKnob.position.set(0.028, 1.02, 0);
+        studioLightGroup.add(midKnob);
+
+        const upperMast = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.44, 14), studioChromeMat);
+        upperMast.position.y = 1.24;
+        upperMast.castShadow = true;
+        studioLightGroup.add(upperMast);
+
+        // Tilted U-Bracket Yoke + Softbox Studio Light Head
+        const yokeBase = new THREE.Mesh(new THREE.CylinderGeometry(0.020, 0.018, 0.04, 14), studioBlueDeepMat);
+        yokeBase.position.y = 1.46;
+        studioLightGroup.add(yokeBase);
+
+        const yokeBar = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.018, 0.028), studioBlueDeepMat);
+        yokeBar.position.y = 1.485;
+        studioLightGroup.add(yokeBar);
+
+        [-0.15, 0.15].forEach((ax) => {
+          const arm = new THREE.Mesh(new THREE.BoxGeometry(0.016, 0.14, 0.026), studioBlueDeepMat);
+          arm.position.set(ax, 1.545, 0);
+          studioLightGroup.add(arm);
+
+          const tiltKnob = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.024, 12), studioBlueMat);
+          tiltKnob.rotation.z = Math.PI / 2;
+          tiltKnob.position.set(ax + (ax > 0 ? 0.018 : -0.018), 1.60, 0);
+          studioLightGroup.add(tiltKnob);
+        });
+
+        const softboxHead = new THREE.Group();
+        softboxHead.position.set(0, 1.60, 0.02);
+        softboxHead.rotation.x = 0.16; // Slight downward aim into room
+
+        // Tapered Rectangular Softbox Hood (built from frustum-like prism via scaled 4-sided CylinderGeometry rotated 45deg)
+        const SB_W = 0.56;
+        const SB_H = 0.42;
+        const SB_D = 0.25;
+        const softboxShellGeo = new THREE.CylinderGeometry(0.5, 0.20, SB_D, 4, 1);
+        softboxShellGeo.rotateY(Math.PI / 4);
+        softboxShellGeo.scale(SB_W / Math.SQRT1_2, 1.0, SB_H / Math.SQRT1_2);
+        softboxShellGeo.rotateX(Math.PI / 2);
+        const softboxShell = new THREE.Mesh(softboxShellGeo, studioBlueMat);
+        softboxShell.position.z = 0.03;
+        softboxShell.castShadow = true;
+        softboxShell.receiveShadow = true;
+        softboxHead.add(softboxShell);
+
+        // Front Softbox Bezel Frame & Glowing White Diffuser Cloth
+        const frontOuterRim = new THREE.Mesh(
+          new THREE.BoxGeometry(SB_W + 0.018, SB_H + 0.018, 0.022),
+          studioBlueDeepMat
+        );
+        frontOuterRim.position.z = SB_D / 2 + 0.03;
+        softboxHead.add(frontOuterRim);
+
+        const frontDiffuser = new THREE.Mesh(
+          new THREE.BoxGeometry(SB_W - 0.022, SB_H - 0.022, 0.016),
+          studioDiffuserMat
+        );
+        frontDiffuser.position.z = SB_D / 2 + 0.036;
+        softboxHead.add(frontDiffuser);
+
+        // Rear Ventilated Light-Blue Lamp Housing + Control Switch
+        const rearLampHousing = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.088, 0.082, 0.16, 20),
+          studioBlueDeepMat
+        );
+        rearLampHousing.rotation.x = Math.PI / 2;
+        rearLampHousing.position.z = -SB_D / 2 - 0.04;
+        rearLampHousing.castShadow = true;
+        softboxHead.add(rearLampHousing);
+
+        const rearCap = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.068, 0.088, 0.035, 20),
+          studioBlueMat
+        );
+        rearCap.rotation.x = Math.PI / 2;
+        rearCap.position.z = -SB_D / 2 - 0.135;
+        softboxHead.add(rearCap);
+
+        const rearVentRing = new THREE.Mesh(
+          new THREE.TorusGeometry(0.072, 0.008, 8, 20),
+          studioDarkMat
+        );
+        rearVentRing.position.z = -SB_D / 2 - 0.115;
+        softboxHead.add(rearVentRing);
+
+        // Actual Soft Studio Fill Light illuminating nearby shelf & corner
+        const studioSpotGlow = new THREE.PointLight(0xeef8ff, 0.95, 4.8, 1.3);
+        studioSpotGlow.position.set(0, 0, SB_D / 2 + 0.24);
+        softboxHead.add(studioSpotGlow);
+
+        studioLightGroup.add(softboxHead);
+        coloredRoomGroup.add(studioLightGroup);
+
+        // Cozy Blue-Gray Beanbag Chair placed in front of the 1st Cabinet (第一個櫃子前方的藍灰色懶骨頭)
+        const beanbagTexCanvas = document.createElement('canvas');
+        beanbagTexCanvas.width = 256;
+        beanbagTexCanvas.height = 256;
+        const bbCtx = beanbagTexCanvas.getContext('2d');
+        if (bbCtx) {
+          bbCtx.fillStyle = '#6f859c';
+          bbCtx.fillRect(0, 0, 256, 256);
+          for (let y = 0; y < 256; y += 3) {
+            bbCtx.fillStyle = y % 6 === 0 ? 'rgba(255,255,255,0.06)' : 'rgba(28,42,58,0.07)';
+            bbCtx.fillRect(0, y, 256, 1.5);
+          }
+          for (let x = 0; x < 256; x += 3) {
+            bbCtx.fillStyle = x % 6 === 0 ? 'rgba(255,255,255,0.05)' : 'rgba(28,42,58,0.06)';
+            bbCtx.fillRect(x, 0, 1.5, 256);
+          }
+          for (let i = 0; i < 900; i++) {
+            const rx = (i * 73) % 256;
+            const ry = (i * 139) % 256;
+            bbCtx.fillStyle = i % 2 === 0 ? 'rgba(195,215,232,0.08)' : 'rgba(42,58,74,0.08)';
+            bbCtx.fillRect(rx, ry, 2, 2);
+          }
+        }
+        const beanbagFabricTex = new THREE.CanvasTexture(beanbagTexCanvas);
+        beanbagFabricTex.colorSpace = THREE.SRGBColorSpace;
+        beanbagFabricTex.wrapS = THREE.RepeatWrapping;
+        beanbagFabricTex.wrapT = THREE.RepeatWrapping;
+        beanbagFabricTex.repeat.set(3.2, 3.2);
+        extraRoomTexturesToDispose.push(beanbagFabricTex);
+
+        const beanbagMat = new THREE.MeshPhysicalMaterial({
+          map: beanbagFabricTex,
+          color: 0xffffff,
+          roughness: 0.90,
+          metalness: 0.0,
+          sheen: 0.78,
+          sheenRoughness: 0.68,
+          sheenColor: new THREE.Color(0xc5d8ea),
+        });
+        const beanbagSeamMat = new THREE.MeshStandardMaterial({
+          color: 0x586d82,
+          roughness: 0.88,
+          metalness: 0.02,
+        });
+
+        const beanbagGroup = new THREE.Group();
+        const bbGeo = new THREE.SphereGeometry(0.42, 32, 24);
+        const bbPos = bbGeo.attributes.position;
+        for (let i = 0; i < bbPos.count; i++) {
+          let x = bbPos.getX(i);
+          let y = bbPos.getY(i);
+          let z = bbPos.getZ(i);
+
+          // Shift vertically to [0, 0.84], then flatten base & sculpt organic teardrop slouch
+          const ny = (y + 0.42) / 0.84; // 0 at bottom, 1 at top
+          const rHoriz = Math.hypot(x, z);
+          const angle = Math.atan2(z, x);
+
+          // Wider plumped lower cushion skirt, tapering softly toward upper peak
+          const skirtFactor = 1.06 - Math.pow(ny, 1.45) * 0.44 + Math.sin(ny * Math.PI) * 0.14;
+          x *= skirtFactor;
+          z *= skirtFactor * 1.04;
+
+          // Subtle 6-panel stitched seam creases around perimeter
+          const goreRipple = 1.0 - 0.022 * Math.pow(Math.abs(Math.sin(angle * 3.0)), 3.0) * Math.sin(ny * Math.PI);
+          x *= goreRipple;
+          z *= goreRipple;
+
+          // Slouching backrest peak toward -Z local rear, cozy sunken seat hollow toward +Z front
+          let sculptedY = ny * 0.56;
+          if (ny < 0.14) {
+            // Flat grounded base pad
+            sculptedY = ny * 0.22;
+          } else {
+            // Backrest rise & forward seat dimple (seat faces +Z)
+            const nz = z / 0.44;
+            const seatDip = Math.max(0, nz + 0.12) * Math.sin(ny * Math.PI) * 0.11;
+            const backPeak = Math.max(0, -nz + 0.18) * Math.pow(ny, 1.35) * 0.17;
+            const radialDamp = Math.min(1, rHoriz / 0.28);
+            sculptedY = sculptedY - seatDip * (1.0 - 0.35 * radialDamp) + backPeak;
+          }
+          z -= Math.pow(ny, 1.6) * 0.10;
+
+          bbPos.setXYZ(i, x, Math.max(0, sculptedY), z);
+        }
+        bbPos.needsUpdate = true;
+        bbGeo.computeVertexNormals();
+        bbGeo.computeBoundingBox();
+        bbGeo.computeBoundingSphere();
+
+        const bbBodyMesh = new THREE.Mesh(bbGeo, beanbagMat);
+        bbBodyMesh.castShadow = true;
+        bbBodyMesh.receiveShadow = true;
+        beanbagGroup.add(bbBodyMesh);
+
+        // Stitched upper piping ring & fabric carry handle loop at backrest crown
+        const bbPipingRing = new THREE.Mesh(
+          new THREE.TorusGeometry(0.165, 0.0085, 8, 28),
+          beanbagSeamMat
+        );
+        bbPipingRing.rotation.x = Math.PI / 2 - 0.24;
+        bbPipingRing.position.set(0, 0.515, -0.095);
+        beanbagGroup.add(bbPipingRing);
+
+        const bbHandleLoop = new THREE.Mesh(
+          new THREE.TorusGeometry(0.034, 0.0085, 8, 16, Math.PI),
+          beanbagSeamMat
+        );
+        bbHandleLoop.position.set(0, 0.582, -0.108);
+        bbHandleLoop.rotation.x = -0.25;
+        bbHandleLoop.castShadow = true;
+        beanbagGroup.add(bbHandleLoop);
+
+        // Grounded cleanly in front of 1st Cabinet (idx === 0 at X ≈ 1.36, Z ≈ 3.228), angled toward room center
+        beanbagGroup.position.set(1.30, 0, 2.26);
+        beanbagGroup.rotation.y = Math.PI + 0.38;
+        coloredRoomGroup.add(beanbagGroup);
+
+        // Light-Blue Short-Pile Round Rug in Exact Center of Pink Room (房間正中間的淺藍色圓形短毛地毯)
+        const rugColorCanvas = document.createElement('canvas');
+        rugColorCanvas.width = 512;
+        rugColorCanvas.height = 512;
+        const rugCtx = rugColorCanvas.getContext('2d');
+
+        const rugBumpCanvas = document.createElement('canvas');
+        rugBumpCanvas.width = 512;
+        rugBumpCanvas.height = 512;
+        const rugBCtx = rugBumpCanvas.getContext('2d');
+
+        if (rugCtx && rugBCtx) {
+          const radGrad = rugCtx.createRadialGradient(256, 256, 20, 256, 256, 260);
+          radGrad.addColorStop(0.0, '#c6e7fa');
+          radGrad.addColorStop(0.65, '#bae0f6');
+          radGrad.addColorStop(1.0, '#add6ef');
+          rugCtx.fillStyle = radGrad;
+          rugCtx.fillRect(0, 0, 512, 512);
+
+          rugBCtx.fillStyle = '#808080';
+          rugBCtx.fillRect(0, 0, 512, 512);
+
+          // Fine dense short-pile carpet nap fibers (no long shag)
+          for (let i = 0; i < 16000; i++) {
+            const fx = (i * 197 + (i % 7) * 13) % 512;
+            const fy = (i * 313 + (i % 11) * 17) % 512;
+            const light = i % 3 === 0;
+            rugCtx.fillStyle = light
+              ? 'rgba(236, 249, 255, 0.34)'
+              : i % 2 === 0
+                ? 'rgba(138, 194, 228, 0.28)'
+                : 'rgba(176, 222, 246, 0.25)';
+            rugCtx.fillRect(fx, fy, 2.2, 1.8);
+
+            rugBCtx.fillStyle = light ? '#b8b8b8' : '#555555';
+            rugBCtx.fillRect(fx, fy, 2, 2);
+          }
+        }
+        const rugColorTex = new THREE.CanvasTexture(rugColorCanvas);
+        rugColorTex.colorSpace = THREE.SRGBColorSpace;
+        rugColorTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+        extraRoomTexturesToDispose.push(rugColorTex);
+
+        const rugBumpTex = new THREE.CanvasTexture(rugBumpCanvas);
+        rugBumpTex.wrapS = THREE.RepeatWrapping;
+        rugBumpTex.wrapT = THREE.RepeatWrapping;
+        rugBumpTex.repeat.set(2.5, 2.5);
+        extraRoomTexturesToDispose.push(rugBumpTex);
+
+        const centerRugGroup = new THREE.Group();
+        const RUG_R = 1.12;
+
+        const rugBacking = new THREE.Mesh(
+          new THREE.CylinderGeometry(RUG_R, RUG_R, 0.008, 64),
+          new THREE.MeshStandardMaterial({ color: 0x9ac3dc, roughness: 0.92 })
+        );
+        rugBacking.position.y = 0.004;
+        rugBacking.receiveShadow = true;
+        centerRugGroup.add(rugBacking);
+
+        const rugPileMesh = new THREE.Mesh(
+          new THREE.CylinderGeometry(RUG_R - 0.006, RUG_R - 0.002, 0.012, 64),
+          new THREE.MeshPhysicalMaterial({
+            map: rugColorTex,
+            bumpMap: rugBumpTex,
+            bumpScale: 0.004,
+            color: 0xffffff,
+            roughness: 0.94,
+            metalness: 0.0,
+            sheen: 0.92,
+            sheenRoughness: 0.65,
+            sheenColor: new THREE.Color(0xeaf7ff),
+          })
+        );
+        rugPileMesh.position.y = 0.014;
+        rugPileMesh.receiveShadow = true;
+        centerRugGroup.add(rugPileMesh);
+
+        // Overlocked bound edge trim ring around the circular short-pile rug
+        const rugBoundEdge = new THREE.Mesh(
+          new THREE.TorusGeometry(RUG_R - 0.004, 0.010, 10, 72),
+          new THREE.MeshStandardMaterial({
+            color: 0xdaf0fc,
+            roughness: 0.88,
+            metalness: 0.0,
+          })
+        );
+        rugBoundEdge.rotation.x = Math.PI / 2;
+        rugBoundEdge.scale.set(1.0, 1.0, 0.65);
+        rugBoundEdge.position.y = 0.013;
+        rugBoundEdge.receiveShadow = true;
+        centerRugGroup.add(rugBoundEdge);
+
+        centerRugGroup.position.set(PR_CENTER_X, 0, 0);
+        coloredRoomGroup.add(centerRugGroup);
       }
 
       scene.add(coloredRoomGroup);
@@ -5843,11 +8853,13 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
     const DOOR_VIEW_POS = new THREE.Vector3(-3.65, 1.28, -1.62);
     const CYAN_DOOR2_VIEW_POS = new THREE.Vector3(5.12, 1.28, CY_CENTER_Z);
     const ROOM_CENTER_POS = new THREE.Vector3(PR_CENTER_X, 1.38, 0);
+    const PINK_DESK_VIEW_POS = new THREE.Vector3(0.76, 1.30, -2.18);
+    const PINK_CAPSULE_VIEW_POS = new THREE.Vector3(-4.36, 1.78, 2.95);
 
     const renderLoop = () => {
       const delta = Math.min(clock.getDelta(), 0.1);
 
-      // Smoothly move camera between tea table, 6-tier cabinet, doors, and center of colored rooms
+      // Smoothly move camera between tea table, 6-tier cabinet, doors, desk, capsule pod, and center of colored rooms
       const targetPos =
         viewLocationRef.current === 'cabinet'
           ? CABINET_VIEW_POS
@@ -5857,7 +8869,11 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
               ? CYAN_DOOR2_VIEW_POS
               : viewLocationRef.current === 'center'
                 ? ROOM_CENTER_POS
-                : TABLE_VIEW_POS;
+                : viewLocationRef.current === 'desk'
+                  ? PINK_DESK_VIEW_POS
+                  : viewLocationRef.current === 'capsule'
+                    ? PINK_CAPSULE_VIEW_POS
+                    : TABLE_VIEW_POS;
       playerPosRef.current.x = THREE.MathUtils.damp(playerPosRef.current.x, targetPos.x, 4.6, delta);
       playerPosRef.current.y = THREE.MathUtils.damp(playerPosRef.current.y, targetPos.y, 4.6, delta);
       playerPosRef.current.z = THREE.MathUtils.damp(playerPosRef.current.z, targetPos.z, 4.6, delta);
@@ -6080,13 +9096,10 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
       ririmuFrontTex.dispose();
       ririmuBackTex.dispose();
       ririmuSideTex.dispose();
-      chiamoBaseTex.dispose();
-      chiamoFrontAlphaTex.dispose();
-      chiamoBackAlphaTex.dispose();
-      chiamoFrontRgbTex.dispose();
-      chiamoBackRgbTex.dispose();
-      chiamoLeftRgbTex.dispose();
-      chiamoRightRgbTex.dispose();
+      chiamoBoxFrontTex.dispose();
+      chiamoBoxSideTex.dispose();
+      chiamoBoxTopTex.dispose();
+      chiamoBoxBackTex.dispose();
       signCardTexture.dispose();
       whiteBoxFrontTexture.dispose();
       whiteBoxTopTexture.dispose();
@@ -6346,6 +9359,7 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
         const isLobby = targetRoom === 'lobby';
         activeRoomRef.current = targetRoom;
         setActiveRoom(targetRoom);
+        setIsPinkNavOpen(false);
 
         if (lobbyRoomGroupRef.current) lobbyRoomGroupRef.current.visible = isLobby;
         if (consoleSceneRef.current) consoleSceneRef.current.visible = isLobby;
@@ -6647,6 +9661,27 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
     }
   };
 
+  // Smoothly navigate inside Pink Room (desk, upper capsule interior, room center, or front door)
+  const handleSelectPinkView = (target: 'desk' | 'capsule' | 'center' | 'door') => {
+    normalizeCurrentYaw();
+    viewLocationRef.current = target;
+    setViewLocation(target);
+    if (target === 'desk') {
+      targetYawRef.current = -0.42;
+      targetPitchRef.current = -0.08;
+    } else if (target === 'capsule') {
+      targetYawRef.current = CENTER_YAW;
+      targetPitchRef.current = -0.04;
+    } else {
+      targetYawRef.current = CENTER_YAW;
+      targetPitchRef.current = 0;
+    }
+    setIsPinkNavOpen(false);
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      try { navigator.vibrate(15); } catch {}
+    }
+  };
+
   // Apply look rotation: Lobby-style rooms (lobby, royalblue, brown) preserve T-shape bounds;
   // Cyan Foyers (2F & B1) lock camera angle; other rooms allow 360° horizontal + slight vertical
   const applyLookDelta = (deltaX: number, deltaY: number, sensitivity: number) => {
@@ -6665,8 +9700,9 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
       );
       targetPitchRef.current = THREE.MathUtils.clamp(targetPitchRef.current, MIN_PITCH, MAX_PITCH);
     } else {
-      const OTHER_MIN_PITCH = (-14 * Math.PI) / 180;
-      const OTHER_MAX_PITCH = (14 * Math.PI) / 180;
+      const isPink = activeRoomRef.current === 'pink';
+      const OTHER_MIN_PITCH = ((isPink ? -22 : -14) * Math.PI) / 180;
+      const OTHER_MAX_PITCH = ((isPink ? 18 : 14) * Math.PI) / 180;
       targetPitchRef.current = THREE.MathUtils.clamp(
         targetPitchRef.current,
         OTHER_MIN_PITCH,
@@ -6975,8 +10011,119 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
         </div>
       )}
 
-      {/* Non-Lobby Rooms Bottom-Right Button */}
-      {!isConsoleHeld && activeRoom !== 'lobby' && (
+      {/* Non-Lobby Rooms Bottom-Right Button(s) */}
+      {!isConsoleHeld && activeRoom !== 'lobby' && activeRoom === 'pink' && (
+        <div
+          className="absolute bottom-5 right-5 z-30 flex flex-col items-end"
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onMouseUp={(e) => e.stopPropagation()}
+        >
+          {/* Compact Unified Light-Blue Pixel-Heart Container Button UI */}
+          <div
+            className={`flex flex-col items-end transition-all duration-200 ${
+              isPinkNavOpen
+                ? 'bg-[#0d1c2e]/92 backdrop-blur-md border border-sky-300/55 rounded-xl p-1.5 shadow-[0_8px_22px_rgba(0,0,0,0.62)] gap-1'
+                : ''
+            }`}
+          >
+            {isPinkNavOpen && (
+              <div className="flex flex-col gap-1 w-full min-w-[114px]">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleSelectPinkView('desk');
+                  }}
+                  className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-medium tracking-wide active:scale-95 transition-all cursor-pointer select-none border text-center ${
+                    viewLocation === 'desk'
+                      ? 'bg-[#1c4069] border-sky-200 text-white shadow-[0_0_10px_rgba(154,221,255,0.35)]'
+                      : 'bg-[#12263f]/85 border-sky-300/35 text-sky-100 hover:bg-[#193557] hover:border-sky-200/75'
+                  }`}
+                >
+                  去書桌前
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleSelectPinkView('capsule');
+                  }}
+                  className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-medium tracking-wide active:scale-95 transition-all cursor-pointer select-none border text-center ${
+                    viewLocation === 'capsule'
+                      ? 'bg-[#1c4069] border-sky-200 text-white shadow-[0_0_10px_rgba(154,221,255,0.35)]'
+                      : 'bg-[#12263f]/85 border-sky-300/35 text-sky-100 hover:bg-[#193557] hover:border-sky-200/75'
+                  }`}
+                >
+                  去膠囊艙裡
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleSelectPinkView(viewLocation === 'center' ? 'door' : 'center');
+                  }}
+                  className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-medium tracking-wide active:scale-95 transition-all cursor-pointer select-none border text-center ${
+                    viewLocation === 'center'
+                      ? 'bg-[#1c4069] border-sky-200 text-white shadow-[0_0_10px_rgba(154,221,255,0.35)]'
+                      : 'bg-[#12263f]/85 border-sky-300/35 text-sky-100 hover:bg-[#193557] hover:border-sky-200/75'
+                  }`}
+                >
+                  {viewLocation === 'center' ? '去門前' : '去房間正中央'}
+                </button>
+              </div>
+            )}
+
+            <button
+              type="button"
+              aria-label="房間位置選單"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsPinkNavOpen((prev) => !prev);
+                if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                  try { navigator.vibrate(12); } catch {}
+                }
+              }}
+              className={`group flex items-center justify-center rounded-lg transition-all duration-200 cursor-pointer select-none active:scale-90 ${
+                isPinkNavOpen
+                  ? 'w-full py-1 bg-white/5 hover:bg-white/10 border border-sky-200/25'
+                  : 'px-2 py-2 bg-[#0d1c2e]/90 backdrop-blur-md border border-sky-300/55 shadow-[0_4px_16px_rgba(0,0,0,0.58)] hover:bg-[#152d49] hover:border-sky-200/85 hover:scale-105'
+              }`}
+            >
+              <div
+                className={`grid grid-cols-7 gap-[1.5px] p-0.5 transition-all duration-300 ${
+                  isPinkNavOpen
+                    ? 'scale-105 drop-shadow-[0_0_12px_rgba(154,221,255,0.65)] opacity-100'
+                    : 'opacity-90 group-hover:opacity-100 drop-shadow-[0_0_8px_rgba(154,221,255,0.45)]'
+                }`}
+              >
+                {[
+                  0, 1, 1, 0, 1, 1, 0,
+                  1, 2, 2, 1, 2, 2, 1,
+                  1, 2, 2, 2, 2, 2, 1,
+                  1, 2, 2, 2, 2, 2, 1,
+                  0, 1, 2, 2, 2, 1, 0,
+                  0, 0, 1, 2, 1, 0, 0,
+                  0, 0, 0, 1, 0, 0, 0,
+                ].map((pixel, idx) => (
+                  <div
+                    key={idx}
+                    className="w-[5px] h-[5px]"
+                    style={{
+                      backgroundColor:
+                        pixel === 1 ? '#FFFFFF' : pixel === 2 ? '#9ADDFF' : 'transparent',
+                    }}
+                  />
+                ))}
+              </div>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!isConsoleHeld && activeRoom !== 'lobby' && activeRoom !== 'pink' && (
         <div className="absolute bottom-5 right-5 z-30 flex flex-col gap-2.5">
           <button
             type="button"
@@ -6994,15 +10141,13 @@ export const Room3DScene: React.FC<Room3DSceneProps> = () => {
                 ? 'bg-[#0f1f0c]/90 border-lime-400/50 text-lime-100 hover:bg-[#193314] hover:border-lime-300/80'
                 : activeRoom === 'gold'
                   ? 'bg-[#241907]/90 border-amber-400/55 text-amber-100 hover:bg-[#38270c] hover:border-amber-300/85'
-                  : activeRoom === 'pink'
-                    ? 'bg-[#29101c]/90 border-pink-300/55 text-pink-100 hover:bg-[#3d1729] hover:border-pink-200/85'
-                    : isFoyerRoom(activeRoom)
-                      ? 'bg-[#081c24]/90 border-cyan-400/55 text-cyan-100 hover:bg-[#0e2d3a] hover:border-cyan-300/85'
-                      : activeRoom === 'royalblue'
-                        ? 'bg-[#0c1633]/90 border-blue-400/55 text-blue-100 hover:bg-[#14234f] hover:border-blue-300/85'
-                        : activeRoom === 'brown'
-                          ? 'bg-[#21150b]/90 border-amber-600/55 text-amber-100 hover:bg-[#332011] hover:border-amber-500/85'
-                          : 'bg-[#1b1028]/90 border-purple-400/50 text-purple-100 hover:bg-[#29173d] hover:border-purple-300/80'
+                  : isFoyerRoom(activeRoom)
+                    ? 'bg-[#081c24]/90 border-cyan-400/55 text-cyan-100 hover:bg-[#0e2d3a] hover:border-cyan-300/85'
+                    : activeRoom === 'royalblue'
+                      ? 'bg-[#0c1633]/90 border-blue-400/55 text-blue-100 hover:bg-[#14234f] hover:border-blue-300/85'
+                      : activeRoom === 'brown'
+                        ? 'bg-[#21150b]/90 border-amber-600/55 text-amber-100 hover:bg-[#332011] hover:border-amber-500/85'
+                        : 'bg-[#1b1028]/90 border-purple-400/50 text-purple-100 hover:bg-[#29173d] hover:border-purple-300/80'
             }`}
           >
             {isFoyerRoom(activeRoom)
